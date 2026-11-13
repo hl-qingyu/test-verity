@@ -1,0 +1,450 @@
+{
+  "analysis_type": "CASE_GENERATION",
+  "contract_version": 2,
+  "request_id": "synthetic-initial",
+  "project_id": 90001,
+  "revision": 1,
+  "mode": "INITIAL",
+  "batch_ref": "batch-initial",
+  "outcome": "PARTIAL",
+  "summary": "提交场景关联复用，取消场景新增建议；金额精度需业务确认，其他场景保留。",
+  "evidence": [
+    {
+      "key": "initial:E1",
+      "kind": "MATERIAL",
+      "target_ref": "M-CURRENT",
+      "segment_id": "P1",
+      "side": "CURRENT",
+      "field": "",
+      "quote": "已启用门店的操作员在门店APP订单确认页，选择可售规格且数量为1后提交，订单创建为“待处理”。",
+      "note": "合成当前业务条款"
+    },
+    {
+      "key": "initial:E2",
+      "kind": "MATERIAL",
+      "target_ref": "M-CURRENT",
+      "segment_id": "P2",
+      "side": "CURRENT",
+      "field": "",
+      "quote": "门店操作员在门店APP订单详情页取消“待处理”订单，订单状态变为“已取消”。",
+      "note": "合成当前业务条款"
+    },
+    {
+      "key": "initial:E3",
+      "kind": "MATERIAL",
+      "target_ref": "M-CURRENT",
+      "segment_id": "P3",
+      "side": "CURRENT",
+      "field": "",
+      "quote": "门店APP订单确认页展示应付总额，应付总额按单价乘数量计算；示例单价19.955元、数量2。未说明金额精度、舍入方式及计算顺序。",
+      "note": "合成当前业务条款"
+    }
+  ],
+  "rules": [
+    {
+      "key": "initial:R1",
+      "semantic_key": "订单|门店操作员|已启用门店操作员提交可售规格数量1",
+      "function_ref": "F-ORDER",
+      "object": "订单",
+      "actor": "门店操作员",
+      "statement": "已启用门店操作员提交可售规格数量1",
+      "branches": [
+        {
+          "branch_ref": "initial:B1",
+          "conditions": [
+            "已启用门店操作员提交可售规格数量1"
+          ],
+          "result": "订单创建为“待处理”",
+          "state": "CONFIRMED",
+          "evidence_refs": [
+            "initial:E1"
+          ]
+        }
+      ],
+      "evidence_refs": [
+        "initial:E1"
+      ]
+    },
+    {
+      "key": "initial:R2",
+      "semantic_key": "订单|门店操作员|门店操作员取消待处理订单",
+      "function_ref": "F-ORDER",
+      "object": "订单",
+      "actor": "门店操作员",
+      "statement": "门店操作员取消待处理订单",
+      "branches": [
+        {
+          "branch_ref": "initial:B2",
+          "conditions": [
+            "门店操作员取消待处理订单"
+          ],
+          "result": "订单状态变为“已取消”",
+          "state": "CONFIRMED",
+          "evidence_refs": [
+            "initial:E2"
+          ]
+        }
+      ],
+      "evidence_refs": [
+        "initial:E2"
+      ]
+    },
+    {
+      "key": "initial:R3",
+      "semantic_key": "订单|门店操作员|确认页应付总额按单价乘数量",
+      "function_ref": "F-ORDER",
+      "object": "订单",
+      "actor": "门店操作员",
+      "statement": "确认页应付总额按单价乘数量",
+      "branches": [
+        {
+          "branch_ref": "initial:B3",
+          "conditions": [
+            "确认页应付总额按单价乘数量"
+          ],
+          "result": "",
+          "state": "PENDING_DECISION",
+          "evidence_refs": [
+            "initial:E3"
+          ]
+        }
+      ],
+      "evidence_refs": [
+        "initial:E3"
+      ]
+    }
+  ],
+  "transitions": [
+    {
+      "key": "initial:T1",
+      "flow_ref": "initial:L1",
+      "rule_refs": [
+        "initial:R2"
+      ],
+      "branch_refs": [
+        "initial:B2"
+      ],
+      "object": "订单",
+      "from_state": "待处理",
+      "action": "取消订单",
+      "actor": "门店操作员",
+      "action_end": "门店APP",
+      "to_state": "已取消",
+      "observation_ends": [
+        "门店APP"
+      ],
+      "evidence_refs": [
+        "initial:E2"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "key": "initial:L1",
+      "object": "订单",
+      "transition_refs": [
+        "initial:T1"
+      ],
+      "state": "COMPLETE",
+      "note": "仅已明确的待处理→取消子流程，不声明整个下单或金额流程闭环。"
+    }
+  ],
+  "scenarios": [
+    {
+      "key": "initial:S1",
+      "semantic_key": "订单|门店操作员|门店APP|选择可售规格数量1并提交",
+      "function_ref": "F-ORDER",
+      "rule_refs": [
+        "initial:R1"
+      ],
+      "branch_refs": [
+        "initial:B1"
+      ],
+      "transition_refs": [],
+      "actor": "门店操作员",
+      "action_end": "门店APP",
+      "observation_end": "门店APP",
+      "entry": "订单确认页",
+      "conditions": [
+        "已启用门店操作员提交可售规格数量1"
+      ],
+      "action": "选择可售规格数量1并提交",
+      "expected": "订单被创建且状态为“待处理”。",
+      "state": "READY",
+      "evidence_refs": [
+        "initial:E1"
+      ],
+      "note": "合成测试设计，非执行记录"
+    },
+    {
+      "key": "initial:S2",
+      "semantic_key": "订单|门店操作员|门店APP|取消待处理订单",
+      "function_ref": "F-ORDER",
+      "rule_refs": [
+        "initial:R2"
+      ],
+      "branch_refs": [
+        "initial:B2"
+      ],
+      "transition_refs": [
+        "initial:T1"
+      ],
+      "actor": "门店操作员",
+      "action_end": "门店APP",
+      "observation_end": "门店APP",
+      "entry": "订单详情页",
+      "conditions": [
+        "门店操作员取消待处理订单"
+      ],
+      "action": "取消待处理订单",
+      "expected": "该订单状态为“已取消”。",
+      "state": "READY",
+      "evidence_refs": [
+        "initial:E2"
+      ],
+      "note": "合成测试设计，非执行记录"
+    },
+    {
+      "key": "initial:S3",
+      "semantic_key": "订单|门店操作员|门店APP|设置单价19.955元的规格数量2并观察应付总额",
+      "function_ref": "F-ORDER",
+      "rule_refs": [
+        "initial:R3"
+      ],
+      "branch_refs": [
+        "initial:B3"
+      ],
+      "transition_refs": [],
+      "actor": "门店操作员",
+      "action_end": "门店APP",
+      "observation_end": "门店APP",
+      "entry": "订单确认页",
+      "conditions": [
+        "确认页应付总额按单价乘数量"
+      ],
+      "action": "设置单价19.955元的规格数量2并观察应付总额",
+      "expected": "",
+      "state": "PENDING_DECISION",
+      "evidence_refs": [
+        "initial:E3"
+      ],
+      "note": "合成测试设计，非执行记录"
+    }
+  ],
+  "suggestions": [
+    {
+      "key": "initial:A1",
+      "kind": "REUSE",
+      "function_ref": "F-ORDER",
+      "scenario_refs": [
+        "initial:S1"
+      ],
+      "case_ref": "C-SUBMIT",
+      "base_version": 3,
+      "design": null,
+      "changes": [],
+      "reason": "按当前依据和场景核对的人工合成建议",
+      "priority_reason": "订单主流程建议P1；不是产品事实或测试结果",
+      "evidence_refs": [
+        "initial:E1"
+      ],
+      "basis_status": "SUPPORTED"
+    },
+    {
+      "key": "initial:A2",
+      "kind": "NEW",
+      "function_ref": "F-ORDER",
+      "scenario_refs": [
+        "initial:S2"
+      ],
+      "case_ref": null,
+      "base_version": null,
+      "design": {
+        "module": "订单",
+        "structure": "取消",
+        "case_type": "业务流程",
+        "priority": "P1",
+        "description": "取消待处理订单",
+        "title": "取消后状态为已取消",
+        "preconditions": "当前账号为门店操作员，有一笔待处理订单。",
+        "steps": "1.进入该订单详情页。\n2.取消订单。",
+        "expected": "该订单状态为“已取消”。",
+        "remark": "",
+        "data_requirements": "",
+        "cleanup": ""
+      },
+      "changes": [],
+      "reason": "按当前依据和场景核对的人工合成建议",
+      "priority_reason": "订单主流程建议P1；不是产品事实或测试结果",
+      "evidence_refs": [
+        "initial:E2"
+      ],
+      "basis_status": "SUPPORTED"
+    }
+  ],
+  "unchanged": [],
+  "conflicts": [],
+  "requirement_questions": [
+    {
+      "key": "initial:Q1",
+      "function_ref": "F-ORDER",
+      "scenario_refs": [
+        "initial:S3"
+      ],
+      "parent_key": null,
+      "trigger": "",
+      "question": "应付总额保留几位小数、采用什么舍入方式、先舍入单价还是合计后舍入？",
+      "options": [
+        "待确认提议：合计后一次四舍五入至2位小数。",
+        "待确认提议：先舍入单价再计算，具体口径由业务决定。"
+      ],
+      "evidence_refs": [
+        "initial:E3"
+      ],
+      "impact": "影响金额预期和边界场景，不影响已明确的提交及取消规则。"
+    }
+  ],
+  "discovery_gaps": [],
+  "coverage": {
+    "input_units": [
+      {
+        "snapshot_ref": "M-CURRENT",
+        "segment_id": "P1",
+        "state": "PROCESSED",
+        "rule_refs": [
+          "initial:R1"
+        ],
+        "scenario_refs": [
+          "initial:S1"
+        ],
+        "issue_refs": [],
+        "note": "按合成条款记录处理去向"
+      },
+      {
+        "snapshot_ref": "M-CURRENT",
+        "segment_id": "P2",
+        "state": "PROCESSED",
+        "rule_refs": [
+          "initial:R2"
+        ],
+        "scenario_refs": [
+          "initial:S2"
+        ],
+        "issue_refs": [],
+        "note": "按合成条款记录处理去向"
+      },
+      {
+        "snapshot_ref": "M-CURRENT",
+        "segment_id": "P3",
+        "state": "PROCESSED",
+        "rule_refs": [
+          "initial:R3"
+        ],
+        "scenario_refs": [
+          "initial:S3"
+        ],
+        "issue_refs": [
+          "initial:Q1"
+        ],
+        "note": "按合成条款记录处理去向"
+      }
+    ],
+    "functions": [
+      {
+        "function_ref": "F-ORDER",
+        "scenario_refs": [
+          "initial:S1",
+          "initial:S2",
+          "initial:S3"
+        ],
+        "issue_refs": [
+          "initial:Q1"
+        ],
+        "state": "PARTIAL",
+        "note": "仅本批已确认范围"
+      }
+    ],
+    "branches": [
+      {
+        "rule_ref": "initial:R1",
+        "branch_ref": "initial:B1",
+        "scenario_refs": [
+          "initial:S1"
+        ],
+        "issue_refs": [],
+        "state": "MODELED",
+        "note": "不以规则条数代替分支覆盖"
+      },
+      {
+        "rule_ref": "initial:R2",
+        "branch_ref": "initial:B2",
+        "scenario_refs": [
+          "initial:S2"
+        ],
+        "issue_refs": [],
+        "state": "MODELED",
+        "note": "不以规则条数代替分支覆盖"
+      },
+      {
+        "rule_ref": "initial:R3",
+        "branch_ref": "initial:B3",
+        "scenario_refs": [
+          "initial:S3"
+        ],
+        "issue_refs": [
+          "initial:Q1"
+        ],
+        "state": "QUESTION",
+        "note": "不以规则条数代替分支覆盖"
+      }
+    ],
+    "scenarios": [
+      {
+        "scenario_ref": "initial:S1",
+        "suggestion_refs": [
+          "initial:A1"
+        ],
+        "unchanged_refs": [],
+        "issue_refs": [],
+        "state": "EXISTING",
+        "note": "设计覆盖，不是执行通过"
+      },
+      {
+        "scenario_ref": "initial:S2",
+        "suggestion_refs": [
+          "initial:A2"
+        ],
+        "unchanged_refs": [],
+        "issue_refs": [],
+        "state": "SUGGESTED",
+        "note": "设计覆盖，不是执行通过"
+      },
+      {
+        "scenario_ref": "initial:S3",
+        "suggestion_refs": [],
+        "unchanged_refs": [],
+        "issue_refs": [
+          "initial:Q1"
+        ],
+        "state": "QUESTION",
+        "note": "设计覆盖，不是执行通过"
+      }
+    ],
+    "cases": [
+      {
+        "case_ref": "C-SUBMIT",
+        "suggestion_refs": [
+          "initial:A1"
+        ],
+        "unchanged_refs": [],
+        "issue_refs": [],
+        "state": "SUGGESTED",
+        "note": "当前设计满足所选提交场景，待人工确认复用。"
+      }
+    ]
+  },
+  "limitations": [
+    "全部项目、来源及用例身份为人工合成，未绑定真实平台原件；未执行测试。",
+    "当前平台生命周期未核实；只比较所选用例，不能认定全项目无重复。"
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "analysis_type": "CASE_GENERATION",
+  "contract_version": 3,
+  "request_id": "synthetic-compact",
+  "project_id": 90001,
+  "revision": 1,
+  "mode": "INITIAL",
+  "scope": {
+    "name": "完全合成订单场景",
+    "full_scope": true,
+    "functions": [
+      {
+        "function_ref": "F-ORDER",
+        "name": "订单",
+        "scope_note": "完整合成订单正文和批注，仅用于离线验收"
+      }
+    ],
+    "target_ends": [
+      "门店APP"
+    ],
+    "case_scope": {
+      "description": "合成选定用例集合",
+      "complete": true,
+      "count": 1,
+      "library_revision": 8
+    }
+  },
+  "focus": "",
+  "materials": [
+    {
+      "snapshot_ref": "M-CURRENT",
+      "source_id": "synthetic-order-requirement",
+      "kind": "REQUIREMENT",
+      "side": "CURRENT",
+      "name": "完全合成订单需求及原型批注",
+      "version_ref": "PROVIDED-synthetic-v1",
+      "read_state": "READABLE",
+      "read_note": "",
+      "content_sha256": "f67be536b1944fb46cb6966f1df827bce8117fcc20fcbc690ff82dc4f79929fa",
+      "segments": [
+        {
+          "segment_id": "P1",
+          "location": "合成需求正文",
+          "text": "已启用门店的操作员在门店APP订单确认页，选择可售规格且数量为1后提交，订单创建为“待处理”。门店操作员在订单详情页取消“待处理”订单，订单状态变为“已取消”，并释放该订单占用库存；已取消订单不能再次取消。订单确认页应付总额按单价乘数量计算，未说明金额精度和舍入方式。",
+          "image_ref": ""
+        },
+        {
+          "segment_id": "P2",
+          "location": "对应页面批注",
+          "text": "订单取消后不扣减实际库存，只释放本订单占用库存。取消失败时订单状态和占用库存保持原状。未提供库存观察页面、接口或SQL，以及故障注入方法。",
+          "image_ref": ""
+        }
+      ]
+    }
+  ],
+  "update_pairs": [],
+  "decisions": [],
+  "related_reports": [],
+  "cases": [
+    {
+      "case_ref": "case-1",
+      "case_id": 101,
+      "design_version": 3,
+      "display_number": "历史展示编号-重复也不作身份",
+      "category_id": null,
+      "lifecycle": "UNKNOWN",
+      "design": {
+        "module": "订单",
+        "structure": "提交",
+        "case_type": "业务流程",
+        "priority": "P1",
+        "description": "可售规格下单",
+        "title": "数量1提交创建待处理订单",
+        "preconditions": "门店已启用，当前账号为门店操作员，规格可售。",
+        "steps": "1.进入订单确认页。\n2.选择该规格，数量填1。\n3.提交订单。",
+        "expected": "订单被创建，状态为“待处理”。",
+        "remark": "",
+        "data_requirements": "准备一条可售规格和已启用门店操作员账号。",
+        "cleanup": ""
+      },
+      "baseline": null
+    }
+  ],
+  "supplement": null,
+  "batch": {
+    "plan_ref": "plan-compact",
+    "batch_ref": "batch-compact",
+    "index": 1,
+    "total": 1,
+    "function_refs": [
+      "F-ORDER"
+    ],
+    "namespace": "compact",
+    "limitations": []
+  },
+  "input_limitations": [
+    "完全合成，未绑定真实项目；未调用模型或执行测试。"
+  ]
+}

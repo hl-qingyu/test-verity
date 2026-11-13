@@ -1,0 +1,241 @@
+{
+  "cases": [
+    {
+      "action": "REUSE",
+      "target": "case-name",
+      "sources": [
+        "Q-CURRENT"
+      ],
+      "evidence_quotes": [
+        {
+          "source": "Q-CURRENT",
+          "quote": "有效名称保存后重新打开配置页仍显示保存的原值。"
+        }
+      ],
+      "note": "所选用例完整覆盖两个字符名称保存及重新进入，保留人工优先级和设计。"
+    },
+    {
+      "action": "NEW",
+      "target": null,
+      "sources": [
+        "Q-CURRENT"
+      ],
+      "evidence_quotes": [
+        {
+          "source": "Q-CURRENT",
+          "quote": "显示名称允许2至5个字符，空格计入字符数且按原样保存；1个或6个字符均拒绝保存，原名称保持不变；有效名称保存后重新打开配置页仍显示保存的原值。"
+        }
+      ],
+      "design": {
+        "module": "配置",
+        "structure": "名称",
+        "case_type": "边界用例",
+        "priority": "P2",
+        "description": "验证名称字符限制与原样保存规则。",
+        "title": "显示名称输入5个字符保存并保留原值",
+        "preconditions": "当前账号为管理员。",
+        "steps": "1. 管理员在配置页记录原显示名称。\n2. 将显示名称改为“ABCDE”。\n3. 点击保存。\n4. 重新打开配置页。",
+        "expected": "重新打开后显示名称仍为“ABCDE”，其中空格按原样保留。",
+        "data_requirements": "拟准备管理员账号，名称输入为“ABCDE”，共5个字符。",
+        "cleanup": "",
+        "remark": "优先级为AI建议，待人工审核：P2，普通名称限制与持久化分支，影响局部配置；影响范围待核对。"
+      }
+    },
+    {
+      "action": "NEW",
+      "target": null,
+      "sources": [
+        "Q-CURRENT"
+      ],
+      "evidence_quotes": [
+        {
+          "source": "Q-CURRENT",
+          "quote": "显示名称允许2至5个字符，空格计入字符数且按原样保存；1个或6个字符均拒绝保存，原名称保持不变；有效名称保存后重新打开配置页仍显示保存的原值。"
+        }
+      ],
+      "design": {
+        "module": "配置",
+        "structure": "名称",
+        "case_type": "逻辑校验",
+        "priority": "P2",
+        "description": "验证名称字符限制与原样保存规则。",
+        "title": "显示名称输入3个字符保存并保留原值",
+        "preconditions": "当前账号为管理员。",
+        "steps": "1. 管理员在配置页记录原显示名称。\n2. 将显示名称改为“A B”。\n3. 点击保存。\n4. 重新打开配置页。",
+        "expected": "重新打开后显示名称仍为“A B”，其中空格按原样保留。",
+        "data_requirements": "拟准备管理员账号，名称输入为“A B”，共3个字符。",
+        "cleanup": "",
+        "remark": "优先级为AI建议，待人工审核：P2，普通名称限制与持久化分支，影响局部配置；影响范围待核对。"
+      }
+    },
+    {
+      "action": "NEW",
+      "target": null,
+      "sources": [
+        "Q-CURRENT"
+      ],
+      "evidence_quotes": [
+        {
+          "source": "Q-CURRENT",
+          "quote": "显示名称允许2至5个字符，空格计入字符数且按原样保存；1个或6个字符均拒绝保存，原名称保持不变；有效名称保存后重新打开配置页仍显示保存的原值。"
+        }
+      ],
+      "design": {
+        "module": "配置",
+        "structure": "名称",
+        "case_type": "逻辑校验",
+        "priority": "P2",
+        "description": "验证名称字符限制与原样保存规则。",
+        "title": "显示名称输入4个字符保存并保留原值",
+        "preconditions": "当前账号为管理员。",
+        "steps": "1. 管理员在配置页记录原显示名称。\n2. 将显示名称改为“A  B”。\n3. 点击保存。\n4. 重新打开配置页。",
+        "expected": "重新打开后显示名称仍为“A  B”，其中空格按原样保留。",
+        "data_requirements": "拟准备管理员账号，名称输入为“A  B”，共4个字符。",
+        "cleanup": "",
+        "remark": "优先级为AI建议，待人工审核：P2，普通名称限制与持久化分支，影响局部配置；影响范围待核对。"
+      }
+    },
+    {
+      "action": "NEW",
+      "target": null,
+      "sources": [
+        "Q-CURRENT"
+      ],
+      "evidence_quotes": [
+        {
+          "source": "Q-CURRENT",
+          "quote": "显示名称允许2至5个字符，空格计入字符数且按原样保存；1个或6个字符均拒绝保存，原名称保持不变；有效名称保存后重新打开配置页仍显示保存的原值。"
+        }
+      ],
+      "design": {
+        "module": "配置",
+        "structure": "名称",
+        "case_type": "边界用例",
+        "priority": "P2",
+        "description": "验证名称字符限制与原样保存规则。",
+        "title": "显示名称输入1个字符被拒绝且原名称不变",
+        "preconditions": "当前账号为管理员。",
+        "steps": "1. 管理员在配置页记录原显示名称。\n2. 将显示名称改为“A”。\n3. 点击保存。",
+        "expected": "保存被拒绝，显示名称保持为本次修改前的原值。",
+        "data_requirements": "拟准备管理员账号，名称输入为“A”，共1个字符。",
+        "cleanup": "",
+        "remark": "优先级为AI建议，待人工审核：P2，普通名称限制与持久化分支，影响局部配置；影响范围待核对。"
+      }
+    },
+    {
+      "action": "NEW",
+      "target": null,
+      "sources": [
+        "Q-CURRENT"
+      ],
+      "evidence_quotes": [
+        {
+          "source": "Q-CURRENT",
+          "quote": "显示名称允许2至5个字符，空格计入字符数且按原样保存；1个或6个字符均拒绝保存，原名称保持不变；有效名称保存后重新打开配置页仍显示保存的原值。"
+        }
+      ],
+      "design": {
+        "module": "配置",
+        "structure": "名称",
+        "case_type": "边界用例",
+        "priority": "P2",
+        "description": "验证名称字符限制与原样保存规则。",
+        "title": "显示名称输入6个字符被拒绝且原名称不变",
+        "preconditions": "当前账号为管理员。",
+        "steps": "1. 管理员在配置页记录原显示名称。\n2. 将显示名称改为“ABCDEF”。\n3. 点击保存。",
+        "expected": "保存被拒绝，显示名称保持为本次修改前的原值。",
+        "data_requirements": "拟准备管理员账号，名称输入为“ABCDEF”，共6个字符。",
+        "cleanup": "",
+        "remark": "优先级为AI建议，待人工审核：P2，普通名称限制与持久化分支，影响局部配置；影响范围待核对。"
+      }
+    },
+    {
+      "action": "NEW",
+      "target": null,
+      "sources": [
+        "Q-CURRENT"
+      ],
+      "evidence_quotes": [
+        {
+          "source": "Q-CURRENT",
+          "quote": "管理员在管理端订单确认页填写可售规格和数量1；填写后、点击提交前，后台操作员下架该规格，本次提交被拒绝且不创建订单。"
+        }
+      ],
+      "design": {
+        "module": "订单",
+        "structure": "提交",
+        "case_type": "业务流程",
+        "priority": "P1",
+        "description": "验证填单后规格下架对本次提交的限制。",
+        "title": "填单后规格下架再提交，被拒绝且不创建订单",
+        "preconditions": "当前账号为管理员；准备的规格起初可售。",
+        "steps": "1. 管理员在订单确认页填写该规格和数量1。\n2. 后台操作员按执行前准备的方法下架同一规格。\n3. 管理员提交已填写的订单。\n4. 按执行前准备的方法核对本次提交是否创建订单。",
+        "expected": "本次提交被拒绝，未创建本次订单。",
+        "data_requirements": "准备管理员和后台操作员、同一可售规格；执行前准备规格下架方法及本次订单记录的核对位置和权限。",
+        "cleanup": "",
+        "remark": "优先级为AI建议，待人工审核：P1，操作中商品资格变化影响重要提交；准备缺口不降低业务风险。"
+      }
+    },
+    {
+      "action": "UPDATE",
+      "target": "case-income",
+      "sources": [
+        "Q-CURRENT"
+      ],
+      "evidence_quotes": [
+        {
+          "source": "Q-CURRENT",
+          "quote": "合计只累计所选范围内状态为已确认的收入，按元累加；失败收入排除；本例仅使用整数金额。"
+        }
+      ],
+      "design": {
+        "expected": "该范围两笔已确认收入合计为10＋20＝30元。"
+      },
+      "note": "当前依据明确累加口径，仅补具体预期；保留人工描述、优先级、数据准备和清理。"
+    },
+    {
+      "action": "NEW",
+      "target": null,
+      "sources": [
+        "Q-CURRENT"
+      ],
+      "evidence_quotes": [
+        {
+          "source": "Q-CURRENT",
+          "quote": "合计只累计所选范围内状态为已确认的收入，按元累加；失败收入排除；本例仅使用整数金额。"
+        }
+      ],
+      "design": {
+        "module": "收入",
+        "structure": "收入合计",
+        "case_type": "逻辑校验",
+        "priority": "P2",
+        "description": "验证收入合计排除失败记录。",
+        "title": "查询含失败收入的范围，只累计已确认收入",
+        "preconditions": "当前账号为管理员。",
+        "steps": "1. 管理员在收入页选择准备记录所属范围。\n2. 点击查询并查看合计。",
+        "expected": "合计为已确认收入10元，不包含失败收入90元，即10＋0＝10元。",
+        "data_requirements": "拟准备同范围一笔已确认收入10元和一笔失败收入90元。",
+        "cleanup": "",
+        "remark": "优先级为AI建议，待人工审核：暂定P2，核对只读汇总过滤；资料未说明结算影响，不能据收入关键词升P0/P1。"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "kind": "EXECUTION_SETUP",
+      "text": "填单后下架用例执行前需准备同一规格的下架方法，以及本次提交是否产生订单记录的核对位置和权限。",
+      "sources": [
+        "Q-CURRENT"
+      ]
+    },
+    {
+      "kind": "BUSINESS_QUESTION",
+      "text": "服务端已受理请求后规格下架，本次订单是否继续创建？该时点与提交前下架不同。",
+      "sources": [
+        "Q-CURRENT"
+      ]
+    }
+  ],
+  "complete": false
+}

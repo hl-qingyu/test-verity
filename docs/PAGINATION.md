@@ -1,0 +1,30 @@
+# 分页跳转（2026-10-14）
+
+用户要求所有翻页操作补齐直接页码跳转。正式前端沿用总原型的“跳至 / 页码 / 确定”，由 `frontend/src/PageJump.tsx` 提供共用交互，页面保留原有上一页、下一页及数量说明。
+
+| 分页面板 | 来源 |
+| --- | --- |
+| 账号列表 | Accounts |
+| 用例列表、批量编辑、导入重复项 | Cases / CaseTableEditor / CaseImportDialog |
+| 需求风险清单、历史报告、历史会话 | RiskReports / RequirementChat |
+| 代码发现、变更结果 | CodeAnalysis / ChangeAnalysis |
+| 生成建议、新建选择、批量审核、入库结果 | CaseGeneration / CaseGenerationNew / GenerationReview |
+| 分析问题、用例检查、审核列表、新建选择 | CaseAnalysis / CaseAnalysisNew |
+
+共17处分页面板，15个代码入口（CaseAnalysis的分页组件复用三次）。用例主列表原有跳转已替换为同一组件。追加加载的记录、聊天消息、Git版本和仓库列表并非切页显示，保留累计加载和既有选择语义。
+
+## 交互与边界
+
+- “确定”和输入框回车都跳转；回车阻止冒泡及默认表单提交，按钮明确为非提交按钮。
+- 页码只接受安全正整数；已知总页数时拒绝超范围。错误以主题文字展示并关联输入，不使用浏览器提示气泡。
+- 空列表/单页及已传入加载、保存状态时禁用；当前页不重复触发读取。翻页、筛选或每页数量变化后同步页码，清除旧提示并保持输入节点和键盘焦点。
+- 历史报告/历史会话接口只有 `has_more`，允许输入正整数页码，仍显示真实当前页及下一页状态；不推算总页数。超出实际范围时沿用空列表反馈，可跳回已有页。
+- 只改页面和原型，复用原查询参数及取消机制；新增历史会话/风险清单的独立加载禁用。跨页选择、草稿、版本审核、入库确认及报告原件不变。
+
+## 原型与验证
+
+总原型为 `C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html`，同步仓库 `outputs/prototype-pending/verity-prototype.html`、`docs/prototypes/verity-requirement-risk-review.html` 和账号原型。共用原型行为校验 `docs/prototypes/check-pagination.cjs` 覆盖整数/范围、行内错误、绝对页码及批量编辑增量路由、当前页和禁用。
+
+前端全量129项通过，包括新4项页码边界/回车隔离/同步/禁用/入口检查，批量编辑原回归改为实际跳转并验证草稿及最终保存请求。两份总原型既有七组回归与分页专项通过；类型、ESLint、Prettier和生产构建结果见 `outputs/pagination-*-20261014.log`，既有主包500kB提示保留。
+
+实际React组件合成浏览器验证1440×900和390×844：末页跳转、按钮/回车、错误提示、焦点保留，无页面横向溢出；新建弹窗跨页勾选保留，回车后仍为新建表单，没有发起准备；窄屏审核列表单独滚动，分页完整可见。截图 `outputs/pagination-desktop-20261014.jpg`、`pagination-390-20261014.jpg`、`pagination-390-dialog-20261014.jpg`、`pagination-390-review-20261014.jpg`。所有QA请求由夹具响应，无API/真实AI/入库；不视为真实账号全模块端到端。临时入口交付前移除，夹具归档在outputs。

@@ -1,0 +1,102 @@
+{
+  "contract_version": 2,
+  "analysis_type": "CODE_REVIEW",
+  "request_id": "synthetic-code-review-001",
+  "source_mode": "GITHUB",
+  "targets": [
+    "BUG",
+    "REQUIREMENT_DEVIATION",
+    "FRONTEND_BACKEND_MISMATCH"
+  ],
+  "focus": "核查当前小型合成示例的模型字段映射和取消状态函数，仅静态审查。",
+  "sources": [
+    {
+      "source_id": "server",
+      "source_kind": "GITHUB",
+      "repository_kind": "BACKEND",
+      "name": "synthetic/server",
+      "snapshot_ref": "github:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "files": [
+        {
+          "file_id": "main",
+          "path": "api.py",
+          "read_state": "READABLE",
+          "read_note": "",
+          "segments": [
+            {
+              "segment_id": "full",
+              "start_line": 1,
+              "text": "from fastapi import FastAPI\napp = FastAPI()\n\n@app.get(\"/orders/{order_id}\")\ndef detail(order_id: int):\n    return {\"id\": order_id, \"verificationStatus\": \"COMPLETED\"}\n\ndef cancel_status(status: str) -> str:\n    \"\"\"Return the new status; no persistence or external hooks.\"\"\"\n    if status == \"CANCELLED\":\n        return status\n    return \"CANCELLED\""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source_id": "web",
+      "source_kind": "GITHUB",
+      "repository_kind": "WEB",
+      "name": "synthetic/web",
+      "snapshot_ref": "github:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "files": [
+        {
+          "file_id": "main",
+          "path": "src/order.ts",
+          "read_state": "READABLE",
+          "read_note": "",
+          "segments": [
+            {
+              "segment_id": "full",
+              "start_line": 1,
+              "text": "export async function loadOrder(id: number) {\n  const response = await fetch(\"/orders/\" + id);\n  const body = await response.json();\n  return {status: body.verificationStatus};\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source_id": "mobile",
+      "source_kind": "GITHUB",
+      "repository_kind": "FLUTTER",
+      "name": "synthetic/mobile",
+      "snapshot_ref": "github:cccccccccccccccccccccccccccccccccccccccc",
+      "commit": "cccccccccccccccccccccccccccccccccccccccc",
+      "files": [
+        {
+          "file_id": "main",
+          "path": "lib/order.dart",
+          "read_state": "READABLE",
+          "read_note": "",
+          "segments": [
+            {
+              "segment_id": "full",
+              "start_line": 1,
+              "text": "import 'dart:convert';\nimport 'package:http/http.dart' as http;\n\nFuture<String> loadOrder(String base, int id) async {\n  final response = await http.get(Uri.parse('$base/orders/$id'));\n  final body = jsonDecode(response.body) as Map<String, dynamic>;\n  return body['verifyStatus'] as String? ?? 'PENDING_VERIFY';\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "source_id": "rules",
+      "name": "合成取消规则",
+      "origin": "REQUIREMENT",
+      "snapshot_ref": "synthetic-rules-v1",
+      "read_state": "READABLE",
+      "read_note": "",
+      "segments": [
+        {
+          "segment_id": "cancel",
+          "location": "取消状态规则 / 第1段",
+          "text": "cancel_status仅允许PENDING转换为CANCELLED；COMPLETED必须拒绝取消，不能返回CANCELLED。重复取消CANCELLED可保持原状态。",
+          "image_ref": ""
+        }
+      ]
+    }
+  ],
+  "input_limitations": []
+}

@@ -1,0 +1,99 @@
+{
+  "analysis_type": "CASE_GENERATION",
+  "contract_version": 2,
+  "request_id": "synthetic-clarification",
+  "project_id": 90001,
+  "revision": 2,
+  "mode": "INITIAL",
+  "scope": {
+    "name": "只补金额精度场景",
+    "full_scope": false,
+    "functions": [
+      {
+        "function_ref": "F-ORDER",
+        "name": "订单",
+        "scope_note": "本次合成需求明确的订单规则"
+      }
+    ],
+    "target_ends": [
+      "门店APP"
+    ],
+    "case_scope": {
+      "description": "合成选定用例集合",
+      "complete": true,
+      "count": 0,
+      "library_revision": 0
+    }
+  },
+  "focus": "",
+  "materials": [
+    {
+      "snapshot_ref": "M-AMOUNT",
+      "source_id": "synthetic-order-requirement",
+      "kind": "REQUIREMENT",
+      "side": "CURRENT",
+      "name": "人工合成订单需求",
+      "version_ref": "PROVIDED-synthetic-v1",
+      "read_state": "READABLE",
+      "read_note": "",
+      "content_sha256": "1db06b0714c737f521645fa2b4ff6ad5adc2c4dc34e58d136dbb04601eafe7fd",
+      "segments": [
+        {
+          "segment_id": "P1",
+          "location": "合成条款1",
+          "text": "门店APP订单确认页展示应付总额，应付总额按单价乘数量计算；示例单价19.955元、数量2。未说明金额精度、舍入方式及计算顺序。",
+          "image_ref": ""
+        }
+      ]
+    }
+  ],
+  "update_pairs": [],
+  "decisions": [
+    {
+      "decision_ref": "D-AMOUNT",
+      "version": 1,
+      "statement": "应付总额先使用单价原值乘数量，再对合计结果一次四舍五入至2位小数，显示于门店APP订单确认页。",
+      "scope_note": "确认当前版本金额规则；测试规格单价19.955元、数量2适用。",
+      "function_refs": [
+        "F-ORDER"
+      ],
+      "actor": "合成产品确认人",
+      "confirmed_at": "2026-10-12T10:00:00+08:00",
+      "applicability": "VERIFIED_CURRENT",
+      "supersedes": [],
+      "origin": {
+        "request_id": "synthetic-initial",
+        "question_key": "initial:Q1"
+      },
+      "basis_refs": [
+        "M-AMOUNT"
+      ]
+    }
+  ],
+  "related_reports": [],
+  "cases": [],
+  "supplement": {
+    "parent_request_id": "synthetic-initial",
+    "decision_refs": [
+      "D-AMOUNT"
+    ],
+    "affected_scenario_refs": [
+      "initial:S3"
+    ],
+    "scope_note": "只补金额场景，不重生成提交/取消，不改父报告。"
+  },
+  "batch": {
+    "plan_ref": "plan-clarification",
+    "batch_ref": "batch-clarification",
+    "index": 1,
+    "total": 1,
+    "function_refs": [
+      "F-ORDER"
+    ],
+    "namespace": "clarification",
+    "limitations": []
+  },
+  "input_limitations": [
+    "全部项目、来源及用例身份为人工合成，未绑定真实平台原件；未执行测试。"
+  ]
+}

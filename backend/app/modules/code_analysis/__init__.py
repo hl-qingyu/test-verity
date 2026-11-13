@@ -1,0 +1,1 @@
+"""Standalone code analysis module."""

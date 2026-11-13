@@ -1,0 +1,60 @@
+body { padding-right: 388px; }
+body.rules-collapsed { padding-right: 58px; }
+#businessRules {
+  position: fixed; inset: 0 0 0 auto; margin: 0; width: 376px;
+  height: 100dvh; max-height: 100dvh; box-sizing: border-box; padding: 0;
+  border: 0; border-left: 1px solid #dce5df; background: #fbfcf9;
+  color: #34483d; font: 13px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+  overflow: auto; box-shadow: -4px 0 18px #243a3010;
+}
+#businessRules::backdrop { background: transparent; pointer-events: none; }
+#businessRules .br-header {
+  position: sticky; top: 0; background: #fbfcf9; z-index: 1; display: flex;
+  align-items: center; justify-content: space-between; gap: 10px; padding: 17px 18px;
+  border-bottom: 1px solid #e1e8dd;
+}
+#businessRules .br-heading strong { display: block; font-size: 17px; }
+#businessRules .br-subtitle { color: #788779; font-size: 11px; }
+#businessRules button {
+  padding: 6px 10px; min-height: 32px; margin: 0; border: 1px solid #d9e2d2;
+  border-radius: 6px; background: white; color: #315e45; font: inherit;
+  cursor: pointer; white-space: nowrap;
+}
+#businessRules button:hover { background: #eef4e8; }
+#businessRules :focus-visible { outline: 2px solid #527c41; outline-offset: 2px; }
+#brBody { padding: 0 18px 20px; }
+#businessRules .br-context { display: grid; gap: 3px; padding: 15px 0; }
+#businessRules .br-context span { color: #7c887c; font-size: 11px; }
+#businessRules .br-context strong { font-size: 14px; overflow-wrap: anywhere; }
+#businessRules .br-search { display: grid; gap: 6px; color: #687a69; font-size: 12px; }
+#businessRules input {
+  display: block; width: 100%; min-width: 0; box-sizing: border-box;
+  padding: 8px 10px; border: 1px solid #d8e2d2; border-radius: 7px;
+  background: white; color: #34483d; font: inherit;
+}
+#businessRules .br-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+#businessRules .br-toolbar button { font-size: 11px; padding: 4px 8px; }
+#businessRules .br-current, #businessRules .br-foot { font-size: 11px; color: #7c887b; margin: 12px 0; }
+#businessRules .br-entry { border: 1px solid #dfe6d8; background: white; border-radius: 8px; margin: 10px 0; }
+#businessRules .br-entry.br-active { border-color: #7e9c6e; box-shadow: 0 0 0 1px #e4eddd; }
+#businessRules summary { cursor: pointer; padding: 12px 11px; font-weight: 600; overflow-wrap: anywhere; }
+#businessRules .br-badge { display: inline-block; font-size: 10px; font-weight: 400; color: #496943; background: #edf4e7; border-radius: 4px; padding: 0 4px; margin-left: 5px; }
+#businessRules .br-entry-body { padding: 0 13px 12px; }
+#businessRules h4 { color: #40623f; font-size: 12px; margin: 13px 0 7px; }
+#businessRules ul { padding-left: 17px; margin: 0; }
+#businessRules li { padding-left: 1px; margin: 8px 0; overflow-wrap: anywhere; }
+#businessRules.br-collapsed { width: 48px; overflow: hidden; }
+#businessRules.br-collapsed .br-heading { display: none; }
+#businessRules.br-collapsed .br-header { padding: 12px 6px; }
+#businessRules.br-collapsed #brToggle { white-space: normal; width: 34px; padding: 8px; line-height: 1.6; }
+dialog.br-has-rules { max-width: calc(100vw - 422px); margin-right: 400px; margin-left: auto; }
+body.rules-collapsed dialog.br-has-rules { max-width: calc(100vw - 92px); margin-right: 70px; }
+@media (max-width: 1000px) {
+  body, body.rules-collapsed { padding-right: 0; }
+  #businessRules { inset: auto 8px 8px auto; width: min(376px, calc(100vw - 16px)); height: auto; max-height: 48dvh; border: 1px solid #dce5df; border-radius: 10px; box-shadow: 0 3px 24px #203f3024; }
+  #businessRules .br-header { padding: 10px 14px; }
+  #businessRules.br-collapsed { width: auto; }
+  #businessRules.br-collapsed .br-header { padding: 5px; }
+  #businessRules.br-collapsed #brToggle { width: auto; white-space: nowrap; }
+  dialog.br-has-rules, body.rules-collapsed dialog.br-has-rules { max-width: calc(100vw - 24px); margin-left: auto; margin-right: auto; }
+}

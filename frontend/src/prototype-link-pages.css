@@ -1,0 +1,51 @@
+.prototype-page-picker {
+  min-width: 0;
+  margin-top: 10px;
+}
+.prototype-page-picker .form-field {
+  margin-top: 10px;
+}
+.prototype-page-picker .code-file-picker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+.prototype-page-picker .code-file-tree {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  padding: 6px;
+}
+.prototype-page-picker .code-tree-directory {
+  margin: 6px 0;
+}
+.prototype-page-picker .code-tree-directory summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.prototype-page-picker .code-tree-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 6px 0 6px 12px;
+}
+.prototype-page-picker .check-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.prototype-page-picker .code-tree-file .check-label {
+  flex: 1;
+  flex-wrap: nowrap;
+}
+.prototype-page-picker .code-tree-file > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.prototype-page-picker .prototype-link-frame {
+  height: 340px;
+  margin-top: 10px;
+}

@@ -1,0 +1,308 @@
+{
+  "contract_version": 2,
+  "analysis_type": "CHANGE_IMPACT",
+  "request_id": "synthetic-code_change",
+  "project_id": 1,
+  "revision": 1,
+  "mode": "CODE_CHANGE",
+  "outcome": "COMPLETE",
+  "summary": {
+    "conclusion": "新增manual_lookup直接复用原有首项读取；空列表会在所提供函数内触发IndexError。旧legacy_lookup同样可触发，属于原有Bug且增加调用入口，未证明HTTP接口或部署行为。",
+    "priority_risk_refs": [
+      "R1"
+    ],
+    "inheritance_note": ""
+  },
+  "target_results": [
+    {
+      "target": "BUG",
+      "status": "COMPLETE",
+      "scope": "仅本次提供范围",
+      "checks": [
+        {
+          "subject": "空列表直接调用路径",
+          "assessment": "DEVIATION",
+          "evidence_refs": [
+            "E1",
+            "E2",
+            "E3"
+          ],
+          "risk_refs": [
+            "R1"
+          ],
+          "note": "代码声明空结果为None，实际直接索引与该约定冲突；未执行测试。"
+        }
+      ],
+      "risk_refs": [
+        "R1"
+      ],
+      "limitation_refs": []
+    }
+  ],
+  "changes": [
+    {
+      "key": "C1",
+      "pair_ref": "p1",
+      "mapping_refs": [
+        "m1"
+      ],
+      "diff_refs": [
+        "d1"
+      ],
+      "title": "新增manual_lookup函数入口",
+      "function": "订单",
+      "kind": "ADD",
+      "evidence_state": "STATIC_SUPPORTED",
+      "before": "已有legacy_lookup调用first_order。",
+      "after": "新增manual_lookup调用同一first_order。",
+      "business_effect": "新增manual_lookup函数入口",
+      "evidence_refs": [
+        "E1",
+        "E2"
+      ],
+      "questions": [],
+      "limitation_refs": []
+    }
+  ],
+  "function_impacts": [],
+  "code_impacts": [
+    {
+      "key": "K1",
+      "title": "原有首项读取增加调用入口",
+      "change_refs": [
+        "C1"
+      ],
+      "subject": "first_order",
+      "subject_refs": [
+        {
+          "snapshot_ref": "code-new",
+          "unit_id": "u1"
+        }
+      ],
+      "directness": "DIRECT",
+      "certainty": "STATIC_SUPPORTED",
+      "description": "manual_lookup复用未变首项读取；影响仅指所提供函数可调用路径。",
+      "evidence_refs": [
+        "E2",
+        "E3"
+      ],
+      "chain_refs": [
+        "N1"
+      ],
+      "suggestion": "在公共first_order处理空列表，保证两个调用方行为一致。",
+      "limitation_refs": []
+    }
+  ],
+  "case_impacts": [],
+  "risks": [
+    {
+      "key": "R1",
+      "title": "空订单列表使新旧查询函数抛出IndexError",
+      "target_refs": [
+        "BUG"
+      ],
+      "change_refs": [
+        "C1"
+      ],
+      "severity": "MEDIUM",
+      "severity_reason": "所提供查询函数在空列表下失败；没有外部调用方，不能推定生产事故范围。",
+      "evidence_state": "STATIC_SUPPORTED",
+      "trigger": "直接调用legacy_lookup([])或manual_lookup([])。",
+      "actual": "调用first_order后执行orders[0]；空列表无索引0，抛出IndexError，而函数文档明确空结果返回None。",
+      "impact": "本范围函数不能正常返回；HTTP错误、页面状态及实际调用量未提供。",
+      "root_cause": "公共first_order在取首项前没有处理空列表。",
+      "target_views": [
+        {
+          "target": "BUG",
+          "evidence_state": "STATIC_SUPPORTED",
+          "expected": "按first_order的函数文档，空订单列表返回None；非空返回首项。",
+          "basis": "所提供函数的明确空结果约定，以及Python空列表索引语义。",
+          "basis_refs": [
+            "E1",
+            "E2"
+          ],
+          "comparison_rows": []
+        }
+      ],
+      "attribution": {
+        "kind": "pre_existing",
+        "explanation": "旧legacy_lookup([])已能走到同一orders[0]；新增入口复用同根因，不是首次引入。",
+        "before_refs": [
+          "E1"
+        ],
+        "after_refs": [
+          "E2",
+          "E3"
+        ],
+        "causal_change_refs": [
+          "C1"
+        ],
+        "impact_expansion": "增加manual_lookup函数可调用入口；未证实外部路由可达。",
+        "limitation_refs": []
+      },
+      "history_refs": [],
+      "evidence_refs": [
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "chain_refs": [
+        "N1"
+      ],
+      "counterevidence_note": "所提供函数中没有前置空值保护；外部调用方未提供，结论仅限直接函数调用，不宣称缺全系统防护。",
+      "fix_suggestion": "在公共first_order取索引前处理空列表并返回None，两个调用方共用修复。",
+      "verification_suggestion": "legacy_lookup([])与manual_lookup([])均返回None；单项和多项仍返回首项。尚未执行。",
+      "limitation_refs": []
+    }
+  ],
+  "historical_reviews": [],
+  "regression_scope": [
+    {
+      "key": "G1",
+      "title": "分别直接调用legacy_lookup([])与manual_lookup([])，再传一项和多项订单",
+      "function": "订单",
+      "change_refs": [
+        "C1"
+      ],
+      "risk_refs": [
+        "R1"
+      ],
+      "case_refs": [],
+      "action": "ADD_SCENARIO",
+      "priority": "HIGH",
+      "reason": "共享原有Bug与新增入口同时回归",
+      "preconditions": "进入所提供的订单编辑或函数调用范围",
+      "data_requirements": "按下面步骤准备边界值",
+      "steps": "分别直接调用legacy_lookup([])与manual_lookup([])，再传一项和多项订单",
+      "expected": "空列表返回None；单项和多项返回首项，不抛出IndexError。",
+      "expected_basis_refs": [
+        "E1",
+        "E2"
+      ],
+      "certainty": "STATIC_SUPPORTED",
+      "questions": [],
+      "limitation_refs": [
+        "L2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "key": "E1",
+      "side": "BEFORE",
+      "pair_ref": "p1",
+      "snapshot_ref": "code-old",
+      "unit_id": "u1",
+      "segment_id": "s1",
+      "kind": "TEXT",
+      "start_line": 1,
+      "end_line": 6,
+      "excerpt": "def first_order(orders):\n    \"\"\"Return None when no orders exist.\"\"\"\n    return orders[0]\n\ndef legacy_lookup(orders):\n    return first_order(orders)",
+      "observation": ""
+    },
+    {
+      "key": "E2",
+      "side": "AFTER",
+      "pair_ref": "p1",
+      "snapshot_ref": "code-new",
+      "unit_id": "u1",
+      "segment_id": "s1",
+      "kind": "TEXT",
+      "start_line": 1,
+      "end_line": 9,
+      "excerpt": "def first_order(orders):\n    \"\"\"Return None when no orders exist.\"\"\"\n    return orders[0]\n\ndef legacy_lookup(orders):\n    return first_order(orders)\n\ndef manual_lookup(orders):\n    return first_order(orders)",
+      "observation": ""
+    },
+    {
+      "key": "E3",
+      "side": "AFTER",
+      "pair_ref": "p1",
+      "snapshot_ref": "code-new",
+      "unit_id": "u1",
+      "segment_id": "s1",
+      "kind": "TEXT",
+      "start_line": 8,
+      "end_line": 9,
+      "excerpt": "def manual_lookup(orders):\n    return first_order(orders)",
+      "observation": ""
+    }
+  ],
+  "chains": [
+    {
+      "key": "N1",
+      "nodes": [
+        {
+          "node_id": "n1",
+          "label": "目标侧manual_lookup",
+          "evidence_refs": [
+            "E3"
+          ]
+        },
+        {
+          "node_id": "n2",
+          "label": "目标侧first_order直接取orders[0]",
+          "evidence_refs": [
+            "E2"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "n1",
+          "to": "n2",
+          "relation": "CALL",
+          "certainty": "STATIC_SUPPORTED",
+          "evidence_refs": [
+            "E3"
+          ],
+          "note": "manual_lookup第9行显式调用first_order；目标侧第1-3行定义空结果约定及读取逻辑。"
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "snapshot_ref": "code-old",
+      "unit_id": "u1",
+      "side": "BEFORE",
+      "pair_ref": "p1",
+      "status": "CHECKED",
+      "segment_reviews": [
+        {
+          "segment_id": "s1",
+          "status": "CHECKED",
+          "note": "已核查所提供片段"
+        }
+      ],
+      "note": "仅本次提供范围",
+      "limitation_refs": []
+    },
+    {
+      "snapshot_ref": "code-new",
+      "unit_id": "u1",
+      "side": "AFTER",
+      "pair_ref": "p1",
+      "status": "CHECKED",
+      "segment_reviews": [
+        {
+          "segment_id": "s1",
+          "status": "CHECKED",
+          "note": "已核查所提供片段"
+        }
+      ],
+      "note": "仅本次提供范围",
+      "limitation_refs": []
+    }
+  ],
+  "limitations": [
+    {
+      "key": "L2",
+      "code": "NO_CASE_SCOPE",
+      "description": "未提供已有用例，只提出回归场景，未核对全库是否已有。",
+      "affects": [
+        "G1"
+      ],
+      "needed": "需要用例映射时提供内部ID与设计版本。"
+    }
+  ]
+}

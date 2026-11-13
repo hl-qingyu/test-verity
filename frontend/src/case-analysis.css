@@ -1,0 +1,471 @@
+/* Match the approved cr-page prototype; classes stay scoped to this module. */
+.case-review-page .head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.case-review-page .code-analysis-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 240px;
+  gap: 18px;
+  align-items: start;
+  margin-top: 20px;
+}
+.case-review-page .code-analysis-layout > * {
+  min-width: 0;
+}
+.case-review-page .code-analysis-context {
+  position: sticky;
+  top: 18px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 18px;
+  max-height: calc(100svh - 130px);
+  overflow-wrap: anywhere;
+}
+.case-review-page .code-analysis-context h2 {
+  font-size: 16px;
+  margin-bottom: 15px;
+}
+.case-review-page .code-analysis-context > p {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.case-review-page .code-analysis-main {
+  overflow: hidden;
+}
+.case-review-page .code-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px 18px;
+}
+.case-review-page .code-filters > * {
+  max-width: none;
+  min-width: 0;
+}
+.case-review-page .change-result-tabs {
+  margin: 0;
+}
+.case-review-page .code-analysis-overview > div > p {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 0;
+}
+.review-results {
+  padding: 16px;
+  max-height: 580px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.review-results .rule-card {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 18px;
+  background: white;
+  margin-bottom: 12px;
+}
+.review-results .rule-card:last-child {
+  margin-bottom: 0;
+}
+.review-results .rule-card h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.review-results .rule-card > .between {
+  align-items: flex-start;
+  gap: 12px;
+}
+.review-results .rule-card p {
+  font-size: 12px;
+  color: #7d8b79;
+  line-height: 1.8;
+  margin: 9px 0 0;
+  overflow-wrap: anywhere;
+}
+.review-results .rule-card p.hint {
+  font-size: 11px;
+}
+.review-results .rule-card .badge {
+  flex-shrink: 0;
+}
+.review-badges,
+.review-card-actions {
+  margin-top: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.review-results .rule-card > .link {
+  padding: 6px 0;
+  display: inline-block;
+}
+.review-results .rule-card details {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.review-bottom {
+  padding: 16px 18px;
+  border-top: 1px solid var(--line);
+  background: #f4f8ef;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.review-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.case-review-page .code-analysis-pagination {
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+  gap: 12px;
+}
+.review-audit-layout {
+  display: grid;
+  flex-shrink: 0;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 18px;
+  min-height: 320px;
+  margin-top: 16px;
+}
+.review-audit-layout > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.review-audit-layout aside {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  padding-right: 14px;
+}
+.review-audit-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.review-audit-layout aside > .check-label,
+.review-audit-layout aside > .code-analysis-pagination {
+  flex-shrink: 0;
+}
+.review-audit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+.review-audit-row button {
+  flex: 1;
+  min-width: 0;
+  padding: 10px;
+  white-space: normal;
+  text-align: left;
+}
+.review-audit-layout section > h3 {
+  margin: 0 0 16px;
+}
+.review-audit-layout .code-analysis-pagination {
+  flex-wrap: wrap;
+  font-size: 11px;
+  margin-top: 12px;
+  gap: 8px;
+}
+.review-chat {
+  max-height: 400px;
+  overflow: auto;
+  margin-block: 16px;
+}
+.case-review-dialog {
+  width: calc(100vw - 32px);
+  max-width: 1100px;
+}
+.case-review-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: 90svh;
+}
+.case-review-dialog > .doc-dialog-head,
+.case-review-dialog > .review-dialog-footer {
+  flex-shrink: 0;
+}
+.case-review-dialog > .panel-pad {
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+}
+.case-review-dialog .case-dialog-surface > .panel-pad {
+  min-height: 0;
+  overflow: auto;
+}
+.case-review-dialog .doc-dialog-head {
+  padding: 18px 24px;
+}
+.case-review-dialog .doc-dialog-head h2 {
+  font-size: 19px;
+  margin: 0;
+}
+.case-review-dialog .review-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--line);
+  background: #fafbf7;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.review-dialog-footer > button {
+  margin: 0;
+  min-height: 40px;
+}
+.review-dialog-footer > .check-label {
+  margin-right: auto;
+}
+.case-review-dialog form,
+.review-prepare-fields {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.review-prepare-fields {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.case-review-dialog .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.case-review-dialog .form-grid > * {
+  min-width: 0;
+}
+.case-review-dialog .form-grid > .span2 {
+  grid-column: 1/-1;
+}
+.case-review-dialog .field-label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  color: #697c6c;
+}
+.case-review-dialog .field-label > input,
+.case-review-dialog .field-label > textarea {
+  width: 100%;
+  min-width: 0;
+}
+.case-review-dialog .check-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.case-review-dialog .check-label input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  accent-color: var(--green);
+}
+.case-review-dialog .evidence {
+  margin-block: 12px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.case-review-dialog .evidence p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.case-review-dialog .hint {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.case-review-dialog details {
+  margin-block: 14px;
+}
+.case-review-dialog summary {
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.case-review-dialog .review-source-card {
+  margin: 12px 0 0;
+}
+.review-source-card > .form-select,
+.review-source-card > .form-select-label {
+  margin-top: 12px;
+}
+.review-form-section > h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+.review-chat-panel .evidence {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.review-chat-panel form,
+.review-chat-panel .field-label {
+  display: grid;
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .case-review-page .code-analysis-layout {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+  .case-review-page .code-analysis-context {
+    grid-column: 1/-1;
+    position: static;
+    max-height: none;
+  }
+}
+@media (max-width: 900px) {
+  .case-review-page .code-analysis-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .case-review-page .code-analysis-records {
+    position: static;
+    max-height: 300px;
+  }
+  .case-review-page .code-analysis-context {
+    grid-column: auto;
+  }
+}
+@media (max-width: 650px) {
+  .case-review-page .head-actions {
+    justify-content: flex-start;
+  }
+  .case-review-page .code-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .case-review-page .code-analysis-pagination {
+    flex-wrap: wrap;
+  }
+  .review-audit-layout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    align-content: start;
+  }
+  .review-audit-layout aside {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 0 0 12px;
+    max-height: 240px;
+    overflow: auto;
+  }
+  .case-review-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100svh - 16px);
+  }
+  .case-review-dialog .doc-dialog-head,
+  .case-review-dialog > .panel-pad,
+  .case-review-dialog .review-dialog-footer {
+    padding: 16px;
+  }
+  .case-review-dialog .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .case-review-dialog .form-grid > .span2 {
+    grid-column: auto;
+  }
+}
+
+.case-review-dialog .field-label > input,
+.case-review-dialog .field-label > textarea {
+  border: 1px solid #dce3d8;
+  border-radius: 7px;
+  padding: 10px 11px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  box-sizing: border-box;
+}
+.case-review-dialog .field-label > textarea {
+  min-height: 95px;
+  line-height: 1.8;
+  resize: vertical;
+}
+.case-review-dialog .field-label > input:focus-visible,
+.case-review-dialog .field-label > textarea:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.case-review-dialog .field-label > input:disabled,
+.case-review-dialog .field-label > textarea:disabled {
+  background: #f7f9f3;
+  color: #93a08f;
+}
+.case-review-dialog fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.case-review-page .evidence,
+.case-review-dialog .evidence {
+  border: 1px solid #e2e8dc;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f6f8f1;
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.case-review-page .evidence p {
+  margin: 8px 0 0;
+}
+.case-review-dialog .review-source-card {
+  margin-top: 0;
+}
+.review-source-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.case-review-dialog input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--green);
+  flex-shrink: 0;
+}
+.review-design > section {
+  margin: 12px 0;
+}
+.review-design p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.case-review-dialog .review-detail-title {
+  margin-top: 16px;
+  font-size: 18px;
+  line-height: 1.7;
+}
+.case-review-dialog > .panel-pad > h3 {
+  font-size: 14px;
+  margin-top: 20px;
+}
+
+.review-check-actions {
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.review-check-actions > .link {
+  font-size: 12px;
+  padding: 0;
+  color: var(--green);
+}
+.review-check-actions > .small {
+  font-size: 12px;
+}

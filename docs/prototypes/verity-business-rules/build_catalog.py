@@ -1,0 +1,402 @@
+"""Maintain code-verified business annotations separately from the standalone prototype."""
+
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+PAGES = {
+    "overview": "项目概览", "documents": "需求资料", "prototypes": "原型资料",
+    "cases": "用例管理", "requirements": "需求分析", "generate": "用例生成",
+    "coverage": "用例分析", "code": "代码分析", "changes": "变更分析",
+    "skills": "Skill 管理", "ai-acceptance": "AI结果验收", "project": "项目设置",
+    "platform": "平台设置",
+}
+catalog = {key: {"name": name, "entries": []} for key, name in PAGES.items()}
+
+
+def add(pages, key, title, matches, groups, sources):
+    entry = {"id": key, "title": title, "matches": matches.split("|"),
+             "groups": [{"title": k, "rules": v} for k, v in groups.items()],
+             "sources": sources.split("|")}
+    for source in entry["sources"]:
+        if not (ROOT / source).is_file():
+            raise ValueError(source)
+    for page in pages.split("|"):
+        catalog[page]["entries"].append(entry)
+
+
+add("overview", "scope", '项目概览和页面跳转', "项目概览|概览范围|项目切换", {'显示范围': ['只显示你有权限访问、尚未删除的项目。', '切换项目后，资料、用例、分析记录和筛选条件随之切换。'],
+ '进入详情': ['点击统计或待办可进入对应页面。记录已删除或无权访问时，显示相应提示。', '概览统计资料和处理进度；测试结果以用例中的执行记录为准。']}, "frontend/src/ProjectOverview.tsx|frontend/src/OverviewEntry.tsx|backend/app/modules/overview/service.py|backend/app/modules/projects/service.py")
+
+add("documents|prototypes", "material-list", '分组、移动和排序', "创建资料分组|创建原型分组|修改分组名称|修改原型分组|整理资料分组|整理原型分组", {'分组名称': ['必填，最多80字符，不能含控制字符。首尾空格会自动去除。', '同一项目、同一类资料的分组不能重名。“未分组”不能用作分组名称。', '没有资料的空分组也会保留。'],
+ '移动和排序': ['一次可移动1–500份资料，目标分组须属于当前项目和同一类资料。',
+           '选择“未分组”可移出原分组。移动后原文、版本和分析记录保持不变。',
+           '上移、下移只调整当前分组内的顺序。第一份不能上移，最后一份不能下移。'],
+ '保存失败': ['操作期间有人修改了资料库，需要刷新后重试。']}, "backend/app/modules/documents/schemas.py|backend/app/modules/documents/service.py|frontend/src/Documents.tsx|frontend/src/Prototypes.tsx")
+
+add("documents", "upload", '上传需求资料和新版本', "上传需求资料|上传文件新版本|uploadForm", {'文件要求': ['支持网页、图片、PDF、Markdown、文本、Word和Excel文件。后缀包括html、htm、png、jpg、jpeg、webp、pdf、md、txt、doc、docx、xls、xlsx。',
+          '不接受空文件。文件内容须与格式一致，含宏或结构损坏的新版Word、Excel文件无法上传。',
+          '文件名1–240字符，不能含目录分隔符、控制字符或首尾空格。',
+          '文本支持UTF-8、带编码标记的UTF-16和GB18030，不能含空字符。'],
+ '上传结果': ['新建资料可选择多个文件；更新资料时只上传对应的新文件。',
+          '上传新版本后，旧文件、附件关联和已有报告继续保留。',
+          '重复提交同一上传不会重复保存；同一上传记录的文件或目标不一致时，需重新上传。',
+          '上传完成前会再检查账号权限和资料库是否有变化。'],
+ '大小和预览': ['资料上传目前没有统一的单文件大小上限。分析结果导入的16兆字节限制不适用于这里。', '长文本预览可能只显示部分内容，分析仍使用完整原文。']}, "frontend/src/Documents.tsx|backend/app/modules/documents/service.py|backend/app/modules/documents/files.py|backend/app/modules/documents/schemas.py")
+
+add("documents|prototypes", "versions", '历史版本和原件下载', "文件历史版本|文件版本|原型版本|历史版本|历史依据", {'查看历史': ['每个版本显示版本号、文件名、上传人和上传时间。',
+          '点击“查看原文”只切换预览，不恢复为当前版本。',
+          '历史版本只读，不能覆盖或单独删除。上传新版后，旧版仍可查看。',
+          '新建分析时需另选资料版本，预览的版本不会自动带入分析。'],
+ '下载和预览': ['下载的是当前查看的版本；目录原型下载为目录包。',
+           '网页使用隔离预览，Word和Excel使用只读预览。预览失败时可下载原件。',
+           '资料删除后，旧报告仍可查看当时的原文；新分析不能再选这份资料。']}, "frontend/src/Documents.tsx|frontend/src/Prototypes.tsx|backend/app/modules/documents/service.py|backend/app/modules/prototypes/directories.py")
+
+add("documents", "link-bind", '关联附件', "关联平台附件|附件关联|来源对照", {'选择附件': ['仅支持Markdown原文中已识别出的链接。',
+          '只能在资料的当前版本修改关联；历史版本只读。',
+          '附件须是本项目已有的文件版本，不能选资料自身或已删除的资料。',
+          '系统按文件名推荐附件，由你确认。'],
+ '版本更新': ['关联后使用所选附件版本。附件上传新版后，旧关联不变。', '原文更新时，只有能确认对应关系的链接才会继承；无法确认时提示处理。', '后续修改关联，不影响已有分析使用的原文和附件。']}, "backend/app/modules/documents/service.py|backend/app/modules/documents/markdown_links.py|frontend/src/DocumentLinks.tsx")
+
+add("documents|prototypes", "material-delete", '删除资料', "确认删除资料|删除原型资料|materialDelete", {'删除前': ['先显示引用情况和删除影响，确认后删除。一次只能删除一份。', '资料库已被修改时，需要刷新后重新确认。'],
+ '删除后': ['资料从列表和新建分析的可选项中移除，不提供恢复入口。', '原件、历史版本、附件关联和旧报告中的依据保留。', '远端网页、仓库和本地目录不受影响，已入库用例也会保留。']}, "frontend/src/MaterialDeleteDialog.tsx|backend/app/modules/documents/service.py")
+
+add("prototypes", "prototype-add", '添加和编辑原型资料', "添加原型|编辑实时来源|原型图片|HTML 文件|更新文件版本|prototypeForm", {'资料信息': ['可添加图片、网页文件、原型链接、GitHub原型代码或本地目录。',
+          '链接和GitHub来源的名称必填，最多200字符；说明最多2000字符。',
+          '图片支持png、jpg、jpeg、webp；网页文件支持html、htm。新建时可多选，更新时只选一个文件。'],
+ '原型链接': ['填写完整的网页地址，支持普通或加密网页连接，最多8192字符。', '地址不能带用户名、密码、空格、控制字符或反斜杠。', '保存后可预览网页；用于分析时还需读取页面并选择范围。'],
+ '编辑后': ['文件更新会新增版本。链接和GitHub来源编辑后更新当前设置。', '已有分析继续使用当时保存的内容。']}, "frontend/src/PrototypeEditor.tsx|backend/app/modules/prototypes/schemas.py|backend/app/modules/prototypes/service.py")
+
+add("prototypes", "prototype-git", 'GitHub原型文件和更新检查', "GitHub 原型代码|检查更新|读取文件清单|固定提交版本", {'选择文件': ['先选本人连接和项目已关联的授权仓库，再选分支或提交版本、目录。',
+          '读取清单后至少勾选一个文件，路径不能重复。',
+          '保存时记录所选提交的40位版本标识。更换连接、仓库、分支或目录后，需重新读取清单。'],
+ '检查更新': ['检查更新会比较分支提交。分支有新提交时，所选目录可能没有变化。', '读取后会再检查连接和项目权限；期间有变化时，需重新读取。', '平台只读取仓库，不修改远端文件、分支或合并请求。']}, "frontend/src/PrototypeEditor.tsx|frontend/src/Prototypes.tsx|backend/app/modules/prototypes/service.py|backend/app/modules/prototypes/schemas.py")
+
+add("prototypes", "prototype-directory", '上传目录和选择分析文件', "上传本地目录|上传目录新版本|选择分析文件|lpdForm", {'上传要求': ['选择目录后，至少勾选一个可上传文件。',
+          '名称可沿用目录名，说明最多2000字符。',
+            '支持html、htm、css、js、ts、jsx、tsx、vue、json、md、txt、svg文件，以及png、jpg、jpeg、webp图片。',
+          '版本库、依赖、构建缓存、凭据和环境配置文件会被排除。文件正文含私钥时无法上传。',
+          '相对路径最多512字符，不能是绝对路径，不能含空层级、上级目录、反斜杠、冒号或控制字符。路径不能重复，也不能同时作为文件和目录。'],
+ '版本和分析范围': ['上传新目录会新增版本，每个版本保留自己的文件清单和内容校验值。',
+             '分析时选定一个版本，再勾选本次文件。切换版本后，原文件选择会清空。',
+             '网页预览会加载目录内引用的资源；分析范围仍以你勾选的文件为准。']}, "frontend/src/prototypeDirectory.ts|frontend/src/PrototypeEditor.tsx|frontend/src/PrototypeDirectoryFiles.tsx|backend/app/modules/prototypes/directories.py")
+
+add("prototypes|requirements|generate|coverage|code|changes", "prototype-link", '原型链接预览和页面选择', "实时预览|放大查看|原型链接预览|选择原型页面|读取页面目录", {'预览': ['加载、刷新、放大和新窗口打开，展示的都是网站当前页面。', '预览不保存分析资料。无法内嵌或需要登录时，可在新窗口查看。'],
+ '选择分析页面': ['支持采集的网站可读取页面目录；选好页面后保存本次内容。',
+            '读取内容包括所选页面正文、说明、批注和引用的Markdown正文，不运行页面脚本。',
+            '网站链接或目录有变化时，需重新读取并选择。',
+            '需求分析最多选择1000个链接页面，页面路径最多512字符。']}, "frontend/src/PrototypeLinkPreview.tsx|frontend/src/PrototypeLinkPages.tsx|backend/app/modules/prototypes/service.py|backend/app/modules/requirements/risk_schemas.py")
+
+add("cases", "case-search", '用例筛选、勾选和导出', "用例管理|导出用例|筛选条件", {'列表和选择': ['默认显示活动用例，可切换停用用例或全部用例。',
+           '筛选支持包含、等于、不包含，最多20个条件，每个条件值最多1000字符。',
+           '每页可显示10、20、50或100条。翻页后保留已勾选用例。'],
+ '导出': ['按当前的活动状态、分类和筛选条件导出全部结果，包含其他分页。', '导出保持默认14列，不包含已删除的用例。']}, "backend/app/modules/cases/schemas.py|backend/app/modules/cases/service.py|frontend/src/Cases.tsx")
+
+add("cases", "case-edit", '新建和编辑用例', "新建用例|新建测试用例|编辑用例|用例 |caseForm", {'填写要求': ['优先级可留空，或填写P0–P4。',
+          '测试结果可留空，或选择未测、通过、失败、阻塞、跳过、废弃。用例类型可自由填写。',
+          '功能模块最多500字符，功能结构1000字符，用例类型200字符；用例描述和验证用例子项各4000字符。',
+          '前置条件、操作步骤和预期结果各最多30000字符；备注、数据要求和清理要求各10000字符；测试人员200字符。',
+          '手工新建用例时，业务内容允许留空。'],
+ '保存后': ['修改设计内容会新增设计版本，测试结果重置为未测，测试人员清空，审核状态重置为待审核。',
+         '只改测试结果、测试人员或审核状态，会追加当前版本的记录，不新增设计版本。调整分类也不新增设计版本。',
+         '旧设计和测试记录保留。保存期间用例库有变化时，需重新读取。']}, "backend/app/modules/cases/schemas.py|backend/app/modules/cases/service.py|frontend/src/CaseEditor.tsx")
+
+add("cases", "case-history", '用例历史、停用和恢复', "历史只读|启停历史|历史设计|历史版本", {'历史版本': ['选择版本可查看当时的设计、测试、审核和来源记录。历史版本只读。', '导入的用例可下载原导入文件，原序号和编号保存在来源记录中。'],
+ '停用和恢复': ['停用或恢复都需确认并填写原因，原因1–10000字符。',
+           '操作后保留编号、设计和测试历史，新增一条启停记录。',
+           '停用后不能新增测试执行记录；编辑设计不会自动恢复用例。',
+           '恢复后沿用已有设计和记录；删除的用例编号不再使用。']}, "frontend/src/CaseEditor.tsx|backend/app/modules/cases/service.py|backend/app/modules/cases/schemas.py")
+
+add("cases", "case-batch", '批量编辑和统一修改', "批量编辑用例|统一修改字段|确认保存用例|放弃未保存修改", {'选择范围': ['可选已勾选用例、当前筛选结果或整个项目，包含其他分页，最多20000条。',
+          '逐行编辑可为每条填写不同内容。',
+          '统一修改只更新勾选字段；勾选后留空表示清空，未勾选的内容不变。',
+          '没有填写修改内容或重复选择同一用例时，不能保存。'],
+ '确认保存': ['保存前显示影响条数。设计有改动的用例会新增版本，并重置测试和审核记录。', '编辑期间用例库或所选范围有变化时，需重新读取。', '离开未保存的编辑时，可继续编辑或放弃修改。']}, "frontend/src/CaseTableEditor.tsx|backend/app/modules/cases/service.py|backend/app/modules/cases/schemas.py")
+
+add("cases", "case-category", '用例分类和迁移', "管理用例分类|创建用例分类|编辑分类名称|确认删除分类|迁移用例并删除分类|批量修改用例分类", {'分类名称': ['项目成员可管理分类。名称1–80字符，同项目不能重名，首尾空格会去除。',
+          '不能使用“未分类”“全部分类”或含控制字符的名称。',
+          '分类独立于功能模块，不占默认14列。改名或调整分类不影响编号、设计版本和测试记录。',
+          '一次可调整1–2000条用例的分类。'],
+ '删除分类': ['空分类可直接确认删除。', '分类下有用例时，必须先选另一个分类。确认后迁移全部用例，再删除原分类。', '不能迁移到自身；没有其他分类时，需先创建目标分类。']}, "backend/app/modules/cases/schemas.py|backend/app/modules/cases/service.py|frontend/src/Cases.tsx")
+
+add("cases", "case-import", '导入用例和处理重复项', "导入已有用例|检查导入|校验未通过|caseImport", {'文件限制': ['支持Excel和CSV文件，后缀为xlsx、xls、csv，最多50兆字节（50×1024×1024字节）。',
+          'Excel最多30个工作表，每表最多20000行、200列，所有表合计最多5000000字符。',
+          '每个非空工作表的第一个非空行为表头，按标准中文列名读取。缺列和空值保留为空。',
+          '重复表头、非法优先级或测试结果、Excel业务单元格含公式或合并单元格时，需修改原文件。',
+          'CSV中等号开头的内容按文字读取。空行，以及只有序号或编号的行会跳过。',
+            '原用例编号保留，缺失时由平台生成。原序号和测试结果记录在来源中。未填写测试人员会提示，但允许保留为空。'],
+ '检查和确认': ['选择本批分类后检查文件。有错误时整批不能入库，修改文件后重新上传。',
+           '更换分类后需重新检查。检查后用例库有变化，也需重新检查。',
+           '按完整设计内容检查重复。与库内用例重复时，每条选择跳过或仍然新增，原用例不变。',
+           '文件内重复且库内无对应项时，需修改原文件。',
+           '同一批次重复确认不会重复入库。']}, "frontend/src/CaseImportDialog.tsx|backend/app/modules/cases/files.py|backend/app/modules/cases/service.py|backend/app/modules/cases/schemas.py")
+
+add("cases", "case-delete", '删除用例', "确认删除用例|删除用例", {'删除后': ['确认后从列表、导出和重复检查中移除，编号不再使用。', '历史设计、测试记录、来源和旧报告引用保留，不提供删除恢复入口。', '用例库有变化时，需刷新后重新确认。']}, "backend/app/modules/cases/service.py|frontend/src/Cases.tsx")
+
+add("requirements", "risk-new", '新建和重新发起需求分析', "新建需求分析|重新发起需求分析|riskNewForm", {'填写要求': ['报告名称必填，最多200字符；补充关注点最多3000字符。',
+          '至少选择一份资料，同一资料只能选一次。',
+          '文件需选版本；目录需选版本和文件；链接需读取目录并选择页面。',
+          '开始后使用本人AI配置，在后台排队。配置或资料有变化时，需重新确认。'],
+ '重新发起': ['仅失败或已取消的分析可重试。沿用原资料范围、分析规则和已保存的输入，原记录保留。', '重试使用本人当前配置，调用方式沿用原任务。需要改范围时，应新建分析。']}, "backend/app/modules/requirements/risk_schemas.py|backend/app/modules/requirements/risk_analysis_service.py|frontend/src/RiskReports.tsx")
+
+add("requirements", "risk-handle", '风险处理和导出', "风险详情|分析范围与边界|导出风险清单", {'处理风险': ['状态可选待确认、待补充、已解决、不适用。除待确认外，必须填写处理说明，最多3000字符。',
+          '有人先修改了处理结果时，需刷新后再保存。',
+          '范围详情显示本次资料、读取情况和未检查范围；可选建议单独展示。'],
+ '导出清单': ['按功能和处理状态筛选导出，包含原文依据、影响、建议和当前处理结果。', '导出不调用AI，也不改变处理状态。']}, "backend/app/modules/requirements/risk_schemas.py|backend/app/modules/requirements/risk_service.py|frontend/src/RiskReports.tsx")
+
+add("requirements", "risk-chat", '需求对话和人工添加风险', "新建分析会话|补充系统资料与原型范围|人工添加风险点|本次资料与范围|需求对话", {'发送问题': ['问题必填，最多8000字符，不能全为空格。', '同一轮回答处理中不能重复发送；会话有新消息时，需更新后继续。', '对话使用本人AI配置，回复保存在会话中，报告和用例库不变。'],
+ '添加风险': ['需选择来源消息和功能，填写标题、等级、类型、描述、原文依据、影响、待澄清问题和改进建议。',
+          '原文依据须来自本次资料，聊天消息不能代替原文。',
+          '确认后只添加当前这一条风险，同时保存来源消息和操作记录。']}, "backend/app/modules/requirements/chat_schemas.py|backend/app/modules/requirements/chat_service.py|backend/app/modules/requirements/risk_schemas.py|backend/app/modules/requirements/risk_service.py|frontend/src/RequirementChat.tsx")
+
+add("code", "code-new", '新建代码分析', "新建代码分析|taskForm", {'填写要求': ['分析名称必填，最多200字符；补充关注点最多10000字符。',
+          '选择1–3个检查目标、1–100个代码来源，最多100份资料。目标和来源不能重复。',
+          '一次分析只能选择GitHub代码或本地代码。每个来源至少选一个文件，文件路径不能重复。'],
+ '检查目标': ['缺陷检查可选单端实现代码，不能只选原型代码。',
+          '仅检查需求偏差时，必须选择需求或原型资料。组合检查时，至少一个目标的资料条件满足才能开始。',
+          '检查前后端不一致时，必须同时选择后端代码，以及网页端或移动端代码。',
+          '切换检查目标后保留已有选择。'],
+ '代码文件': ['本地单文件最多2000000字符，上传内容须通过校验；GitHub单文件最多2000000字节，使用所选提交的40位版本标识。',
+          '不接受空白、含空字符、非文本、被排除的文件或含私钥的正文。',
+          '更换连接或版本后需重新读取文件清单。',
+          '所选代码和资料会保存到本项目，再发送给本人AI。项目成员可查看报告。',
+          '在线分析没有16兆字节的合计输入限制，仍受单文件限制和模型容量限制。']}, "frontend/src/CodeAnalysisNew.tsx|frontend/src/codeAnalysisApi.ts|backend/app/modules/code_analysis/schemas.py|backend/app/modules/code_analysis/sources.py")
+
+add("code", "code-handle", '代码问题详情和处理', "代码分析内容|结论详情|代码分析对话", {'处理状态': ['可选待确认、已确认、已解决、误报、待补证据。',
+          '除待确认外，必须填写说明，最多10000字符。',
+          '只能处理成功报告中已有的问题。处理结果有更新时，需刷新后再保存。',
+          '详情展示本次文件、行号和原文摘录。保存处理结果不会修改代码或运行测试。'],
+ '对话': ['问题必填，最多10000字符，可关联当前问题。', '使用提问人本人的AI配置，调用方式沿用原任务。回答单独保存。']}, "backend/app/modules/code_analysis/schemas.py|backend/app/modules/code_analysis/service.py|backend/app/modules/code_analysis/chat.py|frontend/src/CodeAnalysisDetail.tsx")
+
+add("generate", "generation-new", '新建用例生成和维护', "新建用例生成|新建生成|维护已有用例|cg-new|cgNewForm|generationNew", {'填写要求': ['分析名称必填，最多200字符；指定功能范围最多2000字符。',
+          '补充关注点在页面最多填写4000字符，接口最多接受10000字符。',
+          '选择1–100份资料，同一资料不能重复。',
+          '已有用例可选不对照、整个项目、所选分类或手动勾选，最多20000条，包含跨页选择。',
+          '准备时记录所选用例及版本。用例库或设计有变化时，需重新读取。'],
+ '维护已有用例': ['可选择历史生成记录作为基准，也可为每份资料选择旧版本；没有历史生成记录也能维护。',
+            '选择旧资料时，需使用维护模式，并选择完整替换或增量补充。',
+            '增量补充只增加新资料，旧内容未出现时仍保留。',
+            '没有历史入库基准的用例，需人工核对新旧设计和当前修改。停用用例不会自动恢复。'],
+ '准备和开始': ['先读取并保存本次资料、附件、用例、风险报告和分析规则，这一步不调用AI。',
+           '准备完成后查看范围和输入量，再确认开始。提交中不能重复操作。',
+           '在线生成没有正文和附件合计16兆字节的限制，仍受资料读取和模型容量限制。']}, "frontend/src/CaseGenerationNew.tsx|backend/app/modules/case_generation/schemas.py|backend/app/modules/case_generation/sources.py|backend/app/modules/case_generation/service.py")
+
+add("generate", "generation-start", '确认开始、取消和重试', "确认生成|开始本人AI|输入范围确认|固定输入|准备生成|失败重试", {'开始生成': ['准备完成后，由原发起人确认开始。记录有更新时需刷新后重新确认。',
+          '开始前检查资料权限和本人AI配置，通过后排队生成。',
+          '关闭页面后任务继续执行。取消只处理本人尚未完成的批次，已完成结果保留。'],
+ '失败重试': ['由AI生成且失败或已取消的批次可重试；入库正在处理时暂不能重试。',
+          '重试前检查资料权限，使用重试人本人的配置，调用方式沿用原任务。',
+          '原输入、配置、错误和尝试记录保留。平台不自动发起新的收费任务。',
+          'Codex命令行内部的多轮请求和重试，按该调用方式执行。']}, "backend/app/modules/case_generation/service.py|backend/app/modules/case_generation/schemas.py|frontend/src/CaseGeneration.tsx")
+
+add("generate", "generation-review", '审阅、修改和忽略建议', "建议详情|审阅生成用例|审阅用例|cg-detail|单条审核|连续审核", {'修改内容': ['新增和更新建议必须填写验证用例子项、操作步骤和预期结果。',
+          '复用和停用建议的设计内容不能修改。',
+          '保存修改会新增一条人工处理记录，AI原结果保留。',
+          '除忽略外，需核对依据；依据待核对或存在冲突时，还需填写说明并确认处理结果。忽略也需说明原因。',
+          '摘录未匹配到原文时显示待核对提示，其他建议仍可审阅。'],
+ '保存和切换': ['目标用例被修改、删除、停用，分类被删除，或多条建议指向同一目标时，需先人工核对。',
+           '已入库或已复用的建议不能再改草稿。',
+           '切换上一条或下一条前，需先保存或放弃当前修改。保存草稿后仍需确认入库。']}, "frontend/src/CaseGenerationDialogs.tsx|frontend/src/GenerationBatchReview.tsx|backend/app/modules/case_generation/service.py|backend/app/modules/case_generation/apply.py")
+
+add("generate", "generation-apply", '审核入库和重复用例', "确认批量入库|审核入库|重复处理|入库结果|cg-preview|cg-review|确认入库", {'入库前检查': ['预览会检查当前草稿、目标版本、重复用例和未处理问题。',
+           '同一批次不能对同一用例执行冲突操作。目标版本已变时，需重新核对。',
+           '复用时，设计内容和目标版本须一致，目标须是活动用例；原设计和测试记录保留。',
+           '目标已停用时，需先选择恢复并填写原因。',
+           '仍然新增、忽略或恢复都需填写原因。发现重复后，只有选择“仍然新增”才会新增用例。',
+           '分类可保留、指定或清空；指定分类须属于本项目且尚未删除。'],
+ '入库结果': ['确认后逐条保存，并在当前请求中返回结果。某条失败不影响其他成功项。',
+          '新增用例的测试结果为未测，测试人员为空，审核状态为已审核。',
+          '更新设计会新增版本；复用保留原测试记录；停用保留设计和历史。',
+          '同一次提交重复确认不会重复入库。']}, "backend/app/modules/case_generation/apply.py|backend/app/modules/case_generation/schemas.py|frontend/src/GenerationReview.tsx|frontend/src/GenerationBatchReview.tsx")
+
+add("generate", "generation-decide", '业务澄清和补充生成', "确认业务澄清结论|业务澄清|补充生成|聊天转草稿", {'保存澄清': ['结论和依据必填，各1–10000字符；影响范围必填，1–2000字符。',
+          '确认后保存新版本，原澄清结论保留。',
+          '补充生成需引用已保存的结论，创建关联新任务，只处理对应功能；原报告不变。'],
+ '对话转草稿': ['对话问题必填，最多10000字符。', '转为人工草稿时，需确认、填写说明，并选择1–100条依据。', '草稿保存后继续审核和入库。']}, "backend/app/modules/case_generation/schemas.py|backend/app/modules/case_generation/service.py|backend/app/modules/case_generation/chat.py|frontend/src/CaseGenerationDialogs.tsx")
+
+add("coverage", "coverage-new", '新建用例分析和关联复核', "新建用例分析|关联复核|cr-new|caseReviewNew", {'分析方式': ['对照需求分析需选择1–100份资料，同一资料不能重复。',
+          '仅检查用例质量时，只选择用例，不提交需求或原型资料。',
+          '只分析活动用例，最多20000条。范围可选全部、分类和搜索结果，或跨页勾选。',
+          '搜索按标题、功能模块和预期结果匹配。提交前检查所选用例及其设计版本。'],
+ '填写要求': ['分析名称必填，最多200字符；关注点最多10000字符。',
+          '目录需选择文件，链接需选择页面；无法读取的资料不能提交。',
+          '质量检查至少需要一条用例。对照需求可选零条，但需勾选“仅识别所选需求缺失场景”。'],
+ '准备和复核': ['读取并准备资料不调用AI，确认开始后才排队分析。', '关联复核创建一条新记录，保留原报告和处理历史。', '失败或取消后，可沿用原输入和调用方式准备新记录，再确认开始。']}, "frontend/src/CaseAnalysisNew.tsx|backend/app/modules/case_analysis/schemas.py|backend/app/modules/case_analysis/service.py")
+
+add("coverage", "coverage-handle", '处理用例分析结果和应用修订', "用例分析详情|修订用例|应用修订|不一致详情|缺失场景|cr-detail|cr-apply", {'处理状态': ['可选待确认、已确认待处理、已解决、不适用。',
+          '除待确认外，必须填写说明，最多10000字符。有人更新了报告时，需刷新后再保存。',
+          '业务待澄清和执行准备问题不能直接生成修订草稿。',
+          '其他修订需先核对依据，验证用例子项、操作步骤和预期结果不能为空。'],
+ '应用修订': ['修改已有用例时，只能对应一条活动用例，且设计版本须与核对时一致。',
+          '已应用的建议不能再改草稿。确认时会再次检查草稿版本、重复项和目标版本。',
+          '应用在后台处理，当前入库任务未结束时不能再次提交。',
+          '重复项可选择复用；仍然新增须填写原因。复用保留原测试记录。',
+          '新增用例为未测、测试人员空、已审核；修改设计会新增版本。']}, "backend/app/modules/case_analysis/service.py|backend/app/modules/case_analysis/apply.py|backend/app/modules/case_analysis/schemas.py|frontend/src/CaseAnalysis.tsx")
+
+add("changes", "change-new", '新建变更分析', "新建变更分析|changeNewForm|固定新旧对照", {'填写要求': ['分析名称必填，最多200字符；页面关注点最多4000字符，接口最多10000字符。',
+          '选择1–3个不同目标、1–100组新旧对照，并确认本次范围。',
+          '辅助资料和实现代码来源各最多100个；用例最多20000条，不能重复；历史分析条目最多1000条。'],
+ '分析目标': ['代码变更可检查缺陷、需求偏差、前后端不一致。', '需求和原型变更可检查业务影响、实现跟进、用例回归。'],
+ '选择新旧版本': ['文件的新旧版本不能相同，资料类型须符合本次模式。可选择另一份同类资料作为新版本。',
+            '目录原型须选两个不同版本，每个勾选文件至少在一侧存在。',
+            '代码使用固定提交版本或已有本地快照。',
+            '原型链接的旧版来自已有报告保存的内容，新版重新读取页面。',
+            '需区分完整替换和增量补充：补充资料中未出现的旧内容仍保留。'],
+ '开始分析': ['将所选新旧内容和附件完整交给AI，不按文件大小或代码关联自动删减、拆批。', '没有正文与附件合计16兆字节的限制，结果范围以本次选择为准。']}, "frontend/src/ChangeAnalysisNew.tsx|frontend/src/ChangePrototype.tsx|backend/app/modules/change_analysis/schemas.py|backend/app/modules/change_analysis/sources.py|backend/app/modules/change_analysis/service.py")
+
+add("changes", "change-handle", '处理变更结果和导出', "变化项|影响与风险|回归建议|导出完整变更记录|变更详情", {'处理状态': ['变化和风险可选待确认、已确认、已解决、误报、待补证据。',
+          '回归建议可选待确认、已采纳、暂缓、不采纳。',
+          '除待确认外，必须填写说明，最多10000字符。保存后追加处理记录，AI原文保留。'],
+ '完整导出': ['导出当前分析的全部分页、结果类型、新旧范围、人工处理和证据缺口，不受当前筛选影响。', '不包含其他分析记录，原导入文件保持不变。'],
+ '旧分批记录': ['旧记录待开始或部分批次失败时，可按页面允许状态重新分析。', '重新分析会创建完整输入的新记录，原分批计划、结果和人工处理保留。']}, "backend/app/modules/change_analysis/service.py|backend/app/modules/change_analysis/schemas.py|frontend/src/ChangeAnalysis.tsx|frontend/src/ChangeImport.tsx")
+
+add("requirements|code|changes|generate|coverage", "analysis-import", '导入本地分析结果', "导入本地分析结果|导入代码分析结果|导入变更分析结果|导入用例生成结果|导入用例分析结果", {'选择文件': ['需求、代码、变更和用例生成需同时提供输入文件与结果文件；用例分析使用本模块导出的输入和报告包。',
+          '输入文件通常名为input.json，结果文件通常名为report.json或risk-report.json。',
+          '需求分析支持第3版结果格式，代码和变更分析支持第2版；用例分析按本模块格式检查。',
+          '代码分析每份导入文件最多16兆字节。这是结果导入限制，不是在线分析的合计输入限制。'],
+ '导入检查': ['检查分析类型、格式版本、所属任务、资料关联和原文引用。资料和代码须能关联到当前项目。', '文件不配套、引用缺失、字段重复冲突、附件不匹配或无权访问时，不能导入。'],
+ '导入结果': ['导入不调用AI，也不执行代码或测试。', '生成建议导入后仍需审核、处理重复项并确认入库。', '原文件和来源记录保留。']}, "frontend/src/CodeAnalysisImport.tsx|frontend/src/ChangeImport.tsx|frontend/src/CaseGenerationDialogs.tsx|backend/app/modules/code_analysis/service.py|backend/app/modules/requirements/risk_service.py|backend/app/modules/case_generation/imports.py|backend/app/modules/case_analysis/service.py")
+
+add("requirements|code|changes|coverage|generate", "candidate", '查看和修订未通过检查的结果', "候选与待处理问题|重新校验候选|候选字段冲突|候选修订|candidate", {'查看问题': ['能解析的建议逐条展示，重复字段的各个值一并显示，等待人工选择。', '无法解析时保留原文。通过结构、权限和引用检查后，才保存为正式报告。'],
+ '人工修订': ['修订不调用AI。需求、代码、变更和用例分析的完整结果最多16×1024×1024字符。',
+          '处理原因必填，1–10000字符，不能全为空格，并需确认。',
+          '仅原发起人可查看和修订这四类问题结果。排队或运行中不能修改，失败后才开放保存。',
+          '他人已保存新修订时，需重新读取。每次保存记录人员、时间、原因和检查结果，原响应保留。',
+          '检查通过后转为只读，已有成功报告不覆盖。'],
+ '用例生成': ['有问题的建议单独处理，其他有效建议可继续审核。', '单条修正内容最多1048576字符；也可选择忽略并填写原因。', '修订通过后继续审核和入库，重复字段需先处理。']}, "backend/app/modules/candidate_results/schemas.py|backend/app/modules/candidate_results/service.py|backend/app/modules/case_generation/schemas.py|backend/app/modules/case_generation/candidate_review.py|frontend/src/AnalysisCandidateReview.tsx")
+
+add("requirements|code|changes|generate|coverage", "cancel-retry", '取消和重试分析', "取消本次分析|取消分析|重新分析|重试分析", {'取消': ['只有发起人能取消自己的未完成分析。离开页面或关闭浏览器，后台任务仍会继续。', '取消后保留输入、已有结果和操作记录。已发送给AI的请求可能继续产生费用。'],
+ '重试': ['需求、代码和变更分析重试时创建新记录。代码分析只允许重试AI来源的失败或已取消记录。',
+        '旧分批变更记录待开始或部分失败时，可重新按完整输入分析。',
+        '用例分析重试后先进入准备完成状态，需再确认开始。',
+        '用例生成重试失败或取消的批次，保留原尝试记录。',
+        '各类重试都会重新检查资料权限和本人的AI配置。'],
+ '调用方式': ['平台不自动新建收费重试任务。', 'Codex命令行可自行多轮请求、内部重试和压缩上下文；失败后不会自动改用接口方式。']}, "backend/app/modules/requirements/risk_analysis_service.py|backend/app/modules/code_analysis/service.py|backend/app/modules/change_analysis/service.py|backend/app/modules/case_generation/service.py|backend/app/modules/case_analysis/service.py")
+
+add("requirements|code|changes|generate|coverage", "analysis-delete", '删除分析记录', "确认删除分析记录|删除分析记录", {'删除条件': ['管理员和项目负责人可删除项目内记录；普通成员只能删除自己的记录。',
+          '需求报告由多个任务共享时，普通成员须拥有全部关联记录，才能删除。',
+          '分析、关联对话、生成批次或入库操作还在排队或运行时，不能删除。',
+          '确认期间记录有更新时，需重新查看后再确认。'],
+ '删除结果': ['记录从页面移除，输入、分析规则、原响应、人工处理和入库历史保留。', '已入库的用例继续保留。需求任务及其共享报告一并处理。']}, "frontend/src/AnalysisRecordDelete.tsx|backend/app/modules/projects/record_deletion.py")
+
+add("project|overview", "project-edit", '创建和编辑项目', "创建项目|项目信息|编辑项目|newProjectForm", {'填写要求': ['项目名称必填，1–80字符，首尾空格会去除；描述最多2000字符。', '负责人须是有效账号。普通用户创建的项目由本人负责，管理员可指定其他负责人。', '项目标识自动生成。'],
+ '编辑和切换': ['管理员或项目负责人可编辑项目；只有管理员能更换负责人。', '编辑期间项目有变化时，需刷新后再保存。', '切换项目后，只显示目标项目的资料、用例和分析记录。']}, "backend/app/modules/projects/service.py|backend/app/modules/projects/schemas.py|frontend/src/Projects.tsx|frontend/src/App.tsx")
+
+add("project", "project-members", '添加和移除项目成员', "添加项目成员|调整成员权限|移除项目成员", {'添加成员': ['仅管理员和项目负责人可操作。从已有有效账号中选人，不在这里创建账号。', '项目分负责人和普通成员；测试、开发、产品、经理等平台角色不自动获得项目管理权。'],
+ '移除成员': ['负责人不能直接移除；需先由管理员更换负责人。', '移除后失去项目访问权限，历史操作、报告和上传记录保留。', '项目成员已有变化时，需刷新后再操作。']}, "backend/app/modules/projects/service.py|backend/app/modules/projects/schemas.py|frontend/src/Projects.tsx")
+
+add("project", "project-repo", '关联、编辑和移除仓库', "关联 GitHub 仓库|编辑仓库|删除项目仓库关联", {'关联仓库': ['从本人GitHub连接已授权的仓库中选择，不支持直接填写任意仓库地址。',
+          '默认分支必填，最多255字符。用途可选后端、移动端、网页端、原型或其他。',
+          '读取期间连接或项目权限有变化时，需重新读取。'],
+ '移除仓库': ['仅管理员或项目负责人可操作。仓库仍被原型资料引用时，不能移除。', '只移除本项目关联，远端仓库、个人连接和其他项目关联保留。', '已有报告保存的代码版本不变。']}, "backend/app/modules/projects/service.py|backend/app/modules/projects/schemas.py|frontend/src/Projects.tsx")
+
+add("project", "local-code", '本地目录和读取记录', "添加本地代码目录|编辑本地代码目录|读取变化记录|选择本地目录|本地代码", {'选择目录': ['浏览器需支持目录选择，并由你授予只读权限。',
+          '名称1–80字符，目录名1–255字符，不能含路径分隔符、冒号或控制字符。',
+          '重新授权时目录名须一致。目录授权按用户、项目和当前浏览器分别保存。'],
+ '读取范围': ['目录最多32层，路径最多512字符。', '排除版本库、依赖、构建缓存、凭据、私钥、二进制和媒体文件。只读取所选范围内的文本。', '目录读取失败时显示错误，不将文件记为已删除。'],
+ '变化记录': ['比较两次读取的内容，显示新增、修改、删除，以及纳入或移出范围的文件。', '记录时间是读取时间；两次读取之间的编辑过程不记录。']}, "frontend/src/LocalCode.tsx|frontend/src/localCodeFiles.ts|backend/app/modules/local_code/schemas.py|backend/app/modules/local_code/service.py")
+
+add("project|overview", "project-delete", '删除项目', "删除项目", {'删除条件': ['只有管理员或项目负责人可删除，需再次确认。', '分析、对话或入库任务还在排队、运行时，不能删除。', '项目有更新时，需重新读取后确认。'],
+ '删除结果': ['项目从列表移除，所有成员失去访问权限，不提供恢复入口。', '资料、用例、报告和历史记录保留，远端仓库和本地代码不受影响。']}, "backend/app/modules/projects/service.py|frontend/src/Projects.tsx")
+
+add("platform", "ai-config", 'AI服务配置和连接测试', "AI 服务|切换调用方式|保存并使用|测试当前方式|模型列表|aiForm", {'填写要求': ['本人管理自己的配置。接口和Codex命令行配置分别保存。',
+          '配置名称1–80字符，服务地址1–500字符，模型名称1–160字符；模型名称可自由输入。',
+          '服务地址须以https://开头，不支持本机、明确的内网地址、带认证信息的地址或不合法路径。',
+          '密钥最多1024字符，保存后不回显。已有配置且地址未变时，留空保留旧密钥；首次配置或更换地址时需填写密钥。',
+          '配置已被修改时，需重新加载后再保存。'],
+ '保存和测试': ['保存并使用不调用模型。连接测试使用当前表单，可能计费，但不保存或启用配置。',
+           '读取模型列表与连接测试分别操作。测试成功后仍需保存配置。',
+           '切换调用方式前有未保存修改时，可继续编辑或放弃修改。'],
+ '调用方式': ['Codex命令行支持多轮请求、内部重试和上下文压缩；PDF资料需用接口方式。', '新任务使用开始时选定的方式，失败后不自动切换。']}, "backend/app/modules/ai/schemas.py|backend/app/modules/ai/service.py|frontend/src/AIService.tsx|frontend/src/aiConfiguration.ts")
+
+add("platform", "github-config", 'GitHub连接和仓库授权', "GitHub 连接|删除 GitHub 连接|GitHub连接|ghConnectionForm", {'连接设置': ['本人管理自己的连接。名称1–80字符，使用GitHub官方接口地址。',
+          '支持传统个人访问令牌或细粒度个人访问令牌，格式须有效。',
+          '先测试读取仓库，再勾选1–20个仓库保存。测试已失效或连接信息有变化时，需重新测试。',
+          '已有连接允许沿用密钥时，密钥可留空。'],
+ '操作权限': ['仅允许读取已授权仓库的版本、文件、提交和合并请求差异。', '不支持远端修改、推送、创建分支或标签、创建合并请求、评论或删除。'],
+ '删除连接': ['确认后移除平台连接和仓库授权。远端令牌、仓库、项目关联和历史记录保留。', '后续读取需重新使用有效的本人连接。']}, "backend/app/modules/github/schemas.py|backend/app/modules/github/service.py|frontend/src/GitHubConnections.tsx")
+
+add("platform", "accounts", '账号管理', "账号管理|创建账号|编辑账号|重置密码|删除账号|新增账号", {'填写要求': ['仅管理员可新增、编辑、停用、删除账号或重置密码。',
+          '登录名3–64字符，不能与已有账号重复；显示名称1–80字符，不能全为空格。',
+          '平台角色可选管理员、测试、开发、产品、经理，并兼容原普通用户。',
+          '密码8–128字符，不能全为空格，两次输入须一致。'],
+ '账号保护': ['不能停用、删除自己或取消自己的管理员资格。系统至少保留一个有效管理员。',
+          '账号已被他人修改时，需刷新后重新编辑。',
+          '修改登录名、角色、状态或重置密码后，原登录会话失效。',
+          '删除后保留历史业务记录。']}, "backend/app/modules/accounts/schemas.py|backend/app/modules/accounts/service.py|frontend/src/Accounts.tsx")
+
+add("skills", "skill-edit", '分析规则文件的查看和编辑', "Skill 管理|编辑 Skill|编辑Skill|发布 Skill|Skill文件", {'编辑要求': ['规则由管理员管理，可查看主说明、结果格式和引用文件。', '正文必填，1–200000字符。', '文件已被其他人修改、无法访问或引用清单有误时，不能保存，需先处理问题。'],
+ '生效时间': ['保存后保留旧版本，只影响之后新建的分析。',
+          '已准备任务和历史报告继续使用原规则，保存时不会重新运行旧任务。',
+          'AI建议需人工检查后保存。离开未保存的草稿时，可继续编辑或放弃修改。']}, "backend/app/modules/skills/schemas.py|backend/app/modules/skills/files.py|backend/app/modules/skills/service.py|frontend/src/Skills.tsx")
+
+add("skills", "skill-chat", 'AI辅助修改分析规则', "Skill AI|AI 辅助|AI辅助|优化 Skill", {'发送要求': ['仅管理员可发起，问题必填，1–4000字符，使用本人的AI配置。',
+          '可选择当前规则包内的引用文件，以及是否包含对话历史。',
+          '同一用户、同一规则正在回答时，不能重复发送。文件或会话有更新时，需刷新后再发。',
+          '所选内容超过助手容量时会报错，需自行调整范围。'],
+ '处理建议': ['回复显示在编辑区，检查并保存后才生效。', '取消后保留已有对话和记录。']}, "backend/app/modules/skills/schemas.py|backend/app/modules/skills/service.py|frontend/src/Skills.tsx")
+
+add("ai-acceptance|requirements|code|changes|generate|coverage", "acceptance", 'AI结果验收和人工基准', "遗漏与基准|AI结果验收|人工基准|验收明细|aa-dialog", {'统计范围': ['汇总页仅管理员可查看，默认全部项目，也可选择单个项目。',
+          '按各记录的实际数量累计计算比例，不平均各记录的百分比。',
+          '有效性、依据和采纳情况来自详情中的人工处理及入库记录，汇总页不能修改。',
+          '回归建议的可用性单独统计；说明项不计入普通问题总数。'],
+ '遗漏和基准': ['人工清单最多2000项，每项标题1–500字符、依据1–3000字符，并需确认属于本次范围。',
+           '清单编号不能重复，标题和依据的组合也不能重复。',
+           '覆盖状态可选未审核、已覆盖、缺失。选择已覆盖时，须关联一条已确认有效的结果；其他状态不填写关联项。',
+           '确认范围已审核时需写说明；填写总体验收结论前，需先完成范围审核。',
+           '覆盖率按这份人工清单计算。来源或清单有更新时，需重新读取后保存。']}, "backend/app/modules/acceptance/schemas.py|backend/app/modules/acceptance/service.py|frontend/src/AnalysisAcceptance.tsx|frontend/src/AIResultsAcceptance.tsx")
+
+add("requirements", "requirement-classify", '验收点分类、移动和撤销', "添加功能分类|修改模块名称|调整分类 / 移动到|修改功能点名称|确认删除功能分类|建议分类", {'分类和移动': ['原验收点工作区保留模块和功能点分类。',
+           '名称1–80字符，同一父级下不能重名，不能使用“全部功能”“待归类”“未分类”等保留名称。',
+           '移动只调整分类和顺序，验收内容、来源和报告不变。目标须属于本项目。'],
+ '删除和撤销': ['分类下有验收点时，删除前需选择迁移、移至未分类或删除内容。',
+           '迁移目标不能在本次删除范围内。',
+           '操作保留历史。后续已有人修改相关内容时，不能直接撤销。',
+           '原型中的“建议分类”只演示流程。']}, "backend/app/modules/requirements/schemas.py|backend/app/modules/requirements/service.py")
+
+add("requirements", "requirement-rule", '验收点审核和来源对照', "审阅验收点|来源对照|ruleForm", {'填写要求': ['标题1–500字符，操作和预期结果各1–10000字符。', '角色最多1000字符，前置条件、问题和澄清结论各10000字符。', '最多关联50份来源，同一文件版本不能重复。'],
+ '审核和保存': ['状态可选待补充、待审核、已确认。待补充必须填写问题；有问题未填写澄清结论时，不能改为待审核或已确认。',
+           '已确认内容修改后，需先退回重新审核；内容和来源的修改会保留版本历史。',
+           '调整分类使用分类操作，不在业务内容表单中修改。'],
+ '来源': ['只能关联本项目资料。已删除资料的原关联保留，但不能新增关联。', 'AI建议需人工核对业务依据，相关资料只供对照。']}, "backend/app/modules/requirements/schemas.py|backend/app/modules/requirements/service.py")
+
+add("generate", "generation-export", '报告导出和应用失败清单', "组合导出完整报告|导出生成结果|应用失败清单|cg-export-many|cg-failures", {'导出报告': ['完整报告包含本次范围、建议、人工修订、入库结果和失败历史。',
+          '组合导出时，至少勾选一条有结果的记录，仅导出所选记录。',
+          '候选用例表使用默认14列，优先取人工草稿，没有草稿时取原建议，排除停用建议。',
+          '导出用例的编号、测试人员留空，测试结果为未测，内容按文字写入。'],
+ '处理失败项': ['成功项保留。失败清单显示原因、目标和尝试记录，核对当前版本并保存修改后，再处理该条。', '导出失败清单不会发起重试。']}, "frontend/src/generationExport.ts|frontend/src/CaseGeneration.tsx|backend/app/modules/case_generation/apply.py")
+
+add("code|changes|generate|coverage", "analysis-chat", '历史对话和提问', "历史对话|分析对话|与AI讨论", {'发送问题': ['问题必填，最多10000字符，不能全为空格。',
+          '可关联本报告中的功能或问题。上一轮回答处理中，不能再次发送。',
+          '使用提问人本人的AI配置。回复单独保存，报告和人工处理结果不变。'],
+ '取消和后续处理': ['只能取消本人的未完成回答，已有消息和失败记录保留；已发送请求可能产生费用。', '回复中的建议需经对应页面的添加、修订或审核操作后使用。']}, "frontend/src/GenerationChat.tsx|frontend/src/CodeAnalysisChat.tsx|frontend/src/ChangeAnalysisChat.tsx|backend/app/modules/case_analysis/service.py|backend/app/modules/case_generation/chat.py")
+
+add("documents|prototypes", "image-preview", '图片查看和下载', "图片查看|image-viewer|放大原图", {'查看图片': ['可放大、缩小、适应窗口和滚动查看，原文件不变。', '加载失败时显示错误，可下载原件。关闭后返回资料页。', '用于分析时需另行选择这份图片。']}, "frontend/src/ImagePreview.tsx|frontend/src/Documents.tsx|frontend/src/Prototypes.tsx")
+
+# Context identifiers bind dynamic/numbered modal titles without broad keyword guesses.
+aliases = {
+    "acceptance": "aa|aa-exit", "project-delete": "project-delete",
+    "material-list": "doc-rename-group|doc-create-group|doc-group|prototype-group|prototype-move",
+    "link-bind": "doc-link", "prototype-add": "prototype-edit", "prototype-link": "prototype-link-viewer",
+    "case-category": "case-category-manage|case-category-edit|case-category-delete|case-category-bulk",
+    "case-import": "case-import-demo|case-import-error", "case-edit": "case",
+    "requirement-classify": "requirement-add|requirement-classify|requirement-delete|requirement-rename",
+    "requirement-rule": "rule", "risk-handle": "risk-detail|risk-export", "risk-new": "risk-new",
+    "cancel-retry": "risk-cancel", "risk-chat": "local-session-create|local-session-scope|chat-risk-add",
+    "generation-start": "cg-preview", "generation-review": "cg-table|cg-detail",
+    "generation-apply": "cg-single-confirm|cg-review-result|cg-applied|cg-restore",
+    "generation-new": "cg-new", "generation-decide": "cg-decision",
+    "coverage-handle": "cr-detail|cr-draft|cr-review|cr-chat-issue", "coverage-new": "cr-new|crNewForm",
+    "analysis-import": "risk-import|cg-import|cr-import|code-import|change-import|导入生成结果|导入分析结果",
+    "code-new": "task", "code-handle": "issue|code-task-detail", "change-new": "change-new",
+    "change-handle": "change-detail", "skill-edit": "sk-editor", "github-config": "gh-delete",
+    "upload": "upload", "local-code": "local-code", "project-repo": "repo|remove-repo",
+    "project-members": "member", "analysis-delete": "analysis-delete",
+}
+for page in catalog.values():
+    for entry in page["entries"]:
+        entry["matches"] += aliases.get(entry["id"], "").split("|") if entry["id"] in aliases else []
+
+path = Path(__file__).with_name("catalog.json")
+path.write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+print(f"{len(catalog)} pages, {len({e['id'] for p in catalog.values() for e in p['entries']})} operation groups")

@@ -1,0 +1,358 @@
+.change-analysis-page .change-record-search {
+  padding: 0 12px 10px;
+  font-size: 11px;
+  gap: 8px;
+}
+.change-analysis-page .change-results,
+.change-analysis-page .change-chat-main {
+  min-width: 0;
+  overflow: hidden;
+}
+.change-analysis-page .change-result-tabs {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 18px;
+  gap: 18px;
+  overflow: auto;
+  border-bottom: 1px solid var(--line);
+}
+.change-result-tabs button {
+  white-space: nowrap;
+  padding: 15px 0;
+  font-size: 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #8b978a;
+}
+.change-result-tabs button[aria-selected='true'] {
+  color: var(--green);
+  border-bottom: 2px solid var(--green);
+}
+.change-analysis-page .code-filters > * {
+  min-width: 115px;
+  max-width: 180px;
+  flex: 1;
+  font-size: 11px;
+}
+.change-analysis-page .code-record small,
+.change-analysis-page .code-analysis-scope p {
+  overflow-wrap: anywhere;
+}
+.change-analysis-page .code-finding {
+  padding: 21px;
+  border-bottom: 1px solid var(--line);
+}
+.change-analysis-page .code-finding h3 {
+  margin: 11px 0 8px;
+}
+.change-analysis-page .code-finding p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #687767;
+}
+.change-analysis-page .code-finding .row {
+  gap: 10px;
+}
+.change-analysis-page:where(:not(.case-review-page)) .code-analysis-records {
+  min-height: 360px;
+  max-height: calc(100vh - 230px);
+  padding: 0 12px 16px;
+  scrollbar-color: #82958a #e4e9e4;
+}
+.change-analysis-page:where(:not(.case-review-page)) .code-analysis-records .panel-head {
+  margin: 0 -12px 10px;
+  padding: 16px 12px;
+}
+.change-analysis-page:where(:not(.case-review-page)) .code-record {
+  width: 100%;
+  margin: 6px 0;
+  padding: 11px 10px;
+}
+.change-analysis-page:where(:not(.case-review-page)) .code-record strong {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.change-analysis-page .code-analysis-scope {
+  position: sticky;
+  top: 18px;
+  max-height: calc(100vh - 130px);
+  overflow: auto;
+  padding: 18px;
+}
+.change-analysis-page .code-analysis-scope > h2 {
+  font-size: 17px;
+  margin-bottom: 15px;
+}
+.change-analysis-page .code-analysis-scope > .panel-pad {
+  padding: 0;
+}
+.change-analysis-page .code-analysis-scope .evidence {
+  margin: 13px 0 0;
+  padding: 14px;
+}
+.change-analysis-page .code-analysis-scope h3 {
+  font-size: 13px;
+}
+.change-analysis-page .code-analysis-overview .badge {
+  margin-top: 7px;
+}
+.change-evidence pre {
+  font-size: 12px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 12px 0;
+}
+.change-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  background: #fafbf7;
+  padding: 17px 23px;
+}
+.change-analysis-dialog {
+  width: calc(100% - 32px);
+  max-width: 1060px;
+  padding: 0;
+}
+.change-analysis-dialog > .doc-dialog-head {
+  padding: 18px 23px;
+}
+.change-analysis-dialog > .panel-pad {
+  padding: 22px;
+  overflow-y: auto;
+}
+.change-analysis-dialog.requirement-ui .field-label,
+.change-analysis-dialog .form-field {
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.change-analysis-dialog .form-field {
+  display: grid;
+}
+.change-analysis-dialog input:not([type='checkbox']):not([type='file']):not([type='hidden']),
+.change-analysis-dialog textarea {
+  width: 100%;
+  min-width: 0;
+}
+.change-analysis-dialog .evidence {
+  background: #f6f8f3;
+  border: 1px solid #e5eadf;
+  border-radius: 7px;
+  padding: 14px;
+  font-size: 12px;
+  line-height: 1.9;
+  margin-top: 13px;
+}
+.change-analysis-dialog .change-analysis-targets {
+  display: grid;
+  gap: 16px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.change-analysis-targets legend {
+  font-size: 14px;
+  font-weight: 650;
+  padding: 0 0 20px;
+}
+.change-analysis-dialog .change-analysis-targets .check-label {
+  font-size: 12px;
+}
+.change-analysis-dialog .change-material-versions {
+  display: grid;
+  gap: 12px;
+}
+.change-analysis-dialog .change-material-list {
+  display: grid;
+  gap: 12px;
+  max-height: 230px;
+  overflow: auto;
+}
+.change-analysis-dialog .change-version-list {
+  display: grid;
+  gap: 12px;
+}
+.git-version-picker {
+  min-width: 0;
+  padding: 14px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.git-history-branch {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.git-history-branch > .req-select {
+  flex: 1;
+  min-width: 0;
+}
+.git-version-list {
+  max-height: 230px;
+  overflow: auto;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.git-version-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+.git-version-option.selected {
+  background: #edf5ef;
+  color: var(--green);
+  box-shadow: inset 3px 0 var(--green);
+}
+.git-version-option strong,
+.git-version-option small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.git-version-option strong {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.git-version-option small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.change-analysis-dialog .change-version-row {
+  padding: 14px;
+  border: 1px solid #e5eadf;
+  background: #f6f8f3;
+  border-radius: 7px;
+}
+.change-analysis-dialog .change-version-pair {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0 24px;
+}
+.change-analysis-dialog .change-material-row > .req-select {
+  margin: 10px 0 0 24px;
+  width: calc(100% - 24px);
+}
+.change-analysis-dialog .form-grid {
+  gap: 18px;
+  min-width: 0;
+}
+.change-analysis-dialog .form-grid > * {
+  min-width: 0;
+}
+.change-analysis-dialog .change-detail-badges {
+  margin-top: 18px;
+}
+.change-analysis-dialog .change-handling-form {
+  margin-top: 20px;
+}
+.change-analysis-dialog .change-handling-form .form-grid {
+  align-items: start;
+}
+.change-analysis-page .empty {
+  padding: 56px 20px;
+  text-align: center;
+}
+.change-analysis-page .change-chat-actions {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .change-analysis-page:where(:not(.case-review-page)) .code-analysis-records {
+    min-height: 0;
+    max-height: 340px;
+  }
+  .change-analysis-page .code-analysis-scope {
+    position: static;
+    max-height: none;
+  }
+}
+.change-analysis-page .change-chat-main .code-chat-messages {
+  border-right: 0;
+  min-height: 220px;
+  max-height: 45vh;
+}
+.change-analysis-page .code-chat-compose {
+  display: grid;
+  padding: 20px;
+  gap: 14px;
+}
+.change-analysis-page .code-chat-compose textarea {
+  width: 100%;
+}
+.change-analysis-dialog .evidence {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 680px) {
+  .change-evidence {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .change-analysis-page:where(:not(.case-review-page)) .code-analysis-records {
+    max-height: 300px;
+    position: static;
+  }
+  .change-analysis-page .change-result-tabs {
+    padding: 0 12px;
+    gap: 14px;
+  }
+  .change-analysis-page .code-analysis-pagination {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .change-analysis-page .code-finding {
+    padding: 16px;
+  }
+  .change-analysis-page .code-filters > * {
+    max-width: none;
+  }
+  .change-analysis-dialog > .doc-dialog-head,
+  .change-analysis-dialog > .panel-pad,
+  .change-dialog-footer {
+    padding: 16px;
+  }
+  .change-analysis-dialog .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.change-analysis-page > .notice,
+.change-analysis-dialog .notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  background: #f1f5eb;
+  border: 1px solid #e2e9d8;
+  border-radius: 8px;
+  color: #687e5e;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.change-analysis-page > .notice .icon {
+  margin-top: 2px;
+}
+.change-analysis-page .code-analysis-overview {
+  background: #edf5ef;
+  border-color: #d9e6dc;
+}
+
+.change-batch-list {
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}

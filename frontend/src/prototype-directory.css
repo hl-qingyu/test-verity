@@ -1,0 +1,82 @@
+.prototype-directory-files {
+  min-width: 0;
+  margin-top: 12px;
+}
+.directory-upload-files input[type='checkbox'],
+.prototype-directory-files input[type='checkbox'] {
+  accent-color: var(--green);
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.prototype-directory-files .code-file-tree {
+  max-height: 360px;
+  overflow: auto;
+}
+.prototype-directory-files .code-tree-file,
+.prototype-directory-files .code-tree-directory summary {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.prototype-directory-files .code-tree-file button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.directory-file-preview {
+  margin-top: 12px;
+  min-width: 0;
+}
+.directory-file-preview strong {
+  overflow-wrap: anywhere;
+}
+.directory-file-preview pre {
+  max-height: 420px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.directory-file-preview img {
+  max-width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  display: block;
+  margin: 16px auto;
+}
+.directory-browser .code-file-tree input[type='checkbox'],
+.directory-browser .code-file-picker-toolbar .row {
+  display: none;
+}
+.directory-browser .code-file-picker-toolbar > span {
+  display: none;
+}
+.directory-browser .code-tree-directory summary .hint {
+  display: none;
+}
+.directory-upload-files {
+  min-width: 0;
+}
+.directory-upload-files .code-file-picker,
+.prototype-directory-files .code-file-picker {
+  max-height: none;
+  overflow: visible;
+}
+.directory-upload-files .code-file-tree {
+  max-height: 300px;
+  overflow: auto;
+}
+.directory-upload-files .code-file-picker-toolbar,
+.prototype-directory-files .code-file-picker-toolbar {
+  flex-wrap: wrap;
+}
+.directory-upload-files .code-file-picker-toolbar > span,
+.prototype-directory-files .code-file-picker-toolbar > span {
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .directory-file-preview .between {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}

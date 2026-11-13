@@ -1,0 +1,186 @@
+{
+  "analysis_type": "CASE_GENERATION",
+  "contract_version": 2,
+  "request_id": "synthetic-clarification",
+  "project_id": 90001,
+  "revision": 2,
+  "mode": "INITIAL",
+  "batch_ref": "batch-clarification",
+  "outcome": "COMPLETE",
+  "summary": "本批仅处理金额澄清场景；按已确认口径合计39.91元，形成新增候选。父报告其他范围不重做。",
+  "evidence": [
+    {
+      "key": "clarification:E1",
+      "kind": "MATERIAL",
+      "target_ref": "M-AMOUNT",
+      "segment_id": "P1",
+      "side": "CURRENT",
+      "field": "",
+      "quote": "门店APP订单确认页展示应付总额，应付总额按单价乘数量计算；示例单价19.955元、数量2。未说明金额精度、舍入方式及计算顺序。",
+      "note": "合成当前业务条款"
+    },
+    {
+      "key": "clarification:E2",
+      "kind": "DECISION",
+      "target_ref": "D-AMOUNT",
+      "segment_id": "",
+      "side": "CONTEXT",
+      "field": "",
+      "quote": "应付总额先使用单价原值乘数量，再对合计结果一次四舍五入至2位小数，显示于门店APP订单确认页。",
+      "note": "人工合成已确认结论，不是聊天自动升级。"
+    }
+  ],
+  "rules": [
+    {
+      "key": "clarification:R1",
+      "semantic_key": "订单|门店操作员|单价原值乘数量后合计一次四舍五入至2位",
+      "function_ref": "F-ORDER",
+      "object": "订单",
+      "actor": "门店操作员",
+      "statement": "单价原值乘数量后合计一次四舍五入至2位",
+      "branches": [
+        {
+          "branch_ref": "clarification:B1",
+          "conditions": [
+            "单价原值乘数量后合计一次四舍五入至2位"
+          ],
+          "result": "确认页显示应付总额39.91元",
+          "state": "CONFIRMED",
+          "evidence_refs": [
+            "clarification:E1",
+            "clarification:E2"
+          ]
+        }
+      ],
+      "evidence_refs": [
+        "clarification:E1",
+        "clarification:E2"
+      ]
+    }
+  ],
+  "transitions": [],
+  "flows": [],
+  "scenarios": [
+    {
+      "key": "clarification:S1",
+      "semantic_key": "订单|门店操作员|门店APP|准备单价19.955元规格，数量设2，进入确认页",
+      "function_ref": "F-ORDER",
+      "rule_refs": [
+        "clarification:R1"
+      ],
+      "branch_refs": [
+        "clarification:B1"
+      ],
+      "transition_refs": [],
+      "actor": "门店操作员",
+      "action_end": "门店APP",
+      "observation_end": "门店APP",
+      "entry": "订单确认页",
+      "conditions": [
+        "单价原值乘数量后合计一次四舍五入至2位"
+      ],
+      "action": "准备单价19.955元规格，数量设2，进入确认页",
+      "expected": "应付总额为39.91元（19.955×2=39.910，合计后四舍五入至2位小数）。",
+      "state": "READY",
+      "evidence_refs": [
+        "clarification:E1",
+        "clarification:E2"
+      ],
+      "note": "合成测试设计，非执行记录"
+    }
+  ],
+  "suggestions": [
+    {
+      "key": "clarification:A1",
+      "kind": "NEW",
+      "function_ref": "F-ORDER",
+      "scenario_refs": [
+        "clarification:S1"
+      ],
+      "case_ref": null,
+      "base_version": null,
+      "design": {
+        "module": "订单",
+        "structure": "金额",
+        "case_type": "计算",
+        "priority": "P1",
+        "description": "验证确认后的合计舍入",
+        "title": "原单价乘数量后合计舍入",
+        "preconditions": "已启用门店操作员，有单价19.955元的可售规格。",
+        "steps": "1.选择该规格，数量设2。\n2.进入订单确认页。",
+        "expected": "应付总额为39.91元（19.955×2=39.910，合计后四舍五入至2位小数）。",
+        "remark": "",
+        "data_requirements": "合成示例：准备单价19.955元且可售的规格；使用确认结论中的合计舍入口径。",
+        "cleanup": ""
+      },
+      "changes": [],
+      "reason": "按当前依据和场景核对的人工合成建议",
+      "priority_reason": "订单主流程建议P1；不是产品事实或测试结果",
+      "evidence_refs": [
+        "clarification:E1",
+        "clarification:E2"
+      ],
+      "basis_status": "SUPPORTED"
+    }
+  ],
+  "unchanged": [],
+  "conflicts": [],
+  "requirement_questions": [],
+  "discovery_gaps": [],
+  "coverage": {
+    "input_units": [
+      {
+        "snapshot_ref": "M-AMOUNT",
+        "segment_id": "P1",
+        "state": "PROCESSED",
+        "rule_refs": [
+          "clarification:R1"
+        ],
+        "scenario_refs": [
+          "clarification:S1"
+        ],
+        "issue_refs": [],
+        "note": "按合成条款记录处理去向"
+      }
+    ],
+    "functions": [
+      {
+        "function_ref": "F-ORDER",
+        "scenario_refs": [
+          "clarification:S1"
+        ],
+        "issue_refs": [],
+        "state": "COMPLETE",
+        "note": "仅本批已确认范围"
+      }
+    ],
+    "branches": [
+      {
+        "rule_ref": "clarification:R1",
+        "branch_ref": "clarification:B1",
+        "scenario_refs": [
+          "clarification:S1"
+        ],
+        "issue_refs": [],
+        "state": "MODELED",
+        "note": "不以规则条数代替分支覆盖"
+      }
+    ],
+    "scenarios": [
+      {
+        "scenario_ref": "clarification:S1",
+        "suggestion_refs": [
+          "clarification:A1"
+        ],
+        "unchanged_refs": [],
+        "issue_refs": [],
+        "state": "SUGGESTED",
+        "note": "设计覆盖，不是执行通过"
+      }
+    ],
+    "cases": []
+  },
+  "limitations": [
+    "全部项目、来源及用例身份为人工合成，未绑定真实平台原件；未执行测试。"
+  ]
+}

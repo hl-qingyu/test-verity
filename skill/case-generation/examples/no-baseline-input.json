@@ -1,0 +1,94 @@
+{
+  "analysis_type": "CASE_GENERATION",
+  "contract_version": 2,
+  "request_id": "synthetic-no-baseline",
+  "project_id": 90001,
+  "revision": 1,
+  "mode": "UPDATE",
+  "scope": {
+    "name": "合成订单功能",
+    "full_scope": true,
+    "functions": [
+      {
+        "function_ref": "F-ORDER",
+        "name": "订单",
+        "scope_note": "本次合成需求明确的订单规则"
+      }
+    ],
+    "target_ends": [
+      "门店APP"
+    ],
+    "case_scope": {
+      "description": "合成选定用例集合",
+      "complete": true,
+      "count": 1,
+      "library_revision": 8
+    }
+  },
+  "focus": "",
+  "materials": [
+    {
+      "snapshot_ref": "M-NOW",
+      "source_id": "synthetic-order-requirement",
+      "kind": "REQUIREMENT",
+      "side": "CURRENT",
+      "name": "人工合成订单需求",
+      "version_ref": "PROVIDED-synthetic-current-v3",
+      "read_state": "READABLE",
+      "read_note": "",
+      "content_sha256": "e2f24e4ab22eca3dfb32d77c7cf994befba75c5f1c34c145e4b432bfe68c74d8",
+      "segments": [
+        {
+          "segment_id": "P1",
+          "location": "合成条款1",
+          "text": "门店操作员在门店APP订单确认页填写订单备注；备注最多40字符，超过上限拒绝提交且不创建订单。",
+          "image_ref": ""
+        }
+      ]
+    }
+  ],
+  "update_pairs": [],
+  "decisions": [],
+  "related_reports": [],
+  "cases": [
+    {
+      "case_ref": "C-IMPORTED",
+      "case_id": 301,
+      "design_version": 3,
+      "display_number": "历史展示编号-重复也不作身份",
+      "category_id": null,
+      "lifecycle": "UNKNOWN",
+      "design": {
+        "module": "订单",
+        "structure": "备注",
+        "case_type": "边界值",
+        "priority": "P1",
+        "description": "备注超限拒绝创建",
+        "title": "超出备注上限提交",
+        "preconditions": "当前账号为门店操作员，其他必填项合法。",
+        "steps": "1.在订单确认页填写31个字符的备注。\n2.提交。",
+        "expected": "超过30字符拒绝提交，订单不被创建。",
+        "remark": "",
+        "data_requirements": "使用人工维护的专用门店账号准备规格，账号不重建。",
+        "cleanup": "结束后清理测试草稿。"
+      },
+      "baseline": null
+    }
+  ],
+  "supplement": null,
+  "batch": {
+    "plan_ref": "plan-no-baseline",
+    "batch_ref": "batch-no-baseline",
+    "index": 1,
+    "total": 1,
+    "function_refs": [
+      "F-ORDER"
+    ],
+    "namespace": "no-baseline",
+    "limitations": []
+  },
+  "input_limitations": [
+    "全部项目、来源及用例身份为人工合成，未绑定真实平台原件；未执行测试。",
+    "此用例由人工/导入创建，无实际历史基准及旧需求，不能证明何时变化或完成人工三方保护。"
+  ]
+}

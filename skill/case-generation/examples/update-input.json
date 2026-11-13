@@ -1,0 +1,190 @@
+{
+  "analysis_type": "CASE_GENERATION",
+  "contract_version": 2,
+  "request_id": "synthetic-update",
+  "project_id": 90001,
+  "revision": 1,
+  "mode": "UPDATE",
+  "scope": {
+    "name": "合成订单功能",
+    "full_scope": true,
+    "functions": [
+      {
+        "function_ref": "F-ORDER",
+        "name": "订单",
+        "scope_note": "本次合成需求明确的订单规则"
+      }
+    ],
+    "target_ends": [
+      "门店APP"
+    ],
+    "case_scope": {
+      "description": "合成选定用例集合",
+      "complete": true,
+      "count": 2,
+      "library_revision": 8
+    }
+  },
+  "focus": "",
+  "materials": [
+    {
+      "snapshot_ref": "M-BEFORE",
+      "source_id": "synthetic-order-requirement",
+      "kind": "REQUIREMENT",
+      "side": "BEFORE",
+      "name": "人工合成订单需求",
+      "version_ref": "PROVIDED-synthetic-v1",
+      "read_state": "READABLE",
+      "read_note": "",
+      "content_sha256": "33cc07f44210d9fc00f725a45baba826b54483b5c3526dbb8f71313f91ec190d",
+      "segments": [
+        {
+          "segment_id": "P1",
+          "location": "合成条款1",
+          "text": "门店操作员在门店APP订单详情页取消“待处理”订单，状态变为“已取消”。",
+          "image_ref": ""
+        },
+        {
+          "segment_id": "P2",
+          "location": "合成条款2",
+          "text": "门店操作员在门店APP订单确认页填写订单备注；备注最多20字符，超过上限拒绝提交且不创建订单。",
+          "image_ref": ""
+        }
+      ]
+    },
+    {
+      "snapshot_ref": "M-DELTA",
+      "source_id": "synthetic-order-requirement",
+      "kind": "REQUIREMENT",
+      "side": "SUPPLEMENT",
+      "name": "人工合成订单需求",
+      "version_ref": "PROVIDED-synthetic-v2",
+      "read_state": "READABLE",
+      "read_note": "",
+      "content_sha256": "1bb05c2c4e8d3786512b2af94186e61deed62fecd4959988b0c922671c51735a",
+      "segments": [
+        {
+          "segment_id": "P1",
+          "location": "合成条款1",
+          "text": "订单备注上限从20字符调整为40字符，超过40字符拒绝提交且不创建订单；其他规则保持不变。",
+          "image_ref": ""
+        }
+      ]
+    }
+  ],
+  "update_pairs": [
+    {
+      "pair_ref": "PAIR-ORDER",
+      "before_ref": "M-BEFORE",
+      "after_ref": "M-DELTA",
+      "update_mode": "INCREMENTAL_SUPPLEMENT",
+      "function_refs": [
+        "F-ORDER"
+      ],
+      "scope_confirmed": true,
+      "scope_note": "同一订单功能增量补充，其他旧规则保留。",
+      "comparison_complete": true
+    }
+  ],
+  "decisions": [],
+  "related_reports": [],
+  "cases": [
+    {
+      "case_ref": "C-NOTE",
+      "case_id": 201,
+      "design_version": 3,
+      "display_number": "历史展示编号-重复也不作身份",
+      "category_id": null,
+      "lifecycle": "UNKNOWN",
+      "design": {
+        "module": "订单",
+        "structure": "备注",
+        "case_type": "边界值",
+        "priority": "P1",
+        "description": "备注超限拒绝创建",
+        "title": "超出备注上限提交",
+        "preconditions": "当前账号为门店操作员，其他必填项合法。",
+        "steps": "1.在订单确认页填写31个字符的备注。\n2.提交。",
+        "expected": "超过30字符拒绝提交，订单不被创建。",
+        "remark": "",
+        "data_requirements": "使用人工维护的专用门店账号准备规格，账号不重建。",
+        "cleanup": "结束后清理测试草稿。"
+      },
+      "baseline": {
+        "design_version": 2,
+        "design": {
+          "module": "订单",
+          "structure": "备注",
+          "case_type": "边界值",
+          "priority": "P1",
+          "description": "备注超限拒绝创建",
+          "title": "超出备注上限提交",
+          "preconditions": "当前账号为门店操作员，其他必填项合法。",
+          "steps": "1.在订单确认页填写21个字符的备注。\n2.提交。",
+          "expected": "超过20字符拒绝提交，订单不被创建。",
+          "remark": "",
+          "data_requirements": "准备可售规格和有效门店账号。",
+          "cleanup": "结束后清理测试草稿。"
+        },
+        "origin": "APPLIED",
+        "adoption_ref": "synthetic-success-map-v2"
+      }
+    },
+    {
+      "case_ref": "C-CANCEL",
+      "case_id": 202,
+      "design_version": 3,
+      "display_number": "历史展示编号-重复也不作身份",
+      "category_id": null,
+      "lifecycle": "UNKNOWN",
+      "design": {
+        "module": "订单",
+        "structure": "取消",
+        "case_type": "业务流程",
+        "priority": "P1",
+        "description": "取消待处理订单",
+        "title": "取消后状态为已取消",
+        "preconditions": "当前账号为门店操作员，有一笔待处理订单。",
+        "steps": "1.进入该订单详情页。\n2.取消订单。",
+        "expected": "该订单状态为“已取消”。",
+        "remark": "",
+        "data_requirements": "",
+        "cleanup": ""
+      },
+      "baseline": {
+        "design_version": 2,
+        "design": {
+          "module": "订单",
+          "structure": "取消",
+          "case_type": "业务流程",
+          "priority": "P1",
+          "description": "取消待处理订单",
+          "title": "取消后状态为已取消",
+          "preconditions": "当前账号为门店操作员，有一笔待处理订单。",
+          "steps": "1.进入该订单详情页。\n2.取消订单。",
+          "expected": "该订单状态为“已取消”。",
+          "remark": "",
+          "data_requirements": "",
+          "cleanup": ""
+        },
+        "origin": "DESIGN_HISTORY",
+        "adoption_ref": ""
+      }
+    }
+  ],
+  "supplement": null,
+  "batch": {
+    "plan_ref": "plan-update",
+    "batch_ref": "batch-update",
+    "index": 1,
+    "total": 1,
+    "function_refs": [
+      "F-ORDER"
+    ],
+    "namespace": "update",
+    "limitations": []
+  },
+  "input_limitations": [
+    "全部项目、来源及用例身份为人工合成，未绑定真实平台原件；未执行测试。"
+  ]
+}

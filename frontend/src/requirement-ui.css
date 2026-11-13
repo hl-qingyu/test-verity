@@ -1,0 +1,167 @@
+/* Shared prototype primitives for analysis and conversation surfaces. */
+.requirement-ui .field-label {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  color: #697c6c;
+}
+.requirement-ui input:not([type='checkbox']):not([type='file']):not([type='hidden']),
+.requirement-ui textarea {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid #dce3d8;
+  border-radius: 7px;
+  padding: 10px 11px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+}
+.requirement-ui input[type='checkbox'] {
+  accent-color: var(--green);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.requirement-ui textarea {
+  resize: vertical;
+  min-height: 95px;
+  line-height: 1.8;
+}
+.requirement-ui .evidence {
+  background: #f6f8f3;
+  border: 1px solid #e5eadf;
+  border-radius: 7px;
+  padding: 14px;
+  font-size: 12px;
+  line-height: 1.9;
+  margin-top: 13px;
+  overflow-wrap: anywhere;
+}
+.requirement-ui .hint {
+  font-size: 11px;
+  color: #8a9689;
+  line-height: 1.8;
+}
+.requirement-ui .divider {
+  height: 1px;
+  background: var(--line);
+  margin: 18px 0;
+}
+.requirement-ui :is(input, textarea, summary):focus-visible {
+  outline: 2px solid #315e45;
+  outline-offset: 3px;
+}
+.requirement-ui .ra-table-scroll table {
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+.requirement-ui .ra-table-scroll th {
+  padding: 12px 18px;
+  background: #fafbf8;
+  color: #8b968a;
+  font-weight: 500;
+  border-bottom: 1px solid #e9ede5;
+  white-space: nowrap;
+}
+.requirement-ui .ra-table-scroll td {
+  padding: 16px 18px;
+  border-bottom: 1px solid #edf0e9;
+  line-height: 1.8;
+}
+.requirement-ui .ra-table-scroll tr:last-child td {
+  border-bottom: 0;
+}
+.ra-record-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.risk-analysis-dialog .prototype-editor-content {
+  padding-top: 24px;
+}
+.risk-analysis-dialog .risk-source-group {
+  margin-top: 20px;
+}
+.risk-analysis-dialog .risk-source-group:first-of-type {
+  margin-top: 0;
+}
+.risk-analysis-dialog .risk-source-group legend {
+  font-size: 14px;
+}
+.risk-analysis-dialog .risk-source-check {
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.risk-analysis-dialog .risk-source-check strong {
+  font-weight: 400;
+}
+.risk-material-row + .risk-material-row {
+  margin-top: 13px;
+}
+.risk-analysis-service {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.risk-analysis-service summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.risk-analysis-dialog .prototype-editor-footer {
+  padding: 16px 24px;
+  background: #fafbf7;
+}
+.requirement-ui .chat-history {
+  display: block;
+  max-height: 40vh;
+  overflow: auto;
+  margin-top: 0;
+}
+.requirement-chat-page .chat-history .chat-history-item {
+  display: block;
+  color: var(--ink);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+.requirement-chat-page .chat-history .chat-history-item:hover,
+.requirement-chat-page .chat-history .chat-history-item:focus-visible {
+  background: #edf3e9;
+  border-left-color: #92a989;
+}
+.requirement-chat-page .chat-history .chat-history-item:focus-visible {
+  outline: 2px solid #315e45;
+  outline-offset: 2px;
+}
+.requirement-chat-page .chat-history .chat-history-item[aria-current='page'] {
+  background: #e9f3ec;
+  border-color: #b8d3bf;
+  border-left-color: #28654f;
+}
+.requirement-chat-page .chat-history .chat-history-title,
+.requirement-chat-page .chat-history .chat-history-item > .hint {
+  display: block;
+}
+.requirement-chat-page .chat-history .chat-history-title {
+  font-weight: 650;
+  line-height: 1.5;
+}
+.requirement-chat-page .chat-history .chat-history-item[aria-current='page'] .chat-history-title {
+  color: #205742;
+}
+.chat-history-pages {
+  margin-top: 14px;
+}
+@media (max-width: 620px) {
+  .risk-analysis-dialog .prototype-editor-content {
+    padding: 18px;
+  }
+  .risk-analysis-dialog .prototype-editor-footer {
+    padding: 16px 18px;
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "contract_version": 3,
+  "request_id": "risk-example-001",
+  "project_id": null,
+  "revision": null,
+  "focus": "检查本次订单查询描述是否足以明确匹配规则。",
+  "materials": [
+    {
+      "source_id": "D1",
+      "name": "订单查询（合成资料）",
+      "origin": "REQUIREMENT",
+      "kind": "TEXT",
+      "snapshot_ref": "c0c8d3b4b58bbfb507fddf64ed09057b4a09088fa668682018be5b2b433d2e8f",
+      "read_state": "READABLE",
+      "read_note": "",
+      "segments": [
+        {
+          "segment_id": "s1",
+          "location": "合成需求 · 订单查询",
+          "text": "订单列表支持按订单号搜索。",
+          "image_ref": ""
+        }
+      ]
+    }
+  ]
+}

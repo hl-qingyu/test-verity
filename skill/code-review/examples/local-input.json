@@ -1,0 +1,38 @@
+{
+  "contract_version": 2,
+  "analysis_type": "CODE_REVIEW",
+  "request_id": "synthetic-local-001",
+  "source_mode": "LOCAL",
+  "targets": [
+    "BUG",
+    "REQUIREMENT_DEVIATION"
+  ],
+  "focus": "仅检查所选纯函数的声明与实现。",
+  "sources": [
+    {
+      "source_id": "local-server",
+      "source_kind": "LOCAL",
+      "repository_kind": "BACKEND",
+      "name": "本地后端合成示例",
+      "snapshot_ref": "synthetic-local-content-001",
+      "commit": "",
+      "files": [
+        {
+          "file_id": "main",
+          "path": "domain.py",
+          "read_state": "READABLE",
+          "read_note": "",
+          "segments": [
+            {
+              "segment_id": "full",
+              "start_line": 1,
+              "text": "def total(values):\n    \"\"\"Sum every value; return zero for an empty list.\"\"\"\n    return values[0]"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "materials": [],
+  "input_limitations": []
+}

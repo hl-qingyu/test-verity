@@ -1,0 +1,55 @@
+/* Form dialogs own vertical scrolling; their selection lists grow with the content. */
+html:has(dialog:modal) {
+  overflow: hidden;
+}
+
+.account-dialog[open]:is(.code-analysis-dialog, .document-dialog, .case-review-new):not(
+    .generation-detail-dialog
+  ) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.account-dialog[open]:is(.code-analysis-dialog, .document-dialog, .case-review-new):not(
+    .generation-detail-dialog
+  )
+  > .panel-pad {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.account-dialog[open]:is(.code-analysis-dialog, .document-dialog, .case-review-new):not(
+    .generation-detail-dialog
+  )
+  > :is(.doc-dialog-head, footer) {
+  flex-shrink: 0;
+}
+
+.account-dialog[open]
+  :is(
+    .code-file-picker,
+    .code-file-tree,
+    .local-file-tree,
+    .prototype-file-list,
+    .analysis-github-file-list,
+    .generation-case-picker,
+    .change-material-list,
+    .git-version-list,
+    .ov-choice-list,
+    .link-candidates,
+    .doc-upload-list,
+    .req-tree
+  ) {
+  max-height: none;
+  overflow: visible;
+}
+
+.account-dialog[open].code-analysis-dialog .prototype-editor-footer {
+  bottom: 0;
+  padding-block: 16px;
+  background: var(--white);
+}

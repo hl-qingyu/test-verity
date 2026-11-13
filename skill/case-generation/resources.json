@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "instructions": [
+    "SKILL.md",
+    "references/evidence-and-scope.md",
+    "references/coverage-review.md",
+    "references/roles-and-state.md",
+    "references/risk-and-interruption.md",
+    "references/preparation.md",
+    "references/calculation-and-statistics.md",
+    "references/granularity-and-dedup.md",
+    "references/fields-and-language.md",
+    "references/priority.md",
+    "references/maintenance-and-clarification.md",
+    "contract.md"
+  ]
+}

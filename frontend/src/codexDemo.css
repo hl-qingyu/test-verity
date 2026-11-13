@@ -1,0 +1,29 @@
+.codex-demo {
+  max-width: 900px;
+  margin: 30px auto;
+  padding: 0 24px 40px;
+}
+.codex-demo header,
+.codex-demo section {
+  margin-bottom: 24px;
+}
+.codex-demo .row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.codex-demo p,
+.codex-demo li {
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.codex-demo button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .codex-demo {
+    padding: 0 14px 24px;
+  }
+}

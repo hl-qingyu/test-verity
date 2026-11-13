@@ -1,0 +1,132 @@
+{
+  "contract_version": 2,
+  "analysis_type": "CHANGE_IMPACT",
+  "request_id": "synthetic-code_change",
+  "project_id": 1,
+  "revision": 1,
+  "mode": "CODE_CHANGE",
+  "targets": [
+    "BUG"
+  ],
+  "focus": "",
+  "comparison_pairs": [
+    {
+      "pair_id": "p1",
+      "name": "合成比较组",
+      "before_ref": "code-old",
+      "after_ref": "code-new",
+      "update_mode": "CODE_SNAPSHOT",
+      "scope": [
+        "订单编辑/所提供函数/所提供HTML范围，以样例正文为准"
+      ],
+      "scope_confirmed": true,
+      "unit_mappings": [
+        {
+          "mapping_id": "m1",
+          "before_unit_ids": [
+            "u1"
+          ],
+          "after_unit_ids": [
+            "u1"
+          ],
+          "relation": "MATCH",
+          "confirmed": true,
+          "note": "用户确认同一对象"
+        }
+      ],
+      "text_diffs": [
+        {
+          "diff_id": "d1",
+          "mapping_ref": "m1",
+          "before_segment_refs": [
+            {
+              "unit_id": "u1",
+              "segment_id": "s1"
+            }
+          ],
+          "after_segment_refs": [
+            {
+              "unit_id": "u1",
+              "segment_id": "s1"
+            }
+          ],
+          "note": "调用方以固定两侧正文生成的文本差异，示例不由模型生成"
+        }
+      ]
+    }
+  ],
+  "snapshots": [
+    {
+      "snapshot_ref": "code-old",
+      "source_id": "repo-1",
+      "kind": "CODE",
+      "repository_kind": "BACKEND",
+      "name": "repo-1",
+      "provenance": {
+        "source_kind": "GITHUB",
+        "version_ref": "v1",
+        "commit": "1111111111111111111111111111111111111111",
+        "captured_at": "2026-10-10T10:00:00+08:00"
+      },
+      "scope_complete": true,
+      "scope_note": "",
+      "units": [
+        {
+          "unit_id": "u1",
+          "path": "orders.py",
+          "presence": "PRESENT",
+          "read_state": "READABLE",
+          "read_note": "",
+          "content_sha256": "1e0dd5eff2846e00777390fad06f4a96d7c807faf5751559c322ab5a632da371",
+          "segments": [
+            {
+              "segment_id": "s1",
+              "location": "orders.py",
+              "start_line": 1,
+              "text": "def first_order(orders):\n    \"\"\"Return None when no orders exist.\"\"\"\n    return orders[0]\n\ndef legacy_lookup(orders):\n    return first_order(orders)",
+              "image_ref": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "snapshot_ref": "code-new",
+      "source_id": "repo-1",
+      "kind": "CODE",
+      "repository_kind": "BACKEND",
+      "name": "repo-1",
+      "provenance": {
+        "source_kind": "GITHUB",
+        "version_ref": "v2",
+        "commit": "2222222222222222222222222222222222222222",
+        "captured_at": "2026-10-10T10:00:00+08:00"
+      },
+      "scope_complete": true,
+      "scope_note": "",
+      "units": [
+        {
+          "unit_id": "u1",
+          "path": "orders.py",
+          "presence": "PRESENT",
+          "read_state": "READABLE",
+          "read_note": "",
+          "content_sha256": "fbf6dce201becb7791a48c290a1ad20a6dc0fe1778ec11d0bd1277bc44987123",
+          "segments": [
+            {
+              "segment_id": "s1",
+              "location": "orders.py",
+              "start_line": 1,
+              "text": "def first_order(orders):\n    \"\"\"Return None when no orders exist.\"\"\"\n    return orders[0]\n\ndef legacy_lookup(orders):\n    return first_order(orders)\n\ndef manual_lookup(orders):\n    return first_order(orders)",
+              "image_ref": ""
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "context_refs": [],
+  "cases": [],
+  "historical_items": [],
+  "input_limitations": []
+}

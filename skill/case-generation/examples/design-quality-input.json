@@ -1,0 +1,122 @@
+{
+  "analysis_type": "CASE_GENERATION",
+  "contract_version": 3,
+  "request_id": "synthetic-design-quality",
+  "project_id": 90001,
+  "revision": 1,
+  "mode": "INITIAL",
+  "scope": {
+    "name": "完全合成配置与收入核对",
+    "full_scope": true,
+    "functions": [
+      {
+        "function_ref": "F-ORDER",
+        "name": "配置与收入核对",
+        "scope_note": "仅用于离线契约和设计行为评估"
+      }
+    ],
+    "target_ends": [
+      "管理端"
+    ],
+    "case_scope": {
+      "description": "合成选定用例集合",
+      "complete": true,
+      "count": 2,
+      "library_revision": 8
+    }
+  },
+  "focus": "",
+  "materials": [
+    {
+      "snapshot_ref": "Q-CURRENT",
+      "source_id": "synthetic-design-quality",
+      "kind": "REQUIREMENT",
+      "side": "CURRENT",
+      "name": "完全合成设计质量需求与批注",
+      "version_ref": "PROVIDED-synthetic-v1",
+      "read_state": "READABLE",
+      "read_note": "",
+      "content_sha256": "b49763dd46585363808c29a96c3c4ac66a26a1ff77330fb6db9cd5c2328f9387",
+      "segments": [
+        {
+          "segment_id": "Q1",
+          "location": "合成需求正文",
+          "text": "管理员在管理端配置页编辑显示名称后点击保存。显示名称允许2至5个字符，空格计入字符数且按原样保存；1个或6个字符均拒绝保存，原名称保持不变；有效名称保存后重新打开配置页仍显示保存的原值。管理员在管理端订单确认页填写可售规格和数量1；填写后、点击提交前，后台操作员下架该规格，本次提交被拒绝且不创建订单。商品在服务端已经受理请求后下架的处理结果未定义。管理员在管理端收入页点击查询，合计只累计所选范围内状态为已确认的收入，按元累加；失败收入排除；本例仅使用整数金额。",
+          "image_ref": ""
+        },
+        {
+          "segment_id": "Q2",
+          "location": "合成页面批注",
+          "text": "配置页Mock初始显示名称为A，该值仅为示例，不改变2至5个字符的限制。订单创建记录的查看位置和下架准备方法未提供。收入页允许查看当前查询结果及合计。",
+          "image_ref": ""
+        }
+      ]
+    }
+  ],
+  "update_pairs": [],
+  "decisions": [],
+  "related_reports": [],
+  "cases": [
+    {
+      "case_ref": "case-name",
+      "case_id": 201,
+      "design_version": 3,
+      "display_number": "历史展示编号-重复也不作身份",
+      "category_id": null,
+      "lifecycle": "UNKNOWN",
+      "design": {
+        "module": "配置",
+        "structure": "名称",
+        "case_type": "业务流程",
+        "priority": "P1",
+        "description": "人工名称成功用例",
+        "title": "保存两个字符名称后重进仍保留",
+        "preconditions": "当前账号为管理员。",
+        "steps": "1. 管理员在配置页将显示名称改为AB。\n2. 点击保存。\n3. 重新打开配置页。",
+        "expected": "显示名称为AB。",
+        "remark": "人工维护内容，保持。",
+        "data_requirements": "准备管理员账号；AB为拟准备测试输入。",
+        "cleanup": ""
+      },
+      "baseline": null
+    },
+    {
+      "case_ref": "case-income",
+      "case_id": 202,
+      "design_version": 3,
+      "display_number": "历史展示编号-重复也不作身份",
+      "category_id": null,
+      "lifecycle": "UNKNOWN",
+      "design": {
+        "module": "收入",
+        "structure": "收入合计",
+        "case_type": "业务流程",
+        "priority": "P1",
+        "description": "人工维护收入核对",
+        "title": "查询两笔已确认收入的合计",
+        "preconditions": "当前账号为管理员。",
+        "steps": "1. 管理员在收入页选择准备的两笔收入所属范围。\n2. 点击查询并查看合计。",
+        "expected": "显示收入合计。",
+        "remark": "人工维护内容，保持。",
+        "data_requirements": "拟准备同范围两笔已确认收入10元和20元。",
+        "cleanup": "保留人工清理说明。"
+      },
+      "baseline": null
+    }
+  ],
+  "supplement": null,
+  "batch": {
+    "plan_ref": "quality-plan",
+    "batch_ref": "quality-batch",
+    "index": 1,
+    "total": 1,
+    "function_refs": [
+      "F-ORDER"
+    ],
+    "namespace": "quality",
+    "limitations": []
+  },
+  "input_limitations": [
+    "完全合成，未绑定真实项目；未调用模型或执行测试。"
+  ]
+}
