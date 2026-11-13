@@ -1,6 +1,6 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const paths=process.argv.slice(2);
-if(!paths.length)paths.push('outputs/prototype-pending/verity-prototype.html');
+if(!paths.length)paths.push(require('node:path').resolve(__dirname, '../../verity-prototype.html'));
 for(const path of paths){
   const html=fs.readFileSync(path,'utf8');
   for(const m of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);

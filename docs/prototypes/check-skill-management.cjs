@@ -21,7 +21,7 @@ process.on("exit", () =>
   }),
 );
 const target =
-  process.argv[2] || "outputs/prototype-pending/verity-prototype.html";
+  process.argv[2] || require('node:path').resolve(__dirname, '../../verity-prototype.html');
 const html = fs.readFileSync(target, "utf8");
 for (const match of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))
   new vm.Script(match[1]);

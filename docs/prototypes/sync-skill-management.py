@@ -36,8 +36,8 @@ block = "// Skill management content snapshot.\nconst SKILL_CONTENT = " + serial
 style = '<style id="skill-management-layout">\n' + (SOURCE / "skill-management.css").read_text(encoding="utf-8") + "\n</style>\n"
 for arg in sys.argv[1:]:
     target = Path(arg).resolve()
-    assert target.name == "verity-prototype.html"
-    assert target == (ROOT / "outputs/prototype-pending/verity-prototype.html").resolve() or target == Path("C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html").resolve()
+    assert target.name in {"verity-prototype.html", "verity-requirement-risk-review.html"}
+    assert target == (ROOT / "verity-prototype.html").resolve() or target == (ROOT / "docs/prototypes/verity-requirement-risk-review.html").resolve()
     original = target.read_bytes().decode("utf-8")
     newline = "\r\n" if "\r\n" in original else "\n"
     html = original.replace("\r\n", "\n")

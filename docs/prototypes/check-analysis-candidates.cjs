@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const paths=process.argv.slice(2);if(!paths.length)paths.push('C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html','outputs/prototype-pending/verity-prototype.html');
+const paths=process.argv.slice(2);if(!paths.length)paths.push(require('node:path').resolve(__dirname, '../../verity-prototype.html'));
 for(const path of paths){
  const html=fs.readFileSync(path,'utf8'),start=html.indexOf('<!-- Shared analysis candidate review:');assert.ok(start>0);
  const block=html.slice(start).match(/<script>([\s\S]*?)<\/script>/)[1];assert.ok(!/\b(fetch|XMLHttpRequest|alert|confirm|prompt)\s*\(/.test(block));

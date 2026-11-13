@@ -196,7 +196,7 @@ GitHub新增/编辑只配置仓库、跟踪分支、目录与文件范围，进�
 
 2026-09-14：用户确认在需求资料下方增加同级“原型资料”，作为后续需求分析的补充，并明确“原型代码通过github配置读取代码”。本轮授权为更新已有总 HTML 原型；未实施正式前后端、数据库迁移或真实远端读取。代码来源采用 GitHub，不增加代码粘贴、本地代码上传或 ZIP 入口。
 
-总原型：`C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html#prototypes`。
+总原型：[项目根目录 verity-prototype.html](../verity-prototype.html#prototypes)，后续原型修改直接在此文件进行。
 
 ## 页面与流程
 

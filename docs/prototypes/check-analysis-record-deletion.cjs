@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const html=fs.readFileSync(process.argv[2]||'outputs/prototype-pending/verity-prototype.html','utf8');
+const html=fs.readFileSync(process.argv[2]||require('node:path').resolve(__dirname, '../../verity-prototype.html'),'utf8');
 for(const match of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
 const code=fs.readFileSync('docs/prototypes/analysis-record-deletion.js','utf8');
 assert.ok(html.replaceAll('\r\n', '\n').includes(code.replaceAll('\r\n', '\n').trim()));

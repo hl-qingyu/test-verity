@@ -54,7 +54,7 @@
 
 ## 原型和业务说明
 
-[架构说明](ARCHITECTURE.md)记录已确认总原型位置。仓库中保留[总原型审阅副本](prototypes/verity-requirement-risk-review.html)，右侧提供菜单页、弹窗和具体操作说明，支持搜索与展开收起。
+总原型为项目根目录的 [verity-prototype.html](../verity-prototype.html)，后续直接修改此文件，右侧提供菜单页、弹窗和具体操作说明，支持搜索与展开收起。[审阅副本](prototypes/verity-requirement-risk-review.html)保留作参考。
 
 说明栏的[维护文档](prototypes/verity-business-rules/README.md)和[规则清单](prototypes/verity-business-rules/RULES.md)用于核对业务。HTML使用演示数据，不代表已执行真实分析。
 

@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
-const path = process.argv[2] || 'C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html';
+const path = process.argv[2] || require('node:path').resolve(__dirname, '../../verity-prototype.html');
 const html = fs.readFileSync(path, 'utf8');
 for (const match of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) new vm.Script(match[1]);
 const block = html.slice(html.indexOf('// Change analysis prototype:'), html.indexOf('// End change analysis prototype.'));

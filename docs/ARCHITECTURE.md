@@ -96,7 +96,7 @@ Codex命令行在后端Windows运行，固定版本0.166.0，允许原生多轮�
 
 复用主题控件：下拉用FormSelect/Select，表单用Form，文件入口用FilePicker，页码跳转用PageJump。具体键盘、焦点、弹窗滚动和窄屏要求见[界面规范](UI_STANDARDS.md)。
 
-已确认总原型位于 `C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html`，仓库内有[审阅副本](prototypes/verity-requirement-risk-review.html)。菜单、字段和交互变更需按用户确认执行。原型右侧[业务说明](prototypes/verity-business-rules/README.md)描述当前实现，交互仍使用演示数据。
+已确认总原型为项目根目录的 [verity-prototype.html](../verity-prototype.html)。后续页面、弹窗、交互和业务说明均在这个文件上修改，不再修改项目外的旧文件。[审阅副本](prototypes/verity-requirement-risk-review.html)仅作副本，不能反向覆盖主文件。菜单、字段和交互变更需按用户确认执行。原型右侧[业务说明](prototypes/verity-business-rules/README.md)描述当前实现，交互仍使用演示数据。
 
 ## 文档和验证
 

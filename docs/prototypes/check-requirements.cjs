@@ -1,6 +1,6 @@
 // Run: node docs/prototypes/check-requirements.cjs [total-prototype.html]
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const html=fs.readFileSync(process.argv[2]||'C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html','utf8');
+const html=fs.readFileSync(process.argv[2]||require('node:path').resolve(__dirname, '../../verity-prototype.html'),'utf8');
 const script=html.match(/<script>\s*('use strict';[\s\S]*?)<\/script>/)[1];
 new vm.Script(script);
 const helpers=script.slice(script.indexOf("let requirementTab="),script.indexOf('function viewRequirements()'));

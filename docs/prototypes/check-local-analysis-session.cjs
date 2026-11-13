@@ -1,6 +1,6 @@
 // Run: node docs/prototypes/check-local-analysis-session.cjs [total-prototype.html]
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const html=fs.readFileSync(process.argv[2]||'C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html','utf8');
+const html=fs.readFileSync(process.argv[2]||require('node:path').resolve(__dirname, '../../verity-prototype.html'),'utf8');
 for(const match of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
 const start=html.indexOf('// Requirement risk report prototype:');
 const end=html.indexOf('// End requirement risk report prototype.',start);

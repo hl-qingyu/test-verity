@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const assert = require("node:assert/strict");
 const filename =
-  process.argv[2] || "outputs/prototype-pending/verity-prototype.html";
+  process.argv[2] || require('node:path').resolve(__dirname, '../../verity-prototype.html');
 const html = fs.readFileSync(filename, "utf8");
 for (const m of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))
   new vm.Script(m[1]);

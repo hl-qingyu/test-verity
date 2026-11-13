@@ -3,7 +3,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.resolve(__dirname, '../../..');
 const files = [
-  'C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html',
+  path.join(root, 'verity-prototype.html'),
   path.join(root, 'docs/prototypes/verity-requirement-risk-review.html'),
 ];
 const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, 'catalog.json'), 'utf8'));

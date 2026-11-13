@@ -23,7 +23,7 @@
 
 ## 原型与验证
 
-总原型为 `C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html`，同步仓库 `outputs/prototype-pending/verity-prototype.html`、`docs/prototypes/verity-requirement-risk-review.html` 和账号原型。共用原型行为校验 `docs/prototypes/check-pagination.cjs` 覆盖整数/范围、行内错误、绝对页码及批量编辑增量路由、当前页和禁用。
+总原型为项目根目录的 [verity-prototype.html](../verity-prototype.html)，后续直接修改此文件，审阅副本按需同步。共用原型行为校验 `docs/prototypes/check-pagination.cjs` 默认检查根目录主文件，覆盖整数/范围、行内错误、绝对页码及批量编辑增量路由、当前页和禁用。
 
 前端全量129项通过，包括新4项页码边界/回车隔离/同步/禁用/入口检查，批量编辑原回归改为实际跳转并验证草稿及最终保存请求。两份总原型既有七组回归与分页专项通过；类型、ESLint、Prettier和生产构建结果见 `outputs/pagination-*-20261014.log`，既有主包500kB提示保留。
 

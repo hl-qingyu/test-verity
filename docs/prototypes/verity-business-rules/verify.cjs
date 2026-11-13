@@ -40,7 +40,7 @@ for (const [page, title, context, expected] of scenarios) {
 }
 const root = path.resolve(__dirname, '../../..');
 const files = [
-  'C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html',
+  path.join(root, 'verity-prototype.html'),
   path.join(root, 'docs/prototypes/verity-requirement-risk-review.html'),
 ];
 const annotations = files.map(file => {

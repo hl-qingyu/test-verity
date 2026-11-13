@@ -4,7 +4,7 @@ const fs = require("node:fs"),
   assert = require("node:assert/strict");
 const html = fs.readFileSync(
   process.argv[2] ||
-    "C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html",
+    require('node:path').resolve(__dirname, '../../verity-prototype.html'),
   "utf8",
 );
 // Validate the renderer as well as the page script; preview code must actually parse.

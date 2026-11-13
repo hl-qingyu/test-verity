@@ -4,7 +4,7 @@ const path = require('node:path');
 const esbuild = require('../../frontend/node_modules/esbuild');
 
 (async () => {
-  const target = process.argv[2] || 'C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html';
+  const target = process.argv[2] || require('node:path').resolve(__dirname, '../../verity-prototype.html');
   const result = await esbuild.build({
     stdin: {
       contents: `import {createElement} from 'react'; import {renderToStaticMarkup} from 'react-dom/server'; import {MarkdownPreview} from './MarkdownPreview'; import {OfficePreview} from './OfficePreview';

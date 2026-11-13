@@ -1,5 +1,5 @@
 const fs = require("node:fs"), vm = require("node:vm"), assert = require("node:assert/strict");
-const file = process.argv[2] || "outputs/prototype-pending/verity-prototype.html";
+const file = process.argv[2] || require('node:path').resolve(__dirname, '../../verity-prototype.html');
 const html = fs.readFileSync(file, "utf8");
 for (const script of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) new vm.Script(script[1]);
 const start = html.indexOf("case'new-project':"), end = html.indexOf("case'", html.indexOf("case'create-project':", start) + 5);

@@ -1,6 +1,6 @@
 // Run: node docs/prototypes/check-case-generation.cjs [prototype.html]
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const path=process.argv[2]||'C:/Users/geekonup/Documents/Codex/2026-08-17/new-chat/outputs/verity-prototype.html';
+const path=process.argv[2]||require('node:path').resolve(__dirname, '../../verity-prototype.html');
 const html=fs.readFileSync(path,'utf8');
 for(const match of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
 const block=html.slice(html.indexOf('// Case generation prototype:'),html.indexOf('// End case generation prototype.'));
