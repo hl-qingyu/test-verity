@@ -556,6 +556,56 @@ test('generation activity shows live loading and explicit safe failure diagnosti
   );
 });
 
+test('saved CLI rounds suppress the activity card until a newer generation needs attention', () => {
+  const { GenerationActivity } = load(src('CaseGeneration.tsx'));
+  const original = {
+      id: 9,
+      key: 'B1',
+      status: 'FAILED',
+      reason: 'generation_terminal_turn_interrupted',
+      startedAt: '2026-11-16T09:32:00Z',
+      diagnostics: { received_bytes: 7526, output_characters: 0 },
+    },
+    rounds = [
+      { id: 'new', batchId: 11, timestamp: '2026-11-17T08:15:00Z', caseCount: 97 },
+      { id: 'old', batchId: 10, timestamp: '2026-11-17T06:12:00Z', caseCount: 41 },
+    ],
+    record = { batches: [original], nativeRounds: rounds },
+    before = JSON.stringify(record),
+    render = () =>
+      renderToStaticMarkup(
+        React.createElement(GenerationActivity, {
+          record,
+          onRetry() {},
+        }),
+      );
+  const html = render();
+  assert.equal(html, '<div class="generation-activity-list"></div>');
+  assert.equal(JSON.stringify(record), before);
+
+  original.startedAt = '2026-11-18T08:00:00Z';
+  const laterFailure = render();
+  assert.doesNotMatch(laterFailure, /对话候选已保存/);
+  assert.match(laterFailure, /生成失败/);
+  original.status = 'QUEUED';
+  original.startedAt = null;
+  assert.match(render(), /排队中/);
+  assert.doesNotMatch(render(), /对话候选已保存/);
+  original.status = 'RUNNING';
+  const active = render();
+  assert.match(active, /generation-spinner/);
+  assert.match(active, /aria-busy="true"/);
+  assert.doesNotMatch(active, /对话候选已保存/);
+
+  original.startedAt = '2026-11-18T08:00:00Z';
+  original.status = 'COMPLETED';
+  assert.equal(render(), html);
+
+  original.status = 'FAILED';
+  original.nativeResultId = 'new';
+  assert.equal(render(), html);
+});
+
 test('initial record fetch shows loading rather than claiming saved records are absent', () => {
   const { CaseGeneration } = load(src('CaseGeneration.tsx'));
   const html = renderToStaticMarkup(

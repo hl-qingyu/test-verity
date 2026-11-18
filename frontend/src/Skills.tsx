@@ -1,4 +1,6 @@
 import { callModeName, readSelectedAI } from './aiConfiguration';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useBlocker } from 'react-router-dom';
@@ -31,7 +33,7 @@ import type {
 } from './skillApi';
 import './skills.css';
 
-type Props = { user: User; onSessionEnd: () => void };
+type Props = { user: User; onSessionEnd: () => void; pageCache?: PageViewCache };
 const purpose = (f: SkillFile) =>
   ({
     'SKILL.md': '分析说明',
@@ -53,13 +55,13 @@ const usage = (f: SkillFile) =>
 export function Skills(props: Props) {
   return <SkillWorkspace key={props.user.id} {...props} />;
 }
-function SkillWorkspace({ user, onSessionEnd }: Props) {
+function SkillWorkspace({ user, onSessionEnd, pageCache }: Props) {
   const [items, setItems] = useState<SkillSummary[]>([]),
-    [selected, setSelected] = useState('requirement-analysis'),
+    [selected, setSelected] = useCachedView(pageCache, 'selected', 'requirement-analysis'),
     [record, setRecord] = useState<SkillPackage | null>(null),
-    [fileId, setFileId] = useState(''),
+    [fileId, setFileId] = useCachedView(pageCache, 'fileId', ''),
     [content, setContent] = useState<SkillContent | null>(null),
-    [mode, setMode] = useState('read'),
+    [mode, setMode] = useCachedView(pageCache, 'mode', 'read'),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [loading, setLoading] = useState(true),
@@ -68,7 +70,11 @@ function SkillWorkspace({ user, onSessionEnd }: Props) {
     [editing, setEditing] = useState(false),
     [editChecking, setEditChecking] = useState(false),
     [validation, setValidation] = useState(0),
-    [expanded, setExpanded] = useState(new Set(['examples', 'scripts']));
+    [expanded, setExpanded] = useCachedView(
+      pageCache,
+      'expanded',
+      new Set(['examples', 'scripts']),
+    );
   const editorButton = useRef<HTMLButtonElement>(null);
   const cache = useRef(new Map<string, { bundle: SkillBundle; checked: number }>()),
     currentFile = useRef(fileId),
@@ -88,15 +94,18 @@ function SkillWorkspace({ user, onSessionEnd }: Props) {
       accountCache.clear();
     };
   }, []);
-  const install = useCallback((p: SkillBundle, reset = false) => {
-    const selectedFile =
-      (!reset && p.files.find((f) => f.id === currentFile.current)) ||
-      p.files.find((f) => f.path === 'SKILL.md');
-    currentFile.current = selectedFile?.id || '';
-    setRecord(p);
-    setFileId(currentFile.current);
-    setContent(p.contents.find((f) => f.id === currentFile.current) || null);
-  }, []);
+  const install = useCallback(
+    (p: SkillBundle, reset = false) => {
+      const selectedFile =
+        (!reset && p.files.find((f) => f.id === currentFile.current)) ||
+        p.files.find((f) => f.path === 'SKILL.md');
+      currentFile.current = selectedFile?.id || '';
+      setRecord(p);
+      setFileId(currentFile.current);
+      setContent(p.contents.find((f) => f.id === currentFile.current) || null);
+    },
+    [setFileId],
+  );
   useEffect(() => {
     if (user.platform_role !== 'ADMIN') setEditing(false);
   }, [user.platform_role]);
@@ -209,7 +218,7 @@ function SkillWorkspace({ user, onSessionEnd }: Props) {
       if (!saved || Date.now() - saved.checked >= 5000) setValidation((n) => n + 1);
       setNotice('');
     },
-    [selected],
+    [selected, setExpanded, setFileId, setMode],
   );
   function tree(prefix = ''): React.ReactNode {
     if (!record) return null;

@@ -135,13 +135,13 @@ function harness(custom = {}, workspace = false) {
   const react = {
     useState(initial) {
       const i = cursor++;
-      hooks[i] ??= { value: typeof initial === 'function' ? initial() : initial };
-      return [
-        hooks[i].value,
-        (v) => {
+      hooks[i] ??= {
+        value: typeof initial === 'function' ? initial() : initial,
+        set(v) {
           hooks[i].value = typeof v === 'function' ? v(hooks[i].value) : v;
         },
-      ];
+      };
+      return [hooks[i].value, hooks[i].set];
     },
     useRef(initial) {
       const i = cursor++;

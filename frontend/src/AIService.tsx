@@ -164,8 +164,7 @@ export function AIService({
                     unverified: '未验证',
                   }[settings.cli_runtime.status]
                 }
-                {' · '}
-                {settings.cli_runtime.required_version}。
+                {settings.cli_runtime.version && ` · ${settings.cli_runtime.version}`}。
                 {settings.cli_runtime.available && '可能多轮计费；PDF 请使用 API。'}
                 {!settings.cli_runtime.available &&
                   (settings.cli_runtime.probe_available

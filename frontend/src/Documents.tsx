@@ -1,4 +1,6 @@
 import { MaterialDeleteDialog } from './MaterialDeleteDialog';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { FilePicker } from './FilePicker';
 import { Form } from './Form';
 import { useEffect, useRef, useState } from 'react';
@@ -280,7 +282,9 @@ export function Documents({
   project,
   onSessionEnd,
   documentId,
+  pageCache,
 }: {
+  pageCache?: PageViewCache;
   project: Project | null;
   onSessionEnd: () => void;
   documentId?: number;
@@ -291,7 +295,11 @@ export function Documents({
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   const [reload, setReload] = useState(0),
-    [selected, setSelected] = useState<number | null>(documentId ?? null),
+    [selected, setSelected] = useCachedView<number | null>(
+      documentId === undefined ? pageCache : undefined,
+      'selected',
+      documentId ?? null,
+    ),
     [checked, setChecked] = useState<number[]>([]),
     [historical, setHistorical] = useState<DocumentVersion | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -356,7 +364,7 @@ export function Documents({
       setSelected(documentId);
       setHistorical(null);
     }
-  }, [documentId]);
+  }, [documentId, setSelected]);
   const current =
     library?.documents.find((d) => d.id === selected) ||
     (selected === documentId ? undefined : library?.documents[0]);

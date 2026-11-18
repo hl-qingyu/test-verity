@@ -1,4 +1,6 @@
 import { PageJump } from './PageJump';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { Form } from './Form';
 import { Select } from './FormSelect';
 import { useEffect, useRef, useState } from 'react';
@@ -29,7 +31,9 @@ const firstCondition = (): Condition => ({ field: 'title', operator: 'contains',
 export function Cases({
   project,
   onSessionEnd,
+  pageCache,
 }: {
+  pageCache?: PageViewCache;
   project: Project | null;
   onSessionEnd: () => void;
 }) {
@@ -40,13 +44,15 @@ export function Cases({
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [revision, setRevision] = useState(0);
-  const [draft, setDraft] = useState<Condition[]>([firstCondition()]),
-    [search, setSearch] = useState<CaseSearch>({
-      page: 1,
-      page_size: 10,
-      category_id: null,
-      conditions: [],
-    }),
+  const [search, setSearch] = useCachedView<CaseSearch>(pageCache, 'search', {
+    page: 1,
+    page_size: 10,
+    category_id: null,
+    conditions: [],
+  });
+  const [draft, setDraft] = useState<Condition[]>(
+      search.conditions.length ? search.conditions : [firstCondition()],
+    ),
     [selected, setSelected] = useState<number[]>([]);
   const [modal, setModal] = useState<
       | 'manage'

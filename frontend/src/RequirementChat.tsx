@@ -1,6 +1,8 @@
 import { callModeName, readSelectedAI } from './aiConfiguration';
 import { PageJump } from './PageJump';
 import { useEffect, useRef, useState } from 'react';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { CaseDialog } from './CaseDialog';
 import { Form } from './Form';
@@ -37,9 +39,11 @@ function merge(rows: ChatTurn[], incoming: ChatTurn[]) {
 export function RequirementChat({
   project,
   onSessionEnd,
+  pageCache,
 }: {
   project: Project | null;
   onSessionEnd: () => void;
+  pageCache?: PageViewCache;
 }) {
   const { reportId: raw } = useParams();
   const [search] = useSearchParams();
@@ -57,6 +61,7 @@ export function RequirementChat({
       functionKey={functionKey}
       riskKey={riskKey}
       onSessionEnd={onSessionEnd}
+      pageCache={pageCache}
     />
   );
 }
@@ -67,19 +72,21 @@ function Chat({
   functionKey,
   riskKey,
   onSessionEnd,
+  pageCache,
 }: {
   project: Project;
   reportId: number;
   functionKey: string;
   riskKey: string;
   onSessionEnd: () => void;
+  pageCache?: PageViewCache;
 }) {
   const base = `/api/projects/${project.id}/requirements/risk-reports`;
   const endpoint = `${base}/${reportId}/chat`;
   const [detail, setDetail] = useState<RiskDetail | null>(null),
     [turns, setTurns] = useState<ChatTurn[]>([]);
   const [records, setRecords] = useState<ReportItem[]>([]),
-    [recordPage, setRecordPage] = useState(1),
+    [recordPage, setRecordPage] = useCachedView(pageCache, 'recordPage', 1),
     [recordMore, setRecordMore] = useState(false),
     [recordLoading, setRecordLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false),
@@ -90,7 +97,7 @@ function Chat({
     [config, setConfig] = useState('正在读取个人AI配置…');
   const [notice, setNotice] = useState('');
   const [adding, setAdding] = useState<ChatTurn | null>(null);
-  const [recordQuery, setRecordQuery] = useState('');
+  const [recordQuery, setRecordQuery] = useCachedView(pageCache, 'recordQuery', '');
   const controller = useRef(new AbortController()),
     pending = useRef(false),
     latest = useRef(0);

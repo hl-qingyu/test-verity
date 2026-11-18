@@ -69,7 +69,11 @@ class CLIProtocolTests(unittest.TestCase):
             patch.object(
                 codex_exec,
                 "runtime_status",
-                return_value={"available": False, "status": "unverified"},
+                return_value={
+                    "available": False,
+                    "status": "not_installed",
+                    "reason": "ai_cli_not_installed",
+                },
             ),
             patch("app.integrations.responses.analyze") as api,
             patch.object(codex_exec.subprocess, "Popen") as process,
@@ -151,6 +155,7 @@ class CLIProcessTests(unittest.TestCase):
 
             with (
                 patch.object(codex_exec, "Settings", return_value=settings),
+                patch.object(codex_exec, "runtime_status", return_value={"version": "0.169.1"}),
                 patch.object(codex_exec.subprocess, "Popen", side_effect=spawn),
                 patch.object(codex_exec, "credential_cipher", return_value=cipher),
             ):

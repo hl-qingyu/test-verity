@@ -66,7 +66,7 @@ RPC日志同时记录 turn/started，使新轮次开始会清除上一轮失败�
 
 ## 原生业务调用（现行）
 
-- 已安装固定0.166.0时runtime返回available=true / execution_policy=native-v1，个人CLI可“保存并使用”。实际切换由用户在设置页完成；平台不擅自将保存的CLI配置设为当前方式，不触发收费验证。
+- 配置有效的 Windows CLI 可执行文件后，runtime 返回 available=true / execution_policy=native-v1，个人 CLI 可“保存并使用”。版本探测只用于显示实际版本及记录诊断。启动、参数或协议失败沿现有错误路径返回。实际切换由用户在设置页完成；平台不擅自将保存的CLI配置设为当前方式，不触发收费验证。
 - 五类分析、独立对话及Skill助手沿公共ai_client选择 CLI。新用例生成的已绑定批次使用上节原生 TUI，其余及旧未绑定批次仍使用 codex exec。本人Key、模型、强度、任务固定方式/版本和原业务契约校验保持；原API调用不受CLI的新授权影响。旧缺方式任务仍API。新CLI任务快照增加execution_policy，不改写历史。
 - 业务CLI直连所配模型服务，保留CLI原生多轮、HTTP/SSE重试、上下文压缩和等待默认值；平台不增加总时限、不调用测试网关、不限制只发一次模型请求，也不在CLI失败后自动换API或重新提交任务。CLI本身仍可能有空闲超时/重试上限，不能宣称供应商或CLI无限等待。一个Worker槽代表一次CLI进程生命周期，实际模型调用数仍未知。
 - 固定Skill和可信developer规则通过独立model_instructions_file传入，原messages角色/顺序/文字保存。小输入通过stdin完整传递。真实0.166.0实测stdin超过1,048,576字符在turn/start前本地拒绝；平台在90万字符以上改为将完整输入写入本次input/input.json，附尺寸/SHA256及读取说明。无平台摘要、截断或先挑来源。

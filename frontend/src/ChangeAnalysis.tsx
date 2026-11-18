@@ -1,4 +1,6 @@
 import { AnalysisCandidateReview } from './AnalysisCandidateReview';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { AIConfigurationSummary } from './AIConfigurationSummary';
 import { AnalysisRecordDelete } from './AnalysisRecordDelete';
 import { PageJump } from './PageJump';
@@ -38,6 +40,7 @@ import './requirement-ui.css';
 import './change-analysis.css';
 
 type Props = {
+  pageCache?: PageViewCache;
   onRecordDeleted?: () => void;
   overviewTarget?: OverviewTarget | null;
   project: Project | null;
@@ -53,7 +56,10 @@ export function ChangeAnalysis(props: Props) {
       key={`${props.user.id}:${props.project?.id}:${deletionVersion}`}
       {...props}
       overviewTarget={deletionVersion ? null : props.overviewTarget}
-      onRecordDeleted={() => setDeletionVersion((v) => v + 1)}
+      onRecordDeleted={() => {
+        props.pageCache?.delete('selected');
+        setDeletionVersion((v) => v + 1);
+      }}
     />
   );
 }
@@ -181,6 +187,7 @@ function ChangeWorkspace({
   onRecordDeleted,
   onSessionEnd,
   overviewTarget,
+  pageCache,
 }: Props) {
   const [rows, setRows] = useState<PageChangeRecord[]>(initialRows),
     [listPage, setListPage] = useState(1),
@@ -190,19 +197,27 @@ function ChangeWorkspace({
   function onChange(next: PageChangeRecord[]) {
     setRows(next);
   }
-  const [selected, setSelected] = useState(overviewTarget ? String(overviewTarget.id) : ''),
-    [tab, setTab] = useState<ChangeTab>(
+  const [selected, setSelected] = useCachedView(
+      pageCache,
+      'selected',
+      overviewTarget ? String(overviewTarget.id) : '',
+    ),
+    [tab, setTab] = useCachedView<ChangeTab>(
+      pageCache,
+      'tab',
       overviewTarget?.group === 'regressions'
         ? 'regressions'
         : overviewTarget?.group === 'impacts'
           ? 'impacts'
           : 'changes',
     ),
-    [page, setPage] = useState(1),
-    [query, setQuery] = useState(''),
-    [functionFilter, setFunctionFilter] = useState(''),
-    [causeFilter, setCauseFilter] = useState(''),
-    [handlingFilter, setHandlingFilter] = useState(
+    [page, setPage] = useCachedView(pageCache, 'page', 1),
+    [query, setQuery] = useCachedView(pageCache, 'query', ''),
+    [functionFilter, setFunctionFilter] = useCachedView(pageCache, 'functionFilter', ''),
+    [causeFilter, setCauseFilter] = useCachedView(pageCache, 'causeFilter', ''),
+    [handlingFilter, setHandlingFilter] = useCachedView(
+      pageCache,
+      'handlingFilter',
       overviewTarget?.state
         ? overviewTarget.state === 'PENDING' && overviewTarget.group === 'regressions'
           ? '待审阅'
@@ -228,24 +243,31 @@ function ChangeWorkspace({
   }, []);
   const record = rows.find((x) => x.id === selected) || (selected ? null : rows[0]) || null;
   const base = `/api/projects/${project?.id || 0}/change-analysis`;
+  const entrySelection = useRef(selected);
   useEffect(() => {
-    if (!project || !overviewTarget) return;
+    const id = entrySelection.current;
+    if (!project || !id) return;
     const c = new AbortController();
     setLoading(true);
-    void changeDetail(`${base}/${overviewTarget.id}?page_view=true`, project.id, {
+    void changeDetail(`${base}/${id}?page_view=true`, project.id, {
       signal: c.signal,
     })
       .then((value) => {
         if (!c.signal.aborted) setRows((old) => [value, ...old.filter((r) => r.id !== value.id)]);
       })
       .catch((e) => {
-        if (!c.signal.aborted) setError(changeError(e, onSessionEnd));
+        if (c.signal.aborted) return;
+        if (!overviewTarget && e instanceof Error && e.message === 'change_analysis_not_found') {
+          setSelected((current) => (current === id ? '' : current));
+        } else {
+          setError(changeError(e, onSessionEnd));
+        }
       })
       .finally(() => {
         if (!c.signal.aborted) setLoading(false);
       });
     return () => c.abort();
-  }, [base, project, overviewTarget, onSessionEnd]);
+  }, [base, project, overviewTarget, onSessionEnd, setSelected]);
   useEffect(() => {
     if (!project) return;
     const c = new AbortController();

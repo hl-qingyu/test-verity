@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import type { User } from './Auth';
 import { Accounts } from './Accounts';
 import { AIService } from './AIService';
@@ -9,12 +11,18 @@ export function Platform({
   user,
   onSessionEnd,
   onUserChange,
+  pageCache,
 }: {
+  pageCache?: PageViewCache;
   user: User;
   onSessionEnd: () => void;
   onUserChange: (user: User) => void;
 }) {
-  const [tab, setTab] = useState(user.platform_role === 'ADMIN' ? 'accounts' : 'general');
+  const [tab, setTab] = useCachedView(
+    pageCache,
+    'tab',
+    user.platform_role === 'ADMIN' ? 'accounts' : 'general',
+  );
   const [aiDirty, setAiDirty] = useState(false);
   const [pendingTab, setPendingTab] = useState<string | null>(null);
   const sections = [

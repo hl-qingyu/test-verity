@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Project } from './Projects';
 import { Icon } from './Icon';
@@ -27,16 +29,23 @@ const time = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12
 export function ProjectOverview({
   project,
   onSessionEnd,
+  pageCache,
 }: {
   project: Project | null;
   onSessionEnd: () => void;
+  pageCache?: PageViewCache;
 }) {
   const navigate = useNavigate(),
     [search, setSearch] = useSearchParams();
-  const requested = search.get('view') || 'all';
+  const [savedFilter, setSavedFilter] = useCachedView(pageCache, 'filter', 'all');
+  const urlFilter = search.get('view');
+  const requested = urlFilter ?? savedFilter;
   const filter: OverviewFilter = Object.hasOwn(overviewFilters, requested)
     ? (requested as OverviewFilter)
     : 'all';
+  useEffect(() => {
+    if (urlFilter !== null) setSavedFilter(filter);
+  }, [filter, urlFilter, setSavedFilter]);
   const [data, setData] = useState<OverviewSummary | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(''),
@@ -141,7 +150,7 @@ export function ProjectOverview({
   }, [project, selection, choicePage, navigate, onSessionEnd]);
   function chooseFilter(value: OverviewFilter) {
     recordList.current?.scrollTo({ top: 0 });
-    setSearch(value === 'all' ? {} : { view: value });
+    setSearch({ view: value });
   }
   if (!project)
     return (

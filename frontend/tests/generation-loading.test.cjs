@@ -4,7 +4,7 @@ const { test } = require('node:test'),
   path = require('node:path'),
   ts = require('typescript');
 
-function harness(mode = 'remote') {
+function harness(mode = 'remote', pageCache) {
   const hooks = [],
     effects = [],
     timers = new Map(),
@@ -178,7 +178,7 @@ function harness(mode = 'remote') {
     rawReports: [{}],
     cancelled: false,
   });
-  const props = { project: { id: 7 }, user: { id: 3 }, onSessionEnd() {} },
+  const props = { project: { id: 7 }, user: { id: 3 }, onSessionEnd() {}, pageCache },
     remote = ['export', 'single', 'start-cli', 'start-api'].includes(mode)
       ? GenerationWorkspace
       : CaseGeneration(props).type;
@@ -271,12 +271,12 @@ function harness(mode = 'remote') {
     summaries,
     downloads,
     actions,
-    component(name) {
+    component(name, matches = () => true) {
       let found;
       function walk(node) {
         if (Array.isArray(node)) return node.forEach(walk);
         if (!node || typeof node !== 'object') return;
-        if (node.type?.name === name) found = node;
+        if (node.type?.name === name && matches(node.props)) found = node;
         walk(node.props?.children);
       }
       walk(tree);
@@ -464,6 +464,33 @@ test('entry reads summaries then only the selected detail; unchanged polls reuse
   }
 });
 
+test('returning to generation restores the record and list range and reloads their data', async () => {
+  const pageCache = { projectId: 7 };
+  const first = harness('remote', pageCache);
+  try {
+    first.render();
+    await first.settle();
+    first.workspace().onSelectRecord('1');
+    first.workspace().onMore();
+    await first.settle();
+  } finally {
+    first.close();
+  }
+
+  const reopened = harness('remote', pageCache);
+  try {
+    reopened.render();
+    assert.equal(reopened.workspace(), undefined);
+    await reopened.settle();
+    assert.equal(reopened.summaryReads(), 2);
+    assert.equal(reopened.workspace().selectedRecordId, '1');
+    assert.equal(reopened.reads[0].id, '1');
+    assert.deepEqual(reopened.workspace().rows, []);
+  } finally {
+    reopened.close();
+  }
+});
+
 test('overview entry fetches an older summary by identity and opens it instead of the first list row', async () => {
   const h = harness('target');
   try {
@@ -544,9 +571,16 @@ test('saving a CLI round keeps the original conversation and reviews that round 
     assert.equal(h.component('CachedCliWorkspace').key, native.key);
     assert.equal(h.component('CachedCliWorkspace').props.runId, '2');
     assert.equal(h.component('CachedCliWorkspace').props.open, true);
+    const roundFilter = () => h.component('FormSelect', (props) => props.label === '候选轮次');
+    h.component('CachedCliWorkspace').props.onClose();
+    await h.settle();
+    assert.equal(roundFilter().props.value, '');
+    h.button('历史对话').props.onClick();
+    await h.settle();
     h.component('CachedCliWorkspace').props.onReviewResult('a'.repeat(64));
     await h.settle();
     assert.equal(h.component('CachedCliWorkspace').props.open, false);
+    assert.equal(roundFilter().props.value, 'a'.repeat(64));
     assert.ok(h.button('历史对话'));
     assert.equal(h.actions.filter((a) => a.route.endsWith('/start')).length, 1);
     assert.equal(h.actions.filter((a) => a.route.endsWith('/cancel')).length, 0);

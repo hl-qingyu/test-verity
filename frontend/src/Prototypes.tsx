@@ -1,4 +1,6 @@
 import { MaterialDeleteDialog } from './MaterialDeleteDialog';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { useEffect, useRef, useState } from 'react';
 import { useMaterialDrag } from './useMaterialDrag';
 import { Link } from 'react-router-dom';
@@ -37,7 +39,9 @@ export function Prototypes({
   project,
   onSessionEnd,
   documentId,
+  pageCache,
 }: {
+  pageCache?: PageViewCache;
   project: Project | null;
   onSessionEnd: () => void;
   documentId?: number;
@@ -52,7 +56,11 @@ export function Prototypes({
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [reload, setReload] = useState(0),
-    [selected, setSelected] = useState<number | null>(documentId ?? null),
+    [selected, setSelected] = useCachedView<number | null>(
+      documentId === undefined ? pageCache : undefined,
+      'selected',
+      documentId ?? null,
+    ),
     [historical, setHistorical] = useState<DocumentVersion | null>(null),
     [editor, setEditor] = useState<{
       kind: PrototypeSource['kind'];
@@ -138,7 +146,7 @@ export function Prototypes({
       setSelected(documentId);
       setHistorical(null);
     }
-  }, [documentId]);
+  }, [documentId, setSelected]);
   const current =
     library?.sources.find((s) => s.id === selected) ||
     (selected === documentId ? undefined : library?.sources[0]);

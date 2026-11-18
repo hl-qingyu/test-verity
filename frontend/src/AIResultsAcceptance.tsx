@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import type { User } from './Auth';
 import type { Project } from './Projects';
 import { AcceptanceSummary } from './AnalysisAcceptance';
@@ -10,14 +11,16 @@ export function AIResultsAcceptance({
   projectsLoading,
   onSelectProject,
   onSessionEnd,
+  pageCache,
 }: {
+  pageCache?: PageViewCache;
   user: User;
   projects: Project[];
   projectsLoading: boolean;
   onSelectProject: (id: number) => void;
   onSessionEnd: () => void;
 }) {
-  const [projectId, setProjectId] = useState<number | null>(null);
+  const [projectId, setProjectId] = useCachedView<number | null>(pageCache, 'projectId', null);
   const project = projects.find((p) => p.id === projectId);
   if (user.platform_role !== 'ADMIN')
     return (

@@ -153,8 +153,8 @@ class FakeProvider:
 class RealCLIProbeTests(unittest.TestCase):
     def setUp(self):
         runtime = codex_exec.runtime_status()
-        if runtime["version"] != codex_exec.VERSION:
-            self.skipTest("requires installed pinned CLI exe")
+        if not runtime["probe_available"]:
+            self.skipTest("requires installed CLI exe")
 
     def run_probe(self, mode):
         with (

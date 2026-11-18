@@ -86,7 +86,11 @@ def current_metadata(actor, db, mode=None):
             **value,
             "call_mode": selected,
             "preference_version": pref_version,
-            "client_version": codex_exec.VERSION if selected == "CODEX_EXEC" else "responses-v1",
+            "client_version": (
+                codex_exec.runtime_status()["version"]
+                if selected == "CODEX_EXEC"
+                else "responses-v1"
+            ),
             **({"execution_policy": codex_exec.NATIVE_POLICY} if selected == "CODEX_EXEC" else {}),
         }
         if value

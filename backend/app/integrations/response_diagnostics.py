@@ -249,8 +249,9 @@ def safe_snapshot(stats: dict) -> dict:
     if stats.get("call_mode") in ("RESPONSES_API", "CODEX_EXEC"):
         result["call_mode"] = stats["call_mode"]
     if stats.get("call_mode") == "CODEX_EXEC":
-        if stats.get("client_version") == "0.166.0":
-            result["client_version"] = "0.166.0"
+        version = stats.get("client_version")
+        if isinstance(version, str) and re.fullmatch(r"[0-9][0-9A-Za-z.+-]{0,63}", version):
+            result["client_version"] = version
         result["model_calls"] = None  # Process/turn count does not prove billed request count.
         if type(stats.get("exit_code")) is int:
             result["exit_code"] = stats["exit_code"]

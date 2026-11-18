@@ -155,7 +155,7 @@ test('collapsed scopes defer thousands of file nodes and reveal the complete lis
     useEffect: () => {},
     useRef: (value) => ({ current: value }),
     useState: (initial) => [
-      typeof initial === 'boolean' ? opened : initial,
+      typeof initial === 'boolean' ? opened : typeof initial === 'function' ? initial() : initial,
       (next) => {
         opened = next;
       },

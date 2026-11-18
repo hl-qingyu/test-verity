@@ -1,4 +1,6 @@
 import { AnalysisCandidateReview } from './AnalysisCandidateReview';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { AIConfigurationSummary } from './AIConfigurationSummary';
 import { callModeName } from './aiConfiguration';
 import { AnalysisRecordDelete } from './AnalysisRecordDelete';
@@ -45,6 +47,7 @@ import './case-generation.css';
 import './case-analysis.css';
 
 type Props = {
+  pageCache?: PageViewCache;
   onRecordDeleted?: () => void;
   project: Project | null;
   user: User;
@@ -58,24 +61,34 @@ export function CaseAnalysis(props: Props) {
       key={`${props.user.id}:${props.project?.id}:${deletionVersion}`}
       {...props}
       overviewTarget={deletionVersion ? null : props.overviewTarget}
-      onRecordDeleted={() => setDeletionVersion((v) => v + 1)}
+      onRecordDeleted={() => {
+        props.pageCache?.delete('selected');
+        setDeletionVersion((v) => v + 1);
+      }}
     />
   );
 }
-function ReviewWorkspace({ project, user, onSessionEnd, overviewTarget, onRecordDeleted }: Props) {
+function ReviewWorkspace({
+  project,
+  user,
+  onSessionEnd,
+  overviewTarget,
+  onRecordDeleted,
+  pageCache,
+}: Props) {
   const [rows, setRows] = useState<ReviewSummary[]>([]),
-    [selected, setSelected] = useState(overviewTarget?.id || 0),
+    [selected, setSelected] = useCachedView(pageCache, 'selected', overviewTarget?.id || 0),
     [record, setRecord] = useState<ReviewRecord | null>(null),
     [loaded, setLoaded] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [tab, setTab] = useState('findings'),
-    [page, setPage] = useState(1),
+    [tab, setTab] = useCachedView(pageCache, 'tab', 'findings'),
+    [page, setPage] = useCachedView(pageCache, 'page', 1),
     [listPage, setListPage] = useState(1),
     [more, setMore] = useState(false),
-    [kind, setKind] = useState('全部类型'),
-    [state, setState] = useState(overviewTarget?.state || '全部状态'),
-    [severity, setSeverity] = useState('全部等级');
+    [kind, setKind] = useCachedView(pageCache, 'kind', '全部类型'),
+    [state, setState] = useCachedView(pageCache, 'state', overviewTarget?.state || '全部状态'),
+    [severity, setSeverity] = useCachedView(pageCache, 'severity', '全部等级');
   const [create, setCreate] = useState(false),
     [parent, setParent] = useState<number | undefined>(),
     [options, setOptions] = useState<CodeOptions | null>(null),
@@ -132,7 +145,7 @@ function ReviewWorkspace({ project, user, onSessionEnd, overviewTarget, onRecord
       setLoaded(true);
       if (!selection.current && value.items[0]) setSelected(value.items[0].id);
     },
-    [project, listPage, overviewTarget],
+    [project, listPage, overviewTarget, setSelected],
   );
   useEffect(() => {
     const c = new AbortController();

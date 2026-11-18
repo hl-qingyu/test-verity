@@ -60,7 +60,7 @@ AI和GitHub配置归个人所有，分析和对话使用操作者本人配置。
 | Node.js | 前端建议22或24；CLI标准文件服务需要24以上，按各package-lock.json安装依赖 |
 | PostgreSQL | 推荐17，根目录提供可选数据库容器配置 |
 | 浏览器 | 支持Web Crypto；本地目录功能还需支持目录选择并授予只读权限 |
-| Codex命令行 | 可选，在后端Windows环境运行，当前固定版本0.166.0 |
+| Codex命令行 | 可选，在后端Windows环境运行，使用所配置的 CLI |
 
 启动脚本面向Windows。当前使用一个API进程和一个后台调度进程；调度进程内按配置并发执行任务。不要通过增加API或后台进程数扩容。
 
@@ -134,7 +134,7 @@ if (-not (Test-Path backend/.env)) {
 | `AI_MAX_CONCURRENT` | AI调用并发总数，默认2 |
 | `AI_MAX_PER_USER` | 每用户同时调用数，默认1 |
 | `AI_MAX_PER_CREDENTIAL` | 同一服务密钥同时调用数，默认1，与连接测试共享预算 |
-| `AI_CLI_EXECUTABLE` | 可选，固定版本Codex程序的绝对路径，须为Windows可执行文件 |
+| `AI_CLI_EXECUTABLE` | 可选，Codex CLI 程序的绝对路径，须为Windows可执行文件 |
 | `AI_CLI_WORK_PATH` | 可选，Codex任务私有工作目录 |
 | `AI_CLI_NODE_EXECUTABLE` | 可选，后端Node.js 24以上可执行文件路径；默认从PATH查找node |
 
@@ -193,7 +193,7 @@ npm run dev
 | 方式 | 当前支持 |
 | --- | --- |
 | API | Responses协议，接收完整结果；支持文字及相应模块提供的图片、PDF输入 |
-| Codex命令行 | 后端Windows机器运行固定版本，使用个人独立配置；支持文字、图片及大输入文件读取，PDF需用API |
+| Codex命令行 | 后端Windows机器运行已配置的 CLI，使用个人独立配置；支持文字、图片及大输入文件读取，PDF需用API |
 
 两套配置独立保存。保存不调用模型；连接测试可能计费，但不保存或启用配置。CLI程序未配置或版本不符时，可保存配置，不能启用运行任务。
 

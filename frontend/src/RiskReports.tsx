@@ -1,4 +1,6 @@
 import { AnalysisCandidateReview } from './AnalysisCandidateReview';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import type { AISelection } from './aiConfiguration';
 import { callModeName, readSelectedAI } from './aiConfiguration';
 import { AIConfigurationSummary } from './AIConfigurationSummary';
@@ -114,6 +116,7 @@ function EvidenceList({
 }
 
 type RiskProps = {
+  pageCache?: PageViewCache;
   project: Project | null;
   onSessionEnd: () => void;
   overviewTarget?: OverviewTarget | null;
@@ -125,16 +128,21 @@ export function RiskReports(props: RiskProps) {
       key={`${props.project?.id}:${deletionVersion}`}
       {...props}
       overviewTarget={deletionVersion ? null : props.overviewTarget}
-      onRecordDeleted={() => setDeletionVersion((v) => v + 1)}
+      onRecordDeleted={() => {
+        props.pageCache?.delete('selected');
+        setDeletionVersion((v) => v + 1);
+      }}
     />
   );
 }
 function RiskWorkspace({
   onRecordDeleted,
+  pageCache,
   project,
   onSessionEnd,
   overviewTarget,
 }: {
+  pageCache?: PageViewCache;
   onRecordDeleted: () => void;
   project: Project | null;
   onSessionEnd: () => void;
@@ -142,9 +150,11 @@ function RiskWorkspace({
 }) {
   const base = `/api/projects/${project?.id}/requirements/risk-reports`;
   const [items, setItems] = useState<ReportItem[]>([]),
-    [page, setPage] = useState(1),
+    [page, setPage] = useCachedView(pageCache, 'page', 1),
     [more, setMore] = useState(false),
-    [selected, setSelected] = useState<number | null>(
+    [selected, setSelected] = useCachedView<number | null>(
+      pageCache,
+      'selected',
       overviewTarget?.recordType === 'report' ? overviewTarget.id : null,
     ),
     [detail, setDetail] = useState<RiskDetail | null>(null),
@@ -159,21 +169,31 @@ function RiskWorkspace({
     [starting, setStarting] = useState<RiskAnalysisTask | true | null>(null),
     [history, setHistory] = useState(false),
     [scopeOpen, setScopeOpen] = useState(false),
-    [analysisQuery, setAnalysisQuery] = useState(''),
+    [analysisQuery, setAnalysisQuery] = useCachedView(pageCache, 'analysisQuery', ''),
     [riskKey, setRiskKey] = useState<string | null>(null),
     [sourceKey, setSourceKey] = useState<string | null>(null),
-    [tab, setTab] = useState<'risks' | 'functions' | 'report' | 'sources'>('risks'),
-    [feature, setFeature] = useState(''),
-    [level, setLevel] = useState(''),
-    [state, setState] = useState('');
+    [tab, setTab] = useCachedView<'risks' | 'functions' | 'report' | 'sources'>(
+      pageCache,
+      'tab',
+      'risks',
+    ),
+    [feature, setFeature] = useCachedView(pageCache, 'feature', ''),
+    [level, setLevel] = useCachedView(pageCache, 'level', ''),
+    [state, setState] = useCachedView(pageCache, 'state', '');
   const [catalog, setCatalog] = useState<RiskCatalog | null>(null),
-    [catalogPage, setCatalogPage] = useState(1),
-    [catalogSource, setCatalogSource] = useState(
+    [catalogPage, setCatalogPage] = useCachedView(pageCache, 'catalogPage', 1),
+    [catalogSource, setCatalogSource] = useCachedView(
+      pageCache,
+      'catalogSource',
       overviewTarget?.recordType === 'report' ? String(overviewTarget.id) : '',
     ),
-    [catalogFunction, setCatalogFunction] = useState(''),
-    [catalogLevel, setCatalogLevel] = useState(''),
-    [catalogState, setCatalogState] = useState(overviewTarget?.state || ''),
+    [catalogFunction, setCatalogFunction] = useCachedView(pageCache, 'catalogFunction', ''),
+    [catalogLevel, setCatalogLevel] = useCachedView(pageCache, 'catalogLevel', ''),
+    [catalogState, setCatalogState] = useCachedView(
+      pageCache,
+      'catalogState',
+      overviewTarget?.state || '',
+    ),
     [catalogRisk, setCatalogRisk] = useState<CatalogItem | null>(null),
     [tasks, setTasks] = useState<RiskAnalysisTask[]>([]),
     [catalogLoading, setCatalogLoading] = useState(false);
@@ -265,6 +285,7 @@ function RiskWorkspace({
     catalogFunction,
     catalogLevel,
     catalogState,
+    setCatalogPage,
     reload,
     onSessionEnd,
   ]);

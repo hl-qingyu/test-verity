@@ -21,7 +21,6 @@ export type AISettings = {
   cli_runtime: {
     status: 'available' | 'not_installed' | 'unsupported_version' | 'unverified';
     version: string | null;
-    required_version: string;
     available: boolean;
     probe_available?: boolean;
   };
@@ -88,7 +87,6 @@ export function parseAISettings(value: unknown): AISettings {
     ) ||
     typeof runtime.available !== 'boolean' ||
     (runtime.probe_available !== undefined && typeof runtime.probe_available !== 'boolean') ||
-    typeof runtime.required_version !== 'string' ||
     !(runtime.version === null || typeof runtime.version === 'string')
   )
     throw new Error('ai_invalid_response');

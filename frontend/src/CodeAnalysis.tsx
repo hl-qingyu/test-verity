@@ -1,4 +1,6 @@
 import { AnalysisCandidateReview } from './AnalysisCandidateReview';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { AIConfigurationSummary } from './AIConfigurationSummary';
 import { AnalysisRecordDelete } from './AnalysisRecordDelete';
 import { PageJump } from './PageJump';
@@ -32,6 +34,7 @@ import './code-analysis.css';
 import './requirement-ui.css';
 
 type Props = {
+  pageCache?: PageViewCache;
   onRecordDeleted?: () => void;
   project: Project | null;
   user: User;
@@ -45,7 +48,10 @@ export function CodeAnalysis(props: Props) {
       key={`${props.user.id}:${props.project?.id}:${deletionVersion}`}
       {...props}
       overviewTarget={deletionVersion ? null : props.overviewTarget}
-      onRecordDeleted={() => setDeletionVersion((v) => v + 1)}
+      onRecordDeleted={() => {
+        props.pageCache?.delete('selected');
+        setDeletionVersion((v) => v + 1);
+      }}
     />
   );
 }
@@ -107,10 +113,21 @@ export function CodeScope({ record }: { record: CodeDetail | null }) {
   );
 }
 
-function CodeWorkspace({ project, user, onSessionEnd, overviewTarget, onRecordDeleted }: Props) {
+function CodeWorkspace({
+  project,
+  user,
+  onSessionEnd,
+  overviewTarget,
+  onRecordDeleted,
+  pageCache,
+}: Props) {
   const [rows, setRows] = useState<CodeRecord[]>([]),
     [options, setOptions] = useState<CodeOptions | null>(null),
-    [selected, setSelected] = useState<number | null>(overviewTarget?.id ?? null),
+    [selected, setSelected] = useCachedView<number | null>(
+      pageCache,
+      'selected',
+      overviewTarget?.id ?? null,
+    ),
     [record, setRecord] = useState<CodeDetail | null>(null),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true),
@@ -120,8 +137,8 @@ function CodeWorkspace({ project, user, onSessionEnd, overviewTarget, onRecordDe
     [chat, setChat] = useState(false),
     [findingKey, setFindingKey] = useState(''),
     [chatFinding, setChatFinding] = useState(''),
-    [target, setTarget] = useState<CodeTarget | 'ALL'>('ALL'),
-    [page, setPage] = useState(1),
+    [target, setTarget] = useCachedView<CodeTarget | 'ALL'>(pageCache, 'target', 'ALL'),
+    [page, setPage] = useCachedView(pageCache, 'page', 1),
     [recordPage, setRecordPage] = useState(1),
     [hasMore, setHasMore] = useState(false),
     [busy, setBusy] = useState(false),
@@ -179,7 +196,7 @@ function CodeWorkspace({ project, user, onSessionEnd, overviewTarget, onRecordDe
       clearInterval(timer);
       c.abort();
     };
-  }, [base, project, onSessionEnd, refresh]);
+  }, [base, project, onSessionEnd, refresh, setSelected]);
   useEffect(() => {
     if (!project) return;
     const c = new AbortController();

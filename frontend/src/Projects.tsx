@@ -1,4 +1,6 @@
 import { CaseDialog } from './CaseDialog';
+import { useCachedView } from './pageViewCache';
+import type { PageViewCache } from './pageViewCache';
 import { Form } from './Form';
 import { Select } from './FormSelect';
 import { useEffect, useRef, useState } from 'react';
@@ -335,13 +337,15 @@ export function ProjectSettings({
   user,
   onChanged,
   onSessionEnd,
+  pageCache,
 }: {
+  pageCache?: PageViewCache;
   project: Project | null;
   user: User;
   onChanged: () => void;
   onSessionEnd: () => void;
 }) {
-  const [tab, setTab] = useState('repos');
+  const [tab, setTab] = useCachedView(pageCache, 'tab', 'repos');
   const [deleting, setDeleting] = useState(false),
     [deleteBusy, setDeleteBusy] = useState(false),
     [deleteError, setDeleteError] = useState('');

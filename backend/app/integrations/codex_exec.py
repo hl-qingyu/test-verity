@@ -1,4 +1,4 @@
-"""Pinned native CLI execution using each actor's explicit personal configuration."""
+"""Native CLI execution using each actor's explicit personal configuration."""
 
 import base64
 import binascii
@@ -6,6 +6,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from functools import lru_cache
@@ -22,14 +23,7 @@ from app.integrations.response_diagnostics import safe_identifier
 from app.integrations.windows_job import WindowsJob
 from app.security.secrets import credential_cipher
 
-VERSION = "0.166.0"
 STDIN_LIMIT = 900000  # Leave space below the pinned CLI's 1,048,576-character turn boundary.
-PROBE_VERIFIED = (
-    True  # Fixed-text, no tools, at most one forwarded request; separate from analysis.
-)
-# The user explicitly chose native execution, including CLI-managed retries/compaction.
-# Do not present these native behaviors as verified unlimited wait or a single billed call.
-NATIVE_EXECUTION_ENABLED = True
 NATIVE_POLICY = "native-v1"
 
 
@@ -125,6 +119,7 @@ def _inspect(executable: Path | None, file_revision=None) -> dict:
         return result
     if not executable.is_file():
         return result
+    result.update(status="available", available=True)
     try:
         process = subprocess.run(
             [str(executable), "--version"],
@@ -135,10 +130,11 @@ def _inspect(executable: Path | None, file_revision=None) -> dict:
             env={"SystemRoot": "C:\\Windows"},
         )
     except (OSError, subprocess.TimeoutExpired):
-        return {**result, "status": "unverified"}
-    if process.returncode or process.stdout.strip() != f"codex-cli {VERSION}".encode():
-        return {**result, "status": "unsupported_version"}
-    return {**result, "status": "unverified", "version": VERSION}
+        return result
+    match = re.fullmatch(rb"codex-cli ([0-9][0-9A-Za-z.+-]{0,63})", process.stdout.strip())
+    if process.returncode == 0 and match:
+        result["version"] = match[1].decode("ascii")
+    return result
 
 
 def runtime_status() -> dict:
@@ -149,34 +145,23 @@ def runtime_status() -> dict:
     except OSError:
         revision = None
     inspected = _inspect(executable, revision)
-    enabled = inspected["version"] == VERSION and NATIVE_EXECUTION_ENABLED
+    enabled = inspected["available"]
     return {
         **inspected,
-        **({"status": "available", "available": True} if enabled else {}),
-        "required_version": VERSION,
-        "reason": None
-        if enabled
-        else {
-            "not_installed": "ai_cli_not_installed",
-            "unsupported_version": "ai_cli_unsupported_version",
-        }.get(inspected["status"], "ai_cli_unverified"),
+        "reason": None if enabled else "ai_cli_not_installed",
         "text": enabled,
         "large_files": enabled,
         "images": enabled,
         "pdf": False,
         "execution_policy": NATIVE_POLICY,
-        "probe_available": inspected["version"] == VERSION and PROBE_VERIFIED,
+        "probe_available": enabled,
     }
 
 
 def require_available() -> None:
     status = runtime_status()
     if not status["available"]:
-        code = {
-            "not_installed": "ai_cli_not_installed",
-            "unsupported_version": "ai_cli_unsupported_version",
-        }.get(status["status"], "ai_cli_unverified")
-        raise AppError(503, code)
+        raise AppError(503, status["reason"])
 
 
 def require_probe_available() -> None:
@@ -452,7 +437,7 @@ def _execute(
         execution_policy=None if probe else NATIVE_POLICY,
         original_input_bytes=original_input_bytes,
         call_mode="CODEX_EXEC",
-        client_version=VERSION,
+        client_version=runtime_status()["version"],
         model_calls=None,
         request_bytes=len(payload),
         received_bytes=0,

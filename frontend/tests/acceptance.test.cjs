@@ -374,19 +374,25 @@ test('administrator page denies members and defaults to all projects including a
 });
 
 test('page range selects a project without changing the global project until entering analysis', () => {
-  let chosen = null;
+  let chosen;
+  const effects = [];
   const { AIResultsAcceptance } = load('AIResultsAcceptance.tsx', {
     react: {
       ...React,
-      useState: () => [
-        chosen,
-        (v) => {
-          chosen = v;
-        },
-      ],
+      useEffect: (effect) => effects.push(effect),
+      useState(initial) {
+        if (chosen === undefined) chosen = initial();
+        return [
+          chosen,
+          (v) => {
+            chosen = v;
+          },
+        ];
+      },
     },
   });
   const props = {
+    pageCache: new Map(),
     user: { id: 1, platform_role: 'ADMIN' },
     projects: [
       { id: 7, name: '项目甲' },
@@ -408,6 +414,14 @@ test('page range selects a project without changing the global project until ent
   const selected = AIResultsAcceptance(props);
   assert.equal(selected.props.children[2].props.projectId, 8);
   assert.equal(selected.props.children[2].props.onSelectProject, props.onSelectProject);
+  effects.splice(0).forEach((effect) => effect());
+  chosen = undefined;
+  assert.equal(AIResultsAcceptance(props).props.children[2].props.projectId, 8);
+  chosen = undefined;
+  assert.equal(
+    AIResultsAcceptance({ ...props, pageCache: new Map() }).props.children[2].props.projectId,
+    null,
+  );
   range.props.onChange('all');
   assert.equal(AIResultsAcceptance(props).props.children[2].props.projectId, null);
 });

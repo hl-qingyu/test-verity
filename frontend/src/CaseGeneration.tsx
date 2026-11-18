@@ -80,12 +80,21 @@ function CachedCliWorkspace(props: Parameters<typeof GenerationCliWorkspace>[0])
   return opened || props.open ? <GenerationCliWorkspace {...props} /> : null;
 }
 
+export type GenerationPageCache = {
+  projectId?: number;
+  selectedId?: string;
+  listPage?: number;
+  query?: string;
+  historyOpen?: boolean;
+};
+
 type Props = {
   onRecordDeleted?: () => void;
   overviewTarget?: OverviewTarget | null;
   project: Project | null;
   user: User;
   onSessionEnd: () => void;
+  pageCache?: GenerationPageCache;
 };
 type WorkspaceProps = Props & {
   rows: GenerationRecord[];
@@ -99,32 +108,45 @@ type WorkspaceProps = Props & {
 };
 export function CaseGeneration(props: Props) {
   const [deletionVersion, setDeletionVersion] = useState(0);
+  const pageCache =
+    props.project && props.pageCache?.projectId === props.project.id ? props.pageCache : undefined;
   return (
     <GenerationRemote
       key={`${props.user.id}:${props.project?.id}:${deletionVersion}`}
       {...props}
+      pageCache={pageCache}
       overviewTarget={deletionVersion ? null : props.overviewTarget}
-      onRecordDeleted={() => setDeletionVersion((v) => v + 1)}
+      onRecordDeleted={() => {
+        if (pageCache) delete pageCache.selectedId;
+        setDeletionVersion((v) => v + 1);
+      }}
     />
   );
 }
 function GenerationRemote(props: Props) {
+  const { pageCache } = props;
   const [rows, setRows] = useState<GenerationRecord[]>([]),
     [summaries, setSummaries] = useState<GenerationSummary[]>([]),
     [selectedId, setSelectedId] = useState(
-      props.overviewTarget ? String(props.overviewTarget.id) : '',
+      props.overviewTarget ? String(props.overviewTarget.id) : (pageCache?.selectedId ?? ''),
     ),
     [hasMore, setHasMore] = useState(false),
     [loaded, setLoaded] = useState(false),
     [detailLoading, setDetailLoading] = useState(false),
     [error, setError] = useState(''),
     [detailError, setDetailError] = useState('');
-  const [listPage, setListPage] = useState(1);
+  const [listPage, setListPage] = useState(pageCache?.listPage ?? 1);
   const epoch = useRef(0),
     rowsRef = useRef(rows),
     alive = useRef(true),
     loadedKeys = useRef(new Map<string, string>());
   rowsRef.current = rows;
+  useEffect(() => {
+    if (pageCache && loaded && !error) {
+      pageCache.selectedId = selectedId;
+      pageCache.listPage = listPage;
+    }
+  }, [pageCache, loaded, error, selectedId, listPage]);
   useEffect(() => {
     alive.current = true;
     if (!props.project) return;
@@ -165,6 +187,12 @@ function GenerationRemote(props: Props) {
           e instanceof Error &&
           ['not_authenticated', 'project_not_found'].includes(e.message)
         ) {
+          if (pageCache) {
+            delete pageCache.selectedId;
+            delete pageCache.listPage;
+            delete pageCache.query;
+            delete pageCache.historyOpen;
+          }
           setRows([]);
           setSummaries([]);
           setLoaded(true);
@@ -180,7 +208,7 @@ function GenerationRemote(props: Props) {
       c.abort();
       window.clearInterval(timer);
     };
-  }, [props.project, props.onSessionEnd, props.overviewTarget, listPage]);
+  }, [props.project, props.onSessionEnd, props.overviewTarget, listPage, pageCache]);
   useEffect(
     () => () => {
       alive.current = false;
@@ -241,6 +269,7 @@ function GenerationRemote(props: Props) {
       ) : (
         <GenerationWorkspace
           {...props}
+          pageCache={error ? undefined : pageCache}
           rows={rows}
           summaries={summaries}
           selectedRecordId={selectedId}
@@ -309,6 +338,34 @@ export function GenerationDuration({ timings }: Pick<GenerationRecord, 'timings'
     </small>
   );
 }
+function GenerationCallDiagnostics({ values }: { values?: Record<string, string | number> }) {
+  if (!values || !Object.keys(values).length) return null;
+  return (
+    <details>
+      <summary>调用诊断</summary>
+      <dl>
+        {[
+          ['请求ID', values.request_id],
+          ['响应ID', values.response_id],
+          ['HTTP状态', values.upstream_http_status || values.http_status],
+          ['供应商错误代码', values.upstream_code],
+          ['供应商错误类型', values.upstream_type],
+          ['结束事件', values.termination],
+          ['调用耗时（秒）', values.elapsed_seconds],
+          ['供应商报告超时（秒）', values.reported_timeout_seconds],
+        ]
+          .filter(([, value]) => value !== undefined)
+          .map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd className="mono">{value}</dd>
+            </div>
+          ))}
+      </dl>
+    </details>
+  );
+}
+
 export function GenerationActivity({
   record,
   onRetry,
@@ -316,14 +373,39 @@ export function GenerationActivity({
   candidateBase,
   busy = false,
 }: {
-  record: Pick<GenerationRecord, 'batches'>;
+  record: Pick<GenerationRecord, 'batches'> & Partial<Pick<GenerationRecord, 'nativeRounds'>>;
   onRetry?: (id: number) => void;
   onRevalidate?: (id: number) => void;
   candidateBase?: string;
   busy?: boolean;
 }) {
   const [now, setNow] = useState(Date.now());
-  const active = record.batches.some((b) => ['QUEUED', 'RUNNING'].includes(b.status));
+  // The API returns native rounds in descending result time.
+  const latestRound = record.nativeRounds?.[0];
+  const isActive = (status: string) => status === 'QUEUED' || status === 'RUNNING';
+  const attemptTime = (b: GenerationRecord['batches'][number]) =>
+    Date.parse(b.progressAt || b.startedAt || '') || 0;
+  const active = record.batches.some((b) => isActive(b.status));
+  const newerBatch = latestRound
+    ? record.batches
+        .filter(
+          (b) =>
+            !b.nativeResultId &&
+            (isActive(b.status) ||
+              (['FAILED', 'COMPLETED', 'CANCELLED'].includes(b.status) &&
+                attemptTime(b) > Date.parse(latestRound.timestamp))),
+        )
+        .sort(
+          (a, b) =>
+            Number(isActive(b.status)) - Number(isActive(a.status)) ||
+            attemptTime(b) - attemptTime(a),
+        )[0]
+    : undefined;
+  const visibleBatches = latestRound
+    ? newerBatch && newerBatch.status !== 'COMPLETED'
+      ? [newerBatch]
+      : []
+    : record.batches.filter((b) => isActive(b.status) || b.status === 'FAILED');
   useEffect(() => {
     if (!active) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -359,102 +441,77 @@ export function GenerationActivity({
   };
   return (
     <div className="generation-activity-list">
-      {record.batches
-        .filter((b) => ['QUEUED', 'RUNNING', 'FAILED'].includes(b.status))
-        .map((b) => {
-          const d = b.diagnostics || {},
-            running = b.status === 'RUNNING',
-            waiting = b.status === 'QUEUED';
-          const elapsed = b.startedAt
-            ? Math.max(0, Math.floor((now - Date.parse(b.startedAt)) / 1000))
-            : null;
-          return (
-            <section
-              className="generation-activity evidence"
-              key={b.key}
-              aria-busy={running || waiting}
-            >
-              <div className="row">
-                {(running || waiting) && <span className="generation-spinner" aria-hidden="true" />}
-                <strong role="status">
-                  {waiting
-                    ? '排队中 · 等待后台开始'
-                    : running
-                      ? `正在生成 · ${phases[String(d.phase)] || '等待AI完成'}`
+      {visibleBatches.map((b) => {
+        const d = b.diagnostics || {},
+          running = b.status === 'RUNNING',
+          waiting = b.status === 'QUEUED';
+        const elapsed = b.startedAt
+          ? Math.max(0, Math.floor((now - Date.parse(b.startedAt)) / 1000))
+          : null;
+        return (
+          <section
+            className="generation-activity evidence"
+            key={b.key}
+            aria-busy={running || waiting}
+          >
+            <div className="row">
+              {(running || waiting) && <span className="generation-spinner" aria-hidden="true" />}
+              <strong role="status">
+                {waiting
+                  ? '排队中 · 等待后台开始'
+                  : running
+                    ? `正在生成 · ${phases[String(d.phase)] || '等待AI完成'}`
+                    : b.status === 'CANCELLED'
+                      ? '生成已取消'
                       : b.candidateAvailable
                         ? 'AI已返回 · 候选待核对'
-                        : record.batches.some((v) => v.nativeResultId)
-                          ? '早期生成未完成 · 已保存对话候选'
-                          : '生成失败'}
-                </strong>
-                {running && elapsed !== null && (
-                  <span className="hint">
-                    已运行 {Math.floor(elapsed / 60)}分{elapsed % 60}秒
-                  </span>
+                        : '生成失败'}
+              </strong>
+              {running && elapsed !== null && (
+                <span className="hint">
+                  已运行 {Math.floor(elapsed / 60)}分{elapsed % 60}秒
+                </span>
+              )}
+            </div>
+            {(running || waiting) && <p className="hint">任务在后台继续，可离开页面。</p>}
+            {typeof d.received_bytes === 'number' && (
+              <p className="hint">
+                {d.call_mode === 'CODEX_EXEC' ? 'CLI事件已接收' : '已接收'}{' '}
+                {d.received_bytes.toLocaleString()} 字节 · 输出文字{' '}
+                {Number(d.output_characters || 0).toLocaleString()} 字符
+              </p>
+            )}
+            {b.status === 'FAILED' && (
+              <p className="form-error">
+                {b.candidateAvailable
+                  ? '原始响应已保存，结果校验未通过；可查看候选并免费重新校验'
+                  : categories[String(d.error_category)] || '调用失败，未保存详细上游原因'}{' '}
+                · {generationFailure(b.reason)}
+              </p>
+            )}
+            {b.status === 'FAILED' && b.candidateAvailable && b.id && (
+              <div className="row">
+                {candidateBase && (
+                  <a className="button-link small" href={`${candidateBase}/${b.id}/candidate`}>
+                    下载原始候选
+                  </a>
+                )}
+                {onRevalidate && (
+                  <button className="small" disabled={busy} onClick={() => onRevalidate(b.id!)}>
+                    重新校验（不调用AI）
+                  </button>
                 )}
               </div>
-              {(running || waiting) && <p className="hint">任务在后台继续，可离开页面。</p>}
-              {typeof d.received_bytes === 'number' && (
-                <p className="hint">
-                  {d.call_mode === 'CODEX_EXEC' ? 'CLI事件已接收' : '已接收'}{' '}
-                  {d.received_bytes.toLocaleString()} 字节 · 输出文字{' '}
-                  {Number(d.output_characters || 0).toLocaleString()} 字符
-                </p>
-              )}
-              {b.status === 'FAILED' && (
-                <p className="form-error">
-                  {b.candidateAvailable
-                    ? '原始响应已保存，结果校验未通过；可查看候选并免费重新校验'
-                    : categories[String(d.error_category)] || '调用失败，未保存详细上游原因'}{' '}
-                  · {generationFailure(b.reason)}
-                </p>
-              )}
-              {b.status === 'FAILED' && b.candidateAvailable && b.id && (
-                <div className="row">
-                  {candidateBase && (
-                    <a className="button-link small" href={`${candidateBase}/${b.id}/candidate`}>
-                      下载原始候选
-                    </a>
-                  )}
-                  {onRevalidate && (
-                    <button className="small" disabled={busy} onClick={() => onRevalidate(b.id!)}>
-                      重新校验（不调用AI）
-                    </button>
-                  )}
-                </div>
-              )}
-              {b.status === 'FAILED' && !b.nativeResultId && onRetry && b.id && (
-                <button className="small" disabled={busy} onClick={() => onRetry(b.id!)}>
-                  人工重试（使用本人AI，可能计费）
-                </button>
-              )}
-              {Object.keys(d).length > 0 && (
-                <details>
-                  <summary>调用诊断</summary>
-                  <dl>
-                    {[
-                      ['请求ID', d.request_id],
-                      ['响应ID', d.response_id],
-                      ['HTTP状态', d.upstream_http_status || d.http_status],
-                      ['供应商错误代码', d.upstream_code],
-                      ['供应商错误类型', d.upstream_type],
-                      ['结束事件', d.termination],
-                      ['调用耗时（秒）', d.elapsed_seconds],
-                      ['供应商报告超时（秒）', d.reported_timeout_seconds],
-                    ]
-                      .filter(([, value]) => value !== undefined)
-                      .map(([label, value]) => (
-                        <div key={label}>
-                          <dt>{label}</dt>
-                          <dd className="mono">{value}</dd>
-                        </div>
-                      ))}
-                  </dl>
-                </details>
-              )}
-            </section>
-          );
-        })}
+            )}
+            {b.status === 'FAILED' && !b.nativeResultId && onRetry && b.id && (
+              <button className="small" disabled={busy} onClick={() => onRetry(b.id!)}>
+                人工重试（使用本人AI，可能计费）
+              </button>
+            )}
+            <GenerationCallDiagnostics values={b.diagnostics} />
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -709,12 +766,13 @@ export function GenerationWorkspace({
   selectedRecordId,
   onSelectRecord,
   detailLoading = false,
+  pageCache,
 }: WorkspaceProps) {
   const [selected, setSelected] = useState(''),
     [tab, setTab] = useState<GenerationTab>(
       overviewTarget?.group === 'questions' ? 'questions' : 'suggestions',
     ),
-    [query, setQuery] = useState(''),
+    [query, setQuery] = useState(pageCache?.query ?? ''),
     [kind, setKind] = useState(''),
     [handling, setHandling] = useState(''),
     [feature, setFeature] = useState(''),
@@ -747,13 +805,13 @@ export function GenerationWorkspace({
       single: boolean;
     } | null>(null),
     [reviewApplicationId, setReviewApplicationId] = useState<number | null>(null),
-    [historyOpen, setHistoryOpen] = useState(true),
+    [historyOpen, setHistoryOpen] = useState(pageCache?.historyOpen ?? true),
     [scopeKey, setScopeKey] = useState<string | null>(null),
     [textQuery, setTextQuery] = useState(''),
     [reviewChecks, setReviewChecks] = useState<GenerationPreviewItem[]>([]),
     [reviewChoices, setReviewChoices] = useState<Record<string, ReviewItem>>({}),
     [resolveKey, setResolveKey] = useState('');
-  const [nativeRoundId, setNativeRoundId] = useState<string | null>(null);
+  const [nativeRound, setNativeRound] = useState('');
   const [candidateIssue, setCandidateIssue] = useState<GenerationCandidateIssue | null>(null);
   const scopeTrigger = useRef<HTMLElement | null>(null),
     scopeToggle = useRef<HTMLButtonElement>(null),
@@ -765,6 +823,12 @@ export function GenerationWorkspace({
     alive = useRef(true),
     rowsRef = useRef(rows);
   rowsRef.current = rows;
+  useEffect(() => {
+    if (pageCache) {
+      pageCache.query = query;
+      pageCache.historyOpen = historyOpen;
+    }
+  }, [pageCache, query, historyOpen]);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -792,15 +856,7 @@ export function GenerationWorkspace({
           (i) => i.key === detail && ['PENDING', 'RUNNING'].includes(String(i.status)),
         ),
     );
-  const nativeRound = nativeRoundId ?? record?.nativeRounds?.[0]?.id ?? '';
   const roundRecord = generationRoundRecord(record, nativeRound);
-  useEffect(() => {
-    setNativeRoundId(null);
-  }, [record?.id]);
-  useEffect(() => {
-    if (nativeRoundId === null && record?.nativeRounds?.length)
-      setNativeRoundId(record.nativeRounds[0].id);
-  }, [nativeRoundId, record?.nativeRounds]);
   useEffect(() => {
     setChosen([]);
     setFeature('');
@@ -811,6 +867,7 @@ export function GenerationWorkspace({
     setDetail('');
   }, [nativeRound]);
   useEffect(() => {
+    setNativeRound('');
     setTextQuery('');
     setChosen([]);
     setPage(1);
@@ -1535,7 +1592,7 @@ export function GenerationWorkspace({
                 onSessionEnd={onSessionEnd}
                 onClose={() => setChat(false)}
                 onReviewResult={(id) => {
-                  setNativeRoundId(id);
+                  setNativeRound(id);
                   setTab('suggestions');
                   setChat(false);
                 }}
@@ -1544,10 +1601,7 @@ export function GenerationWorkspace({
                     request_id: requestId,
                     confirmed: true,
                   });
-                  if (next) {
-                    setNativeRoundId(id);
-                    setNotice('本轮候选已保存。');
-                  }
+                  if (next) setNotice('本轮候选已保存。');
                   return !!next;
                 }}
               />
@@ -1593,7 +1647,7 @@ export function GenerationWorkspace({
                           label: `${new Date(r.timestamp).toLocaleString()} · ${r.caseCount}条候选`,
                         })),
                       ]}
-                      onChange={setNativeRoundId}
+                      onChange={setNativeRound}
                     />
                   </div>
                 )}
@@ -1963,6 +2017,9 @@ export function GenerationWorkspace({
                             {b.attempts}次
                           </p>
                           <p className="hint">{generationFailure(b.reason)}</p>
+                          {['FAILED', 'CANCELLED'].includes(b.status) && (
+                            <GenerationCallDiagnostics values={b.diagnostics} />
+                          )}
                           <div className="row">
                             <button
                               className="small"

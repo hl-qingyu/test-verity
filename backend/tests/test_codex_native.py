@@ -4,9 +4,12 @@ import base64
 import json
 import os
 import struct
+import subprocess
+import tempfile
 import unittest
 import zlib
 from copy import deepcopy
+from pathlib import Path
 from unittest.mock import patch
 
 from test_codex_probe import FakeProvider
@@ -18,6 +21,31 @@ from app.security.secrets import credential_cipher
 
 
 class NativeContractTests(unittest.TestCase):
+    def test_version_detection_never_blocks_an_installed_cli(self):
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "codex.exe"
+            executable.touch()
+            settings = Settings(ai_cli_executable=executable)
+            for output, expected in (
+                (b"codex-cli 0.169.1", "0.169.1"),
+                (b"codex-cli 1.0.0-beta.1", "1.0.0-beta.1"),
+                (b"", None),
+            ):
+                with (
+                    self.subTest(output=output),
+                    patch.object(codex_exec, "Settings", return_value=settings),
+                    patch.object(
+                        codex_exec.subprocess,
+                        "run",
+                        return_value=subprocess.CompletedProcess([], 0, stdout=output),
+                    ),
+                ):
+                    codex_exec._inspect.cache_clear()
+                    runtime = codex_exec.runtime_status()
+                    self.assertTrue(runtime["available"])
+                    self.assertTrue(runtime["probe_available"])
+                    self.assertEqual(runtime["version"], expected)
+
     def test_native_final_message_keeps_final_after_progress_and_recovered_error(self):
         def answer(text):
             return {"type": "item.completed", "item": {"type": "agent_message", "text": text}}
@@ -60,8 +88,8 @@ class NativeContractTests(unittest.TestCase):
 @unittest.skipUnless(os.name == "nt", "Windows native CLI integration")
 class RealNativeCLITests(unittest.TestCase):
     def setUp(self):
-        if codex_exec.runtime_status()["version"] != codex_exec.VERSION:
-            self.skipTest("requires pinned CLI exe")
+        if not codex_exec.runtime_status()["available"]:
+            self.skipTest("requires installed CLI exe")
 
     def call(self, provider, text="合成业务输入", extra=()):
         with (

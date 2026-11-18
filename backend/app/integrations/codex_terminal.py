@@ -482,7 +482,7 @@ def analyze(
     stats = diagnostics if diagnostics is not None else {}
     stats.update(
         call_mode="CODEX_EXEC",
-        client_version=codex_exec.VERSION,
+        client_version=codex_exec.runtime_status()["version"],
         cli_terminal_id=terminal_spec["identity"],
         phase="cli_native_running",
     )

@@ -1,5 +1,5 @@
 import './prototype-directory.css';
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthStatus, Login, useAuth } from './Auth';
@@ -15,6 +15,7 @@ import { RiskReports } from './RiskReports';
 import { CodeAnalysis } from './CodeAnalysis';
 import { ChangeAnalysis } from './ChangeAnalysis';
 import { CaseGeneration } from './CaseGeneration';
+import type { GenerationPageCache } from './CaseGeneration';
 import { CaseAnalysis } from './CaseAnalysis';
 import { Skills } from './Skills';
 import { ProjectOverview } from './ProjectOverview';
@@ -111,6 +112,29 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
   const current = modules.find((m) => m[0] === pathname)?.[1] || '页面不存在';
   const endSession = useCallback(() => onLogout(null), [onLogout]);
   const projects = useProjects(user.id, endSession);
+  const projectId = projects.current?.id;
+  const [accountViews] = useState(() => ({
+    acceptance: new Map<string, unknown>(),
+    platform: new Map<string, unknown>(),
+    skills: new Map<string, unknown>(),
+  }));
+  const projectViews = useMemo(
+    () => ({
+      projectId,
+      overview: new Map<string, unknown>(),
+      prototypes: new Map<string, unknown>(),
+      documents: new Map<string, unknown>(),
+      settings: new Map<string, unknown>(),
+      cases: new Map<string, unknown>(),
+      requirements: new Map<string, unknown>(),
+      requirementChat: new Map<string, unknown>(),
+      code: new Map<string, unknown>(),
+      changes: new Map<string, unknown>(),
+      coverage: new Map<string, unknown>(),
+    }),
+    [projectId],
+  );
+  const generationPageCache = useMemo<GenerationPageCache>(() => ({ projectId }), [projectId]);
   const [creatingProject, setCreatingProject] = useState(false);
   const projectPicker = useRef<HTMLDetailsElement>(null);
   const accountMenu = useRef<HTMLDetailsElement>(null);
@@ -497,6 +521,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
               element={
                 <AIResultsAcceptance
                   user={user}
+                  pageCache={accountViews.acceptance}
                   projects={projects.projects}
                   projectsLoading={projects.loading}
                   onSelectProject={projects.setSelected}
@@ -504,13 +529,19 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
                 />
               }
             />
-            <Route path="/skills" element={<Skills user={user} onSessionEnd={endSession} />} />
+            <Route
+              path="/skills"
+              element={
+                <Skills user={user} onSessionEnd={endSession} pageCache={accountViews.skills} />
+              }
+            />
             <Route
               path="/"
               element={
                 <ProjectOverview
                   key={`${user.id}:${projects.current?.id}`}
                   project={projects.current}
+                  pageCache={projectViews.overview}
                   onSessionEnd={endSession}
                 />
               }
@@ -519,9 +550,10 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
               path="/prototypes"
               element={
                 <Prototypes
-                  key={projects.current?.id}
+                  key={`${projectId}:${documentId}`}
                   project={projects.current}
                   documentId={documentId}
+                  pageCache={projectViews.prototypes}
                   onSessionEnd={endSession}
                 />
               }
@@ -532,6 +564,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
                 <ProjectSettings
                   key={projects.current?.id || 0}
                   project={projects.current}
+                  pageCache={projectViews.settings}
                   user={user}
                   onChanged={projects.reload}
                   onSessionEnd={endSession}
@@ -542,9 +575,10 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
               path="/documents"
               element={
                 <Documents
-                  key={projects.current?.id || 0}
+                  key={`${projectId}:${documentId}`}
                   project={projects.current}
                   documentId={documentId}
+                  pageCache={projectViews.documents}
                   onSessionEnd={endSession}
                 />
               }
@@ -555,6 +589,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
                 <Cases
                   key={projects.current?.id || 0}
                   project={projects.current}
+                  pageCache={projectViews.cases}
                   onSessionEnd={endSession}
                 />
               }
@@ -573,6 +608,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
                       project={projects.current}
                       onSessionEnd={endSession}
                       overviewTarget={target}
+                      pageCache={target ? undefined : projectViews.requirements}
                     />
                   )}
                 </OverviewEntry>
@@ -580,7 +616,13 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
             />
             <Route
               path="/requirements/chat/:reportId"
-              element={<RequirementChat project={projects.current} onSessionEnd={endSession} />}
+              element={
+                <RequirementChat
+                  project={projects.current}
+                  onSessionEnd={endSession}
+                  pageCache={projectViews.requirementChat}
+                />
+              }
             />
             <Route
               path="/code"
@@ -597,6 +639,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
                       user={user}
                       onSessionEnd={endSession}
                       overviewTarget={target}
+                      pageCache={target ? undefined : projectViews.code}
                     />
                   )}
                 </OverviewEntry>
@@ -617,6 +660,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
                       user={user}
                       onSessionEnd={endSession}
                       overviewTarget={target}
+                      pageCache={target ? undefined : projectViews.changes}
                     />
                   )}
                 </OverviewEntry>
@@ -637,6 +681,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
                       user={user}
                       onSessionEnd={endSession}
                       overviewTarget={target}
+                      pageCache={target ? undefined : generationPageCache}
                     />
                   )}
                 </OverviewEntry>
@@ -657,6 +702,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
                       user={user}
                       onSessionEnd={endSession}
                       overviewTarget={target}
+                      pageCache={target ? undefined : projectViews.coverage}
                     />
                   )}
                 </OverviewEntry>
@@ -684,7 +730,14 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
               ))}
             <Route
               path="/platform"
-              element={<Platform user={user} onSessionEnd={endSession} onUserChange={onLogout} />}
+              element={
+                <Platform
+                  user={user}
+                  onSessionEnd={endSession}
+                  onUserChange={onLogout}
+                  pageCache={accountViews.platform}
+                />
+              }
             />
             <Route path="/interfaces" element={<Navigate to="/documents" replace />} />
             <Route path="/projects" element={<Navigate to="/project" replace />} />
