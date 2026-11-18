@@ -32,6 +32,12 @@ function bool(v: unknown): boolean {
   if (typeof v !== 'boolean') throw Error('generation_response_invalid');
   return v;
 }
+function nativeId(v: unknown): string | undefined {
+  if (v === undefined) return undefined;
+  const value = text(v);
+  if (!/^[0-9a-f]{64}$/.test(value)) throw Error('generation_response_invalid');
+  return value;
+}
 function list<T>(v: unknown, parse: (v: unknown) => T): T[] {
   if (!Array.isArray(v) || v.length > 20000) throw Error('generation_response_invalid');
   return v.map(parse);
@@ -106,6 +112,7 @@ export function parseGenerationRecord(v: unknown, projectId: number): Generation
     if (!Object.hasOwn(generationKinds, kind)) throw Error('generation_response_invalid');
     return {
       key: text(s.key),
+      nativeResultId: nativeId(s.nativeResultId),
       kind: kind as GenerationSuggestion['kind'],
       function: text(s.function),
       functionRef: text(s.functionRef),
@@ -211,6 +218,24 @@ export function parseGenerationRecord(v: unknown, projectId: number): Generation
   };
   return {
     id,
+    nativeRounds:
+      o.nativeRounds === undefined
+        ? []
+        : list(o.nativeRounds, (value) => {
+            const r = object(value),
+              rid = nativeId(r.id),
+              stamp = text(r.timestamp);
+            if (!rid || !Number.isFinite(Date.parse(stamp)))
+              throw Error('generation_response_invalid');
+            return {
+              id: rid,
+              batchId: num(r.batchId),
+              batchRef: text(r.batchRef),
+              timestamp: stamp,
+              caseCount: num(r.caseCount, true),
+              status: text(r.status),
+            };
+          }),
     projectId,
     ownerId: num(o.ownerId),
     title: text(o.title),
@@ -234,6 +259,7 @@ export function parseGenerationRecord(v: unknown, projectId: number): Generation
       const q = object(v);
       return {
         key: text(q.key),
+        nativeResultId: nativeId(q.nativeResultId),
         function: text(q.function),
         functionRef: text(q.functionRef),
         title: text(q.title),
@@ -255,6 +281,7 @@ export function parseGenerationRecord(v: unknown, projectId: number): Generation
               throw Error('generation_response_invalid');
             return {
               key: text(issue.key),
+              nativeResultId: nativeId(issue.nativeResultId),
               issueId: text(issue.issueId),
               batchId: num(issue.batchId),
               kind: kind as 'case' | 'note' | 'response',
@@ -292,6 +319,8 @@ export function parseGenerationRecord(v: unknown, projectId: number): Generation
     batches: list(o.batches, (v): GenerationBatch => {
       const b = object(v);
       return {
+        terminalAvailable: b.terminalAvailable === undefined ? false : bool(b.terminalAvailable),
+        nativeResultId: nativeId(b.nativeResultId),
         id: num(b.id),
         key: text(b.key),
         function: text(b.function),
@@ -425,6 +454,13 @@ export async function generationAction(
   return parseGenerationRecord(response, projectId);
 }
 const generationErrors: Record<string, string> = {
+  generation_native_results_unavailable: '原生CLI历史暂不可读取，请稍后重试；没有调用AI。',
+  generation_native_result_not_found: '没有找到这轮生成JSON，请重新读取可选轮次。',
+  generation_native_round_retry_forbidden:
+    '候选轮次不单独调用AI；请在原CLI对话继续生成，或免费修正候选。',
+  generation_native_result_migration_requires_review:
+    '旧候选已有人工处理记录，需要保留并核对迁移，未覆盖已有结果。',
+  generation_native_result_not_ready: '首次生成仍在处理中，完成后再保存对话结果。',
   ...connectionErrors,
   ...codeErrors,
   generation_prepare_timeout:
@@ -448,6 +484,23 @@ const generationErrors: Record<string, string> = {
   generation_candidate_already_resolved: '此候选已经修正，请刷新查看。',
   generation_candidate_prior_result_changed: '修正影响了已保存建议，未保存此次改动。',
   generation_owner_only: '该操作仅限发起人。',
+  generation_cli_mode_required: '请先在 AI 服务设置中选择本人 Codex CLI 配置，再发送追问。',
+  generation_terminal_closed: 'CLI 进程已结束，可继续同一会话；重新生成请使用人工重试。',
+  generation_terminal_permission_required: '当前账号未启用 CLI 试用，请联系平台管理员。',
+  generation_terminal_failed: '原生 CLI 进程启动或执行失败，请核对终端记录。',
+  generation_terminal_not_started:
+    '请选用 CLI 方式点击开始生成；终端只关联实际生成任务，不再另建独立会话。',
+  generation_terminal_bound_to_batch:
+    '此终端固定关联生成任务，请继续同一会话；重新生成请使用明确的人工重试。',
+  generation_terminal_response_incomplete:
+    'CLI 未完成本次生成或未交付完整结果，未作为有效报告保存。',
+  generation_terminal_turn_failed: 'CLI 本轮分析失败，原始错误已保留，请查看终端记录。',
+  generation_terminal_turn_interrupted: 'CLI 本轮分析已中断，未作为完整报告保存。',
+  generation_terminal_command_blocked:
+    '本机命令已被后端拒绝，未执行；当前 CLI 已退出，可继续会话恢复正常对话。',
+  generation_terminal_windows_required: '原生终端需要后端运行在 Windows。',
+  generation_cli_log_unavailable: 'CLI 执行记录暂不可读取，请重新读取或核对后端私有存储。',
+  generation_chat_busy: '本记录的上一轮对话尚未结束，请等待或取消后继续。',
   generation_bindings_required: '请关联每份实际资料的项目原件和固定版本。',
   generation_binding_mismatch: '文件正文与绑定原件不匹配。',
   generation_decision_binding_required: '已确认结论必须绑定本项目实际人工确认记录。',

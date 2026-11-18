@@ -243,7 +243,7 @@ function ProjectForm({
         <p>{project?.owner_name || `${user.display_name}（本人）`}</p>
       )}
       {!project && user.platform_role !== 'ADMIN' && (
-        <p className="hint">创建后由你担任项目负责人，可管理该项目的成员和仓库。</p>
+        <p className="hint">创建后你将成为项目负责人。</p>
       )}
       <label className="form-field">
         项目说明
@@ -357,13 +357,12 @@ export function ProjectSettings({
       <div className="page-head">
         <div>
           <h1>项目设置</h1>
-          <p>管理项目基本信息、代码来源与成员权限。</p>
         </div>
       </div>
       {!project ? (
         <section className="panel empty">
           <h2>尚未选择项目</h2>
-          <p>点击左侧项目选择旁的“＋”创建项目。</p>
+          <p>点击左侧“＋”创建项目。</p>
         </section>
       ) : (
         <div className="settings-layout">
@@ -396,7 +395,6 @@ export function ProjectSettings({
                   <div className="project-delete-section">
                     <div>
                       <h3>删除项目</h3>
-                      <p className="hint">删除后所有成员无法访问，资料、用例和历史报告仍保留。</p>
                     </div>
                     <button
                       className="danger"
@@ -656,7 +654,7 @@ function ProjectRepositories({
             </div>
             <p className="hint mt">{r.url}</p>
             <p className="hint">
-              {kinds.find(([v]) => v === r.kind)?.[1]} · {r.default_branch} · 未建立代码快照
+              {kinds.find(([v]) => v === r.kind)?.[1]} · {r.default_branch}
             </p>
             <p className="hint">
               {r.has_personal_authorization
@@ -666,11 +664,9 @@ function ProjectRepositories({
           </div>
         ))
       ) : (
-        <p className="muted mt">尚未关联仓库。一个项目可以关联多个前后端仓库。</p>
+        <p className="muted mt">尚未关联仓库。</p>
       )}
-      <p className="hint mt">
-        各项目独立关联仓库。项目关联不共享个人凭据；编辑时必须选择本人的已授权连接并验证分支。
-      </p>
+      <p className="hint mt">项目成员读取仓库时使用各自连接。</p>
       {error && (
         <p className="form-error mt" role="alert">
           {error}
@@ -882,7 +878,7 @@ function RepositoryDialog({
               />
             </label>
           </div>
-          <p className="hint">保存时验证真实分支访问权限，不下载代码，不创建提交快照。</p>
+          <p className="hint">保存时校验所选分支的访问权限。</p>
           {error && (
             <p className="form-error" role="alert">
               {error}

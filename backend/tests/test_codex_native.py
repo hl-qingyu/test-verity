@@ -138,14 +138,13 @@ class RealNativeCLITests(unittest.TestCase):
         )
         self.assertEqual(json.loads(result), {"result": "read"})
         self.assertEqual(len(requests), 2)
-        self.assertTrue(any("mcp_servers.verity_input=" in arg for arg in args))
+        self.assertTrue(any("mcp_servers.filesystem=" in arg for arg in args))
         outputs = [
             x
             for x in requests[1][2]["input"]
             if x.get("type") in ("function_call_output", "custom_tool_call_output")
         ]
         self.assertTrue(outputs)
-        self.assertIn("next_offset_bytes", json.dumps(outputs, ensure_ascii=False))
         self.assertIn("大文件完整原文", json.dumps(outputs, ensure_ascii=False))
         text_blocks = [
             x["text"]
@@ -154,13 +153,20 @@ class RealNativeCLITests(unittest.TestCase):
             if isinstance(x, dict) and x.get("type") == "input_text"
         ]
         parsed = next(json.loads(x) for x in text_blocks if x.startswith('{"tools":'))
+        expected = json.dumps(
+            {"messages": [{"role": "user", "content": [{"type": "input_text", "text": text}]}]},
+            ensure_ascii=False,
+        )
+        self.assertEqual(parsed["characters"], len(expected))
+        self.assertEqual(parsed["tail"], expected[-150:])
         self.assertTrue(
-            {"mcp__verity_input__read_input", "mcp__verity_input__search_input"}.issubset(
+            {"mcp__filesystem__read_text_file", "mcp__filesystem__get_file_info"}.issubset(
                 parsed["tools"]
             )
         )
         self.assertNotIn("exec_command", parsed["tools"])
         self.assertNotIn("view_image", parsed["tools"])
+        self.assertFalse(any("filesystem__write" in name for name in parsed["tools"]))
         environment = json.dumps(requests[0][2]["input"], ensure_ascii=False)
         self.assertIn('access=\\"deny\\"', environment)
 

@@ -31,7 +31,6 @@ export function AIResultsAcceptance({
       <div className="page-head">
         <div>
           <h1>AI结果验收</h1>
-          <p>从人工处理与实际采纳结果，了解五类AI分析的使用质量。</p>
         </div>
         <span className="badge">仅管理员</span>
       </div>
@@ -51,7 +50,7 @@ export function AIResultsAcceptance({
         />
         <div className="aa-range-description">
           <strong>{projectId === null ? '全部项目汇总' : project?.name || '项目不可用'}</strong>
-          <p className="hint">全部历史分析记录 · 分子分母累计计算 · 详情处理后自动更新</p>
+          <p className="hint">按全部历史分析记录累计</p>
         </div>
         <span className="badge">全部历史</span>
       </section>

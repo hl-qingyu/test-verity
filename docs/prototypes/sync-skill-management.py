@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(__file__).resolve().parent
 MODULES = [
     ("requirement-analysis", "需求分析", "3.0.2", "spark"),
-    ("case-generation", "用例生成", "2.1.1", "list"),
+    ("case-generation", "用例生成", "2.1.2", "list"),
     ("case-analysis", "用例分析", "1.0.1", "chart"),
     ("code-review", "代码分析", "2.0.1", "code"),
     ("change-impact", "变更分析", "1.0.4", "branch"),

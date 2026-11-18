@@ -18,6 +18,7 @@ from app.db.models import (
 )
 from app.integrations import ai_client as responses
 from app.integrations import github
+from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.documents import service as documents
 from app.modules.documents.files import decode_text
@@ -321,6 +322,7 @@ def execute(task_id, session_factory):
             task.status, task.updated_at = "COMPLETED", datetime.now(UTC)
             db.commit()
     except Exception as exc:
+        propagate_database_outage(exc)
         code = exc.detail if isinstance(exc, AppError) else "risk_analysis_internal_error"
         logger.warning("risk_analysis_failed id=%s type=%s", task_id, type(exc).__name__)
         with session_factory() as db:

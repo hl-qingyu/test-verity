@@ -273,9 +273,7 @@ export function SourcePicker({
                     <pre className="code">{preview.content}</pre>
                   </>
                 ) : (
-                  <p className="hint">
-                    点击文件名预览，勾选框用于选择分析范围。预览不会自动勾选或发送给AI。
-                  </p>
+                  <p className="hint">点击文件名预览，勾选文件用于分析。</p>
                 )}
               </section>
             </div>
@@ -467,9 +465,7 @@ export function NewCodeAnalysis({
               setSelectedSources({});
             }}
           />
-          <p className="hint">
-            按登记类型区分后端、前端与移动端。可选择多个来源；未选文件不会读取。切换来源方式会清除代码选择。
-          </p>
+          <p className="hint">可选择多个来源；切换来源方式会清空代码选择。</p>
           {repositories
             .filter((repo) => repo.kind !== 'PROTOTYPE')
             .map((repo) => (
@@ -663,7 +659,7 @@ export function NewCodeAnalysis({
             {callModeName(options.ai.call_mode)} · {options.ai.name} · {options.ai.model}
           </p>
           <p className="hint">
-            所选代码与资料将保存到本项目并发送给你自己的AI服务；项目成员可查看固定报告。任务在后台继续，失败不自动重试，只有发起人可以取消。
+            所选代码和资料将发送至你的AI服务，并在项目内共享。任务可在后台继续。
           </p>
           {options.ai.error_code && <p className="form-error">请先在平台设置配置自己的AI服务。</p>}
         </section>

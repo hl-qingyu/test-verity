@@ -99,10 +99,9 @@ export function CodeScope({ record }: { record: CodeDetail | null }) {
         )}
         <p className="hint mt">
           {record?.origin === 'IMPORT'
-            ? '用户导入的固定快照；引用校验不代表与真实仓库自动比对。'
-            : '本记录使用创建时固定的代码范围，不随当前分支或目录变化。'}
+            ? '导入快照尚未与真实仓库比对。'
+            : '分析使用创建时的固定范围。'}
         </p>
-        <p className="hint">静态分析不代表已执行代码、接口、页面或数据库验证。</p>
       </div>
     </aside>
   );
@@ -460,7 +459,6 @@ function CodeWorkspace({ project, user, onSessionEnd, overviewTarget, onRecordDe
       {loading && <p role="status">正在加载代码分析记录…</p>}
       {chat ? (
         <>
-          <p className="doc-note">只使用当前代码分析记录，不混入需求分析或其他模块历史。</p>
           <div className="code-chat-layout">
             {records}
             {record ? (
@@ -481,9 +479,6 @@ function CodeWorkspace({ project, user, onSessionEnd, overviewTarget, onRecordDe
         </>
       ) : (
         <>
-          <p className="notice">
-            分析来自固定代码范围；严重程度、证据状态与人工处理分别记录，静态分析不代表运行验证。
-          </p>
           {record?.report && (
             <div className="code-goal-summary">
               {record.report.target_results.map((goal) => (
@@ -709,7 +704,6 @@ function CodeWorkspace({ project, user, onSessionEnd, overviewTarget, onRecordDe
               {!visible.length && !detailLoading && (
                 <div className="empty">
                   <h3>{record?.report ? '当前目标没有代码发现' : '尚未取得分析结果'}</h3>
-                  <p>可切换目标或其他记录；没有发现不代表测试通过。</p>
                 </div>
               )}
               {!!filtered.length && (

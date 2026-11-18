@@ -236,7 +236,6 @@ export function Cases({
     return (
       <section className="panel panel-pad">
         <h2>请选择项目</h2>
-        <p className="muted">用例和分类按项目共享。</p>
       </section>
     );
   return (
@@ -244,7 +243,6 @@ export function Cases({
       <header className="page-head">
         <div>
           <h1>用例管理</h1>
-          <p>项目共享用例 · 保留导入编号 · 14 列标准格式</p>
         </div>
         <div className="row">
           <button
@@ -279,9 +277,7 @@ export function Cases({
           </button>
         </div>
       </header>
-      <p className="doc-note">
-        有项目权限即可查看、编辑、导入、审核和记录测试结果。导入用例保留原文件编号，缺少编号时由平台分配；审核不等于测试通过。
-      </p>
+
       {notice && (
         <p role="status" className="account-notice">
           {notice}
@@ -657,9 +653,7 @@ export function Cases({
           </div>
         </div>
       </section>
-      <p className="hint">
-        序号为当前结果行次；用例编号保留导入原值，可重复，内部ID用于区分记录。导出包含当前分类与搜索范围全部用例。
-      </p>
+      <p className="hint">用例编号可重复；导出包含当前筛选的全部用例。</p>
       {modal === 'case' && data && (
         <CaseEditor
           key={caseId ?? 'new'}
@@ -691,7 +685,7 @@ export function Cases({
       )}
       {modal === 'batch' && (
         <CaseDialog title="批量编辑用例" busy={busy} onClose={() => setModal(null)}>
-          <p className="doc-note">可逐行填写不同内容后统一保存，也可统一修改选定字段。</p>
+          <p className="doc-note">逐行编辑或统一修改所选字段。</p>
           <label className="form-field">
             编辑范围
             <Select
@@ -772,9 +766,7 @@ export function Cases({
         >
           {modal === 'manage' && (
             <>
-              <p className="hint">
-                分类项目共享，不占默认14列。删除均需确认，有关联用例须迁移后删除。
-              </p>
+              <p className="hint">有关联用例的分类需迁移后删除。</p>
               {data.categories.map((c) => (
                 <div className="case-category-row" key={c.id}>
                   <span>

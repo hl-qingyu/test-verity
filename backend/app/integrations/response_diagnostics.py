@@ -279,6 +279,9 @@ def safe_snapshot(stats: dict) -> dict:
     attempt_id = safe_identifier(stats.get("cli_attempt_id"))
     if attempt_id:
         result["cli_attempt_id"] = attempt_id
+    terminal_id = safe_identifier(stats.get("cli_terminal_id"))
+    if terminal_id:
+        result["cli_terminal_id"] = terminal_id
     thread_id = safe_identifier(stats.get("cli_thread_id"))
     if thread_id:
         result["cli_thread_id"] = thread_id
@@ -339,6 +342,7 @@ def safe_snapshot(stats: dict) -> dict:
             "cli_reasoning",
             "cli_reading",
             "cli_failed",
+            "cli_native_running",
         },
         "error_category": {
             "unknown",

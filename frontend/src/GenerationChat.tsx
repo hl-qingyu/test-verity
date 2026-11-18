@@ -3,6 +3,7 @@ import { MarkdownPreview } from './MarkdownPreview';
 import { apiRequest } from './api/http';
 import { generationBase, generationError } from './generationApi';
 import { Form } from './Form';
+import { CliEventLog } from './CliEventLog';
 
 type Turn = {
   id: number;
@@ -11,6 +12,7 @@ type Turn = {
   status: string;
   can_cancel: boolean;
   error_code: string;
+  call_mode?: string;
 };
 function parse(value: unknown, functionKey: string): { items: Turn[]; hasMore: boolean } {
   if (
@@ -52,6 +54,7 @@ function parse(value: unknown, functionKey: string): { items: Turn[]; hasMore: b
         status: v.status,
         can_cancel: v.can_cancel,
         error_code: v.error_code,
+        call_mode: 'call_mode' in v && typeof v.call_mode === 'string' ? v.call_mode : undefined,
       };
     }),
     hasMore: value.has_more,
@@ -65,6 +68,7 @@ export function GenerationChat({
   reference,
   onSessionEnd,
   onDraft,
+  terminal = false,
 }: {
   projectId: number;
   runId: string;
@@ -73,6 +77,7 @@ export function GenerationChat({
   reference: string;
   onSessionEnd: () => void;
   onDraft: (turnId: number) => void;
+  terminal?: boolean;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]),
     [question, setQuestion] = useState(''),
@@ -142,9 +147,12 @@ export function GenerationChat({
   }
   const active = turns.some((t) => ['QUEUED', 'RUNNING'].includes(t.status));
   return (
-    <section className="panel generation-chat-main">
+    <section className={`panel generation-chat-main${terminal ? ' cli-terminal-chat' : ''}`}>
       <div className="panel-head">
-        <h2>{label}对话</h2>
+        <h2>
+          {terminal ? 'CLI 对话 · ' : ''}
+          {label}对话
+        </h2>
       </div>
       <div className="code-chat-messages">
         {hasMore && (
@@ -179,6 +187,9 @@ export function GenerationChat({
           <article className="evidence" key={t.id}>
             <strong>提问</strong>
             <p>{t.question}</p>
+            {terminal && t.call_mode === 'CODEX_EXEC' && (
+              <CliEventLog url={`${base}/${t.id}/cli-events`} onSessionEnd={onSessionEnd} />
+            )}
             <MarkdownPreview
               text={t.answer || `${t.status}${t.error_code ? ` · ${t.error_code}` : ''}`}
             />
@@ -191,7 +202,7 @@ export function GenerationChat({
                 取消本轮
               </button>
             )}
-            {t.status === 'COMPLETED' && (
+            {t.status === 'COMPLETED' && !terminal && (
               <button className="small" onClick={() => onDraft(t.id)}>
                 人工添加为草案
               </button>
@@ -210,12 +221,11 @@ export function GenerationChat({
             function_key: functionKey,
             finding_key: reference,
             question,
+            ...(terminal ? { cli_only: true } : {}),
           });
         }}
       >
-        <p className="hint">
-          {reference ? `引用 ${reference}` : '未引用建议'} · 使用提问者本人的AI，聊天不应用用例。
-        </p>
+        {reference && <p className="hint">当前引用：{reference}</p>}
         <label className="form-field">
           提问
           <textarea

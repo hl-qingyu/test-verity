@@ -430,7 +430,11 @@ test('queued and running applications lock editing but allow closing and browsin
     h.submit('review');
     h.submit('save');
     assert.equal(h.saved.length, 0);
-    assert.ok(h.render().some((node) => node.props?.role === 'status' && /后台/.test(text(node))));
+    assert.ok(
+      h
+        .render()
+        .some((node) => node.props?.role === 'status' && /等待入库|正在审核入库/.test(text(node))),
+    );
     h.props.applicationStatus = 'COMPLETED';
     h.props.record.handling[h.props.suggestion.key] = [
       { status: '已应用', revision: 3, evidenceChecked: true },

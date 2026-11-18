@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 from app.core.errors import AppError
 from app.db.models import RequirementChatTurn, RequirementRiskReport, UserAccount
 from app.integrations import ai_client as responses
+from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.requirements import chat_service, risk_service
 
@@ -109,6 +110,7 @@ def execute(turn_id, session_factory):
                 row.answer, row.status, row.updated_at = answer, "COMPLETED", datetime.now(UTC)
                 db.commit()
     except Exception as exc:
+        propagate_database_outage(exc)
         code = exc.detail if isinstance(exc, AppError) else "chat_internal_error"
         # No source text, upstream exception text, credentials or answer in logs.
         logger.warning("chat_turn_failed id=%s type=%s", turn_id, type(exc).__name__)

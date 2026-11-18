@@ -1,21 +1,48 @@
 import json
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, WebSocket
 from fastapi.responses import FileResponse, Response
 
 from app.api.dependencies import DB, Actor, check_origin
+from app.api.terminal_transport import check_terminal_origin
+from app.api.terminal_transport import serve as serve_terminal
 from app.modules.case_generation import (
     apply,
     candidate_review,
     chat,
+    cli,
     execution,
     imports,
+    native_results,
+    native_terminal,
     schemas,
     service,
 )
 from app.modules.projects import record_deletion
 
 router = APIRouter(prefix="/api/projects/{project_id}/case-generation", tags=["case-generation"])
+
+
+@router.get("/{run_id}/terminal/results")
+def native_results_list(project_id: int, run_id: int, actor: Actor, db: DB):
+    return native_results.listing(project_id, run_id, actor, db)
+
+
+@router.get("/{run_id}/terminal/results/{result_id}")
+def native_result_preview(project_id: int, run_id: int, result_id: str, actor: Actor, db: DB):
+    return native_results.preview(project_id, run_id, result_id, actor, db)
+
+
+@router.post("/{run_id}/terminal/results/{result_id}/save", dependencies=[Depends(check_origin)])
+def native_result_save(
+    project_id: int,
+    run_id: int,
+    result_id: str,
+    payload: schemas.TerminalResultSave,
+    actor: Actor,
+    db: DB,
+):
+    return native_results.save(project_id, run_id, result_id, payload, actor, db)
 
 
 @router.get("")
@@ -170,6 +197,98 @@ def chat_list(
     before: int | None = Query(None, gt=0),
 ):
     return chat.listing(project_id, run_id, function_key, actor, db, before)
+
+
+@router.get("/{run_id}/terminal")
+def terminal_current(project_id: int, run_id: int, actor: Actor, db: DB):
+    return native_terminal.current(project_id, run_id, actor, db)
+
+
+@router.post("/{run_id}/terminal", dependencies=[Depends(check_terminal_origin)], status_code=202)
+def terminal_start(
+    project_id: int, run_id: int, payload: schemas.TerminalStart, actor: Actor, db: DB
+):
+    return native_terminal.start(project_id, run_id, payload, actor, db)
+
+
+@router.get("/{run_id}/terminal/{turn_id}")
+def terminal_read(
+    project_id: int,
+    run_id: int,
+    turn_id: int,
+    actor: Actor,
+    db: DB,
+    cursor: int = Query(0, ge=0, le=10000000),
+):
+    return native_terminal.read(project_id, run_id, turn_id, cursor, actor, db)
+
+
+@router.websocket("/{run_id}/terminal/generation/{batch_id}/socket")
+async def generation_terminal_socket(
+    websocket: WebSocket, project_id: int, run_id: int, batch_id: int
+):
+    await serve_terminal(
+        websocket,
+        lambda actor, db: native_terminal.generation_binding(
+            project_id, run_id, batch_id, actor, db
+        ),
+        native_terminal.bound_output,
+        native_terminal.bound_input,
+        schemas.TerminalInput,
+    )
+
+
+@router.websocket("/{run_id}/terminal/{turn_id}/socket")
+async def terminal_socket(websocket: WebSocket, project_id: int, run_id: int, turn_id: int):
+    await serve_terminal(
+        websocket,
+        lambda actor, db: native_terminal.binding(project_id, run_id, turn_id, actor, db),
+        native_terminal.bound_output,
+        native_terminal.bound_input,
+        schemas.TerminalInput,
+    )
+
+
+@router.post("/{run_id}/terminal/{turn_id}/input", dependencies=[Depends(check_terminal_origin)])
+def terminal_input(
+    project_id: int, run_id: int, turn_id: int, payload: schemas.TerminalInput, actor: Actor, db: DB
+):
+    return native_terminal.write(project_id, run_id, turn_id, payload, actor, db)
+
+
+@router.get("/{run_id}/batches/{batch_id}/cli-events")
+def batch_cli_events(
+    project_id: int,
+    run_id: int,
+    batch_id: int,
+    actor: Actor,
+    db: DB,
+    cursor: int = Query(0, ge=0, le=1000000),
+    attempt: int | None = Query(None, ge=0),
+):
+    return Response(
+        content=json.dumps(
+            cli.events(project_id, run_id, "batch", batch_id, actor, db, cursor, attempt)
+        ),
+        media_type="application/json",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/{run_id}/chat/{turn_id}/cli-events")
+def chat_cli_events(
+    project_id: int,
+    run_id: int,
+    turn_id: int,
+    actor: Actor,
+    db: DB,
+    cursor: int = Query(0, ge=0, le=1000000),
+):
+    return Response(
+        content=json.dumps(cli.events(project_id, run_id, "chat", turn_id, actor, db, cursor)),
+        media_type="application/json",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.post("/{run_id}/chat", dependencies=[Depends(check_origin)], status_code=202)

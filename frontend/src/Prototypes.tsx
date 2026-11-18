@@ -254,7 +254,6 @@ export function Prototypes({
     return (
       <section className="panel empty">
         <h2>请先选择项目</h2>
-        <p>原型资料按项目共享。</p>
       </section>
     );
   const groups = [...(library?.groups || []), { id: null, name: '未分组' }];
@@ -280,7 +279,6 @@ export function Prototypes({
       <div className="page-head">
         <div>
           <h1>原型资料</h1>
-          <p>统一查看原型来源，结合需求核对页面与交互。</p>
         </div>
         <div className="head-actions">
           <button
@@ -327,7 +325,7 @@ export function Prototypes({
         </p>
       )}
       <div className="toolbar mt">
-        <p className="hint">GitHub / 链接跟随实时来源 · 目录 / 图片 / HTML 保留版本</p>
+        <p className="hint">GitHub/链接为实时来源，上传文件保留版本</p>
       </div>
       {loading && (
         <p role="status" className="hint mt">
@@ -623,9 +621,7 @@ export function Prototypes({
                         本人尚无可读取此项目仓库的连接。<Link to="/platform">配置 GitHub 连接</Link>
                       </div>
                     )}
-                    <p className="hint mt">
-                      提交变化不代表所选目录一定变化；历史依据保留当次快照。分析及页面快照采集尚未接入。
-                    </p>
+                    <p className="hint mt">网页快照采集待接入。</p>
                   </div>
                 )}
               </>
@@ -736,7 +732,6 @@ export function Prototypes({
                   </button>
                 </div>
               ))}
-              <p className="hint">更新文件不覆盖旧文件和既有需求来源。</p>
             </>
           ) : (
             <Form

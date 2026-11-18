@@ -27,7 +27,7 @@ function adDeleteAction(action, identity) {
   if (action === 'ad-delete') {
     modalContext = { type: 'analysis-delete', module, id };
     openModal('确认删除分析记录',
-      `<p>确定删除「${esc(r.title)}」吗？</p><p class="notice warn">删除后，项目成员均无法在分析列表查看此记录，概览和 AI 结果验收统计同步移除。需求分析的关联任务与报告一并处理。</p><p class="hint mt">原始输入、报告、对话及审计保留，已入库用例和历史成果保留。本期没有恢复入口，不释放存储空间。</p>${adActive(r) ? '<p class="inline-error mt">还有排队或执行中的任务，请先取消或等待结束。</p>' : ''}`,
+      `<p>确定删除「${esc(r.title)}」吗？</p><p class="notice warn">删除后，项目成员均无法在分析列表查看此记录，概览和 AI 结果验收统计同步移除。需求分析的关联任务与报告一并处理。</p><p class="hint mt">原始输入、报告、对话与审计保留；已入库用例不受影响，暂不支持恢复。</p>${adActive(r) ? '<p class="inline-error mt">还有排队或执行中的任务，请先取消或等待结束。</p>' : ''}`,
       btn('取消', 'close') + (adActive(r) ? '' : btn('确认删除', 'ad-delete-confirm', identity, 'danger')));
     return;
   }

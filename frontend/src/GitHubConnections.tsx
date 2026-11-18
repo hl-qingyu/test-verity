@@ -48,15 +48,11 @@ export function GitHubConnections({ onSessionEnd }: { onSessionEnd: () => void }
           新增连接
         </button>
       </div>
-      <p className="hint mt">
-        每个账号独立管理自己的连接，不共享凭据。填写 Token
-        后自动发现可访问仓库，按所属个人或组织分组。仅支持 GitHub.com。
-      </p>
+      <p className="hint mt">配置当前账号的 GitHub.com 连接。</p>
       <section className="gh-section mt" aria-labelledby="github-my-connections">
         <div className="gh-section-head">
           <div>
             <h3 id="github-my-connections">我的连接</h3>
-            <p>选择一项连接，在下方查看或修改配置。</p>
           </div>
           <span className="badge green">{connections.length} 个连接</span>
         </div>
@@ -108,7 +104,7 @@ export function GitHubConnections({ onSessionEnd }: { onSessionEnd: () => void }
               </div>
             ))
           ) : (
-            <p className="muted mt">暂无连接。可分别添加个人和已加入组织的连接。</p>
+            <p className="muted mt">暂无连接。</p>
           )}
         </div>
       </section>
@@ -380,8 +376,7 @@ function ConnectionEditor({
         {tokenType === 'classic'
           ? 'Classic 可发现该 Token 有权访问的个人、组织和协作仓库。私有仓库通常需 repo 权限（本身含写入能力），平台仍只执行读取操作。'
           : 'Fine-grained 只会发现这枚 Token 已获授权的仓库，使用 Contents Read 和 Metadata Read；组织可能要求审批。'}
-        无需填写连接类型或组织名称；测试后按所属个人/组织分组选择。切换访问方式需要重新填写匹配的
-        Token。
+        切换访问方式需重新填写 Token。
       </p>
       <div className="row mt">
         <button type="submit" value="test" disabled={busy}>
@@ -466,10 +461,7 @@ function ConnectionEditor({
           )}
         </div>
       </section>
-      <p className="hint mt">
-        仅勾选的仓库允许后续读取。保存前重新验证所选仓库，最多等待约3分钟；不拉取代码、不建立快照、不调用
-        AI，不执行任何 GitHub 写入。
-      </p>
+      <p className="hint mt">保存前验证仓库访问权限，最长约3分钟。</p>
       <button
         type="submit"
         value="save"

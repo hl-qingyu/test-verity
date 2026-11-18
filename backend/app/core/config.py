@@ -40,7 +40,10 @@ class Settings(BaseSettings):
     ai_max_per_user: int = Field(default=1, ge=1, le=64)
     ai_max_per_credential: int = Field(default=1, ge=1, le=64)
     ai_cli_executable: Path | None = None
+    ai_cli_node_executable: Path | None = None
     ai_cli_work_path: Path = Path(__file__).resolve().parents[2] / "storage" / "codex-exec"
+    ai_cli_terminal_work_path: Path = Path.home() / ".test-verity" / "cli-workspaces"
+    ai_cli_terminal_user_ids: list[int] | None = None
     ai_allowed_base_urls: list[str] = [
         "https://api.openai.com/v1",
         "https://sub2api.geekuat.com",

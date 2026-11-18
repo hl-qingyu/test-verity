@@ -178,7 +178,6 @@ export function ProjectOverview({
       <div className="page-head">
         <div>
           <h1>项目概览</h1>
-          <p>查看项目资料、待处理事项与近期分析。</p>
         </div>
         <div className="row">
           <button className="ghost" disabled={loading} onClick={() => setReload((v) => v + 1)}>
@@ -210,7 +209,7 @@ export function ProjectOverview({
       )}
       {summary?.unavailable.length ? (
         <p className="notice" role="status">
-          部分模块摘要暂不可用，相关数量不显示为零。
+          部分模块暂不可用，相应数量显示“—”。
         </p>
       ) : null}
       <div className="ov-stats" aria-busy={loading}>
@@ -245,7 +244,6 @@ export function ProjectOverview({
       <section className="panel ov-shortcuts">
         <div>
           <h2>分析入口</h2>
-          <p className="hint">在对应模块选择范围并开始分析</p>
         </div>
         <div className="ov-shortcut-buttons">
           {Object.entries(overviewModules).map(([key, [name, path, icon]]) => (
@@ -261,7 +259,6 @@ export function ProjectOverview({
           <div className="panel-head">
             <div>
               <h2>近期分析</h2>
-              <p className="hint">快速查看分析进度，继续处理已有结果</p>
             </div>
             <span className="ov-list-count">
               {loading && !summary ? '读取中' : `${records.length} 条记录`}
@@ -336,19 +333,18 @@ export function ProjectOverview({
                       ? '还没有分析记录'
                       : '当前筛选没有匹配记录'}
                 </h3>
-                <p>可从上方分析入口进入对应模块。</p>
               </div>
             )}
           </div>
           <div className="ov-recent-footnote" id="overview-recent-help">
-            列表内可滚动查看 · 每类最多8条 · 更多历史请进入对应模块
+            每类最多8条，完整历史见对应模块
           </div>
         </section>
         <aside className="panel ov-attention">
           <div className="panel-head">
             <div>
               <h2>需要关注</h2>
-              <p className="hint">按历史记录累计，重复发现需人工核对</p>
+              <p className="hint">历史累计，可能包含重复发现</p>
             </div>
           </div>
           {!summary && (
@@ -389,9 +385,6 @@ export function ProjectOverview({
               </div>
             </section>
           ))}
-          <p className="hint ov-attention-note">
-            各模块分别统计，不合成为缺陷总数。已应用草案不表示问题已解决。
-          </p>
         </aside>
       </div>
       {selection && (
@@ -435,7 +428,7 @@ export function ProjectOverview({
           }
         >
           <p className="hint">
-            {overviewModules[selection.module][0]} · {selection.part.label}。选择后进入原模块。
+            {overviewModules[selection.module][0]} · {selection.part.label}
           </p>
           {choiceError && (
             <p className="form-error" role="alert">

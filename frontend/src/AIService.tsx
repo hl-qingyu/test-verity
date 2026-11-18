@@ -134,9 +134,6 @@ export function AIService({
       ) : (
         settings && (
           <>
-            <p className="hint mb">
-              仅管理当前账号自己的 AI 服务。每位用户都需要配置个人 API Key，管理员也不例外。
-            </p>
             <p className="hint mb">当前已保存方式：{callModeName(settings.call_mode)}</p>
             <FormSelect
               label="调用方式"
@@ -158,7 +155,7 @@ export function AIService({
             />
             {mode === 'CODEX_EXEC' && (
               <p className="hint mt" role="status">
-                后端运行环境：
+                CLI：
                 {
                   {
                     available: '可用',
@@ -167,14 +164,13 @@ export function AIService({
                     unverified: '未验证',
                   }[settings.cli_runtime.status]
                 }
-                {' · 固定版本 '}
+                {' · '}
                 {settings.cli_runtime.required_version}。
-                {settings.cli_runtime.available &&
-                  '原生方式可用。可保存并使用，随后从各分析页面发起任务。CLI 可能多轮请求、自动重试或压缩上下文，可能产生多次费用；PDF 请使用 API 方式。'}
+                {settings.cli_runtime.available && '可能多轮计费；PDF 请使用 API。'}
                 {!settings.cli_runtime.available &&
                   (settings.cli_runtime.probe_available
-                    ? '可测试固定文字连接；业务分析尚未验证，不能激活或提交 CLI 任务。'
-                    : '当前仅能保存配置，不能激活或提交 CLI 任务。')}
+                    ? '可测试连接，业务调用未启用。'
+                    : '当前仅可保存配置，业务调用未启用。')}
               </p>
             )}
             <ConnectionForm
@@ -485,7 +481,6 @@ function ConnectionForm({
             <option value="max">最大（max）</option>
             <option value="ultra">极高（ultra）</option>
           </Select>
-          <span className="hint">可用档位取决于模型和中转；不支持时明确报错，不自动降档。</span>
         </label>
         <label className="form-field ai-full">
           API Key
@@ -525,9 +520,9 @@ function ConnectionForm({
       )}
       <p className="hint mt">
         {mode === 'CODEX_EXEC'
-          ? '测试当前 CLI 表单，仅发送“请只回复 OK”，最多向模型服务发送1次请求，可能产生费用；不发送公司资料，等待最长约120秒。连接成功不代表业务分析可用。'
-          : '测试当前表单，仅发送“请只回复 OK”，可能产生少量 API 费用，不发送公司资料。测试等待最长约120秒，高强度可能更慢；输出限制仍为256 tokens。'}
-        保存不会自动调用模型。修改地址需重新填写密钥。
+          ? '连接测试仅发送“请只回复 OK”，最多1次请求，可能计费；最长等待约120秒。'
+          : '连接测试仅发送“请只回复 OK”，可能计费；最长等待约120秒。'}
+        修改地址后请重新填写密钥。
       </p>
     </Form>
   );

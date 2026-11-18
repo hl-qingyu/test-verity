@@ -280,7 +280,7 @@ function Chat({
           返回需求分析
         </Link>
       </header>
-      <p className="doc-note">不同对话的历史和上下文独立；功能风险与人工处理仍在需求分析页维护。</p>
+
       <div className="requirement-chat-layout">
         <aside className="panel chat-sidebar">
           <div className="panel-pad chat-side-scroll">
@@ -404,9 +404,7 @@ function Chat({
               </button>
             )}
             {loading && <p role="status">正在读取聊天历史…</p>}
-            {!loading && !turns.length && (
-              <p className="hint">可以从“这次分析有哪些需要优先跟产品确认的问题？”开始。</p>
-            )}
+            {!loading && !turns.length && <p className="hint">暂无对话，可直接提问。</p>}
             {turns.map((row) => (
               <div className="chat-turn" key={row.id}>
                 <article className="chat-message mine">
@@ -420,11 +418,7 @@ function Chat({
                     AI · {callModeName(row.ai.call_mode)} · {row.ai.name} · {row.ai.model}
                   </strong>
                   <p>{row.answer || chatStates[row.status]}</p>
-                  {row.status === 'QUEUED' && (
-                    <p className="hint">
-                      等待后台处理。如果长时间未开始，请联系管理员检查对话服务。
-                    </p>
-                  )}
+                  {row.status === 'QUEUED' && <p className="hint">排队中，等待处理。</p>}
                   {row.status === 'RUNNING' && (
                     <p className="hint">接收AI回复中，完整结束后显示回答。</p>
                   )}
@@ -496,16 +490,14 @@ function Chat({
         <aside className="panel chat-context">
           <div className="panel-pad chat-side-scroll">
             <h3>本次上下文</h3>
-            <p className="hint">分析 #{reportId} · 平台保存聊天历史</p>
+            <p className="hint">分析 #{reportId}</p>
             <p className="hint">
               当前讨论：
               {detail?.report.functions.find((item) => item.key === functionKey)?.name ||
                 '整个需求'}
             </p>
-            <p>包含导入时文字片段、分析结果及本轮发送时的人工处理结论。</p>
-            <p className="hint">
-              本轮未读取图片/PDF原件或重新访问原型链接，仅使用已保存文字及既有观察。
-            </p>
+            <p>使用本次分析的资料、结果及人工结论。</p>
+            <p className="hint">仅使用已保存文字和观察，不重新读取原件或链接。</p>
             {detail?.input.materials.map((m) => {
               const binding = detail.bindings.find((b) => b.source_id === m.source_id);
               return (
@@ -545,7 +537,6 @@ function Chat({
                   </div>
                 </div>
               ))}
-            <p className="hint">链接打开资料管理页；对话仍使用分析时保存的固定文字依据。</p>
           </div>
         </aside>
       </div>
@@ -649,7 +640,7 @@ function ManualRiskDialog({
   return (
     <CaseDialog title="添加为风险点" busy={busy} onClose={onClose} wide>
       <Form onSubmit={(event) => void submit(event)}>
-        <p className="hint">AI回复仅作为发现线索；请核对固定原文依据后再入库。</p>
+        <p className="hint">核对依据后再入库。</p>
         <FormSelect
           label="所属功能"
           value={feature}

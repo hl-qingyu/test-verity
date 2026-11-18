@@ -24,7 +24,7 @@ const openModal=(t,b,f)=>modal=t+b+f,closeModal=()=>{modalContext=null},error=t=
 const formData=()=>formValues,themeValidateForm=()=>true,crypto={randomUUID:()=>String(++seq)},download=()=>{};
 const listeners={},document={addEventListener:(type,fn)=>(listeners[type]||=[]).push(fn),getElementById:()=>null};
 ${block}
-const records=changeRecords();assert.equal(records.length,5);
+const records=changeRecords();assert.equal(records.length,7);
 const code=changeActive();assert.equal(code.mode,'CODE_CHANGE');assert.equal(code.regressions.length,12);
 let page=viewChanges();assert.match(page,/role="tablist"/);assert.match(page,/旧基准/);assert.match(page,/本次引入/);
 changeTab='regressions';page=viewChanges();assert.match(page,/RG-010/);assert.doesNotMatch(page,/data-id="RG-011"/);assert.match(page,/下一页/);

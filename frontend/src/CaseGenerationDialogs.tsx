@@ -229,9 +229,7 @@ export function GenerationImport({
             });
         }}
       >
-        <p className="notice">
-          配对文件经后端严格校验并绑定项目已有原件/用例版本后保存；导入不调用AI，不直接应用用例。
-        </p>
+        <p className="notice">配对导入 input.json 与 report.json，导入后仍需审核。</p>
         <div className="form-grid">
           {(['input', 'report'] as const).map((kind) => (
             <section className="evidence" key={kind}>
@@ -302,9 +300,7 @@ export function GenerationImport({
                 />
               )}
               {source && !['FILE', 'DIRECTORY'].includes(source.kind) && (
-                <p className="hint">
-                  仓库/链接正文须匹配项目已有固定生成快照；地址本身不作为正文证明。
-                </p>
+                <p className="hint">仓库或链接须匹配项目已保存的正文快照。</p>
               )}
             </section>
           );
@@ -596,16 +592,11 @@ export function GenerationDetail({
       {applied && <p className="notice">本条已应用或复用，仅供查看；继续审阅下一条。</p>}
       {applying && (
         <p className="notice" role="status">
-          {applicationStatus === 'QUEUED'
-            ? '本条已提交审核，等待后台入库。'
-            : '后台正在将本条审核入库。'}
-          入库完成前不能修改或重复提交，可关闭弹窗或切换其他用例；结果会自动更新。
-          {applicationStatus === 'QUEUED' ? '若长时间未更新，请检查后台Worker是否运行。' : ''}
+          {applicationStatus === 'QUEUED' ? '已提交审核，等待入库。' : '正在审核入库。'}{' '}
+          完成前请勿重复提交，可关闭后查看结果。
         </p>
       )}
-      <p className="notice">
-        原始报告保留；人工草稿和审计独立保存。点击审核确认入库后先核对当前版本与重复建议，再最终确认；成功新增/修改为已审核、未测，复用保留已有测试记录。
-      </p>
+      <p className="notice">审核入库后，新增或修改项为“已审核、未测”；复用保留原测试记录。</p>
       {suggestion.caseId && (
         <p className="hint mono">
           内部用例ID {suggestion.caseId} · 固定设计v{suggestion.baseVersion}
@@ -866,9 +857,7 @@ export function GenerationClarification({
         </footer>
       }
     >
-      <p className="notice">
-        保存人工结论、确认人及依据版本，原报告不改写；确认后可定向补生成，不直接应用用例。
-      </p>
+      <p className="notice">确认结论后可补生成受影响场景。</p>
       {serverError && (
         <p className="form-error" role="alert">
           {serverError}

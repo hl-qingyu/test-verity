@@ -114,10 +114,7 @@ export function CaseImportDialog({
   }
   return (
     <CaseDialog title="导入用例" busy={busy} onClose={onClose} wide={!!duplicates.length}>
-      <p className="hint">
-        支持 XLSX / XLS /
-        CSV。自动读取各非空工作表的首个非空行为表头；缺列和空值保留为空，保留原文件用例编号，缺少编号时由平台生成。
-      </p>
+      <p className="hint">支持 XLSX / XLS / CSV，各工作表首个非空行作为表头。</p>
       <label className="form-field">
         用例分类
         <Select
@@ -167,7 +164,7 @@ export function CaseImportDialog({
           {preview.errors.length ? (
             <section className="case-import-blocked" role="alert">
               <h3>校验未通过，不能导入</h3>
-              <p>请修改原文件后重新上传。不会新增任何用例。</p>
+              <p>请修改原文件后重新上传。</p>
               <ul>
                 {preview.errors.slice(0, 100).map((i, n) => (
                   <li key={n}>

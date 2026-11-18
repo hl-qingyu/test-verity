@@ -77,11 +77,11 @@ vm.runInContext(renderer[1], context);
 vm.runInContext(block, context);
 vm.runInContext(
   `
-assert.equal(SKILL_CONTENT.length,5);assert.deepEqual(SKILL_CONTENT.map(s=>s.files.length),[4,27,2,8,9]);
+assert.equal(SKILL_CONTENT.length,5);assert.deepEqual(SKILL_CONTENT.map(s=>s.files.length),[4,28,2,8,9]);
 for(const record of SKILL_CONTENT){for(const file of record.files){const original=fs.readFileSync(path.resolve('skill',record.key,file.path),'utf8');assert.equal(file.text,original);assert.equal(file.sha256,crypto.createHash('sha256').update(original).digest('hex'));assert.ok(!file.path.includes('__pycache__'));}}
 let output=viewSkills();assert.match(output,/文件目录/);assert.match(output,/sk-edit/);assert.doesNotMatch(output,/导入 Markdown|编辑与试跑|复制到当前项目/);
 skSelected='case-generation';skPath='SKILL.md';output=viewSkills();assert.match(output,/legacy-contract.md/);assert.match(output,/compact-report.json/);assert.equal(skUsage(skFile()),'参与当前AI调用');
-skPath='references/preparation.md';assert.equal(skUsage(skFile()),'参与当前AI调用');assert.match(viewSkills(),/references/);skPath='legacy-contract.md';assert.equal(skUsage(skFile()),'历史约定');assert.doesNotMatch(viewSkills(),/data-action="sk-edit"/);
+assert.equal(skRecord().version,'2.1.2');skPath='segmented-output-draft.md';assert.equal(skUsage(skFile()),'参考文件');skPath='references/preparation.md';assert.equal(skUsage(skFile()),'参与当前AI调用');assert.match(viewSkills(),/references/);skPath='legacy-contract.md';assert.equal(skUsage(skFile()),'历史约定');assert.doesNotMatch(viewSkills(),/data-action="sk-edit"/);
 skSelected='code-review';skPath='scripts/check_examples.py';assert.match(skContent(),/import/);assert.equal(skUsage(skFile()),'参考文件');assert.doesNotMatch(viewSkills(),/data-action="sk-edit"/);
 skPath='examples/input.json';skMode='read';assert.equal(skContent(),'<pre class="sk-code">'+esc(JSON.stringify(JSON.parse(skText()),null,2))+'</pre>');skMode='raw';assert.equal(skContent(),'<pre class="sk-code">'+esc(skText())+'</pre>');
 assert.equal(skResolveLink('SKILL.md','contract.md'),'contract.md');assert.equal(skResolveLink('examples/input.json','../SKILL.md'),'SKILL.md');
@@ -111,7 +111,7 @@ assert.deepEqual(skChanged('abc','abc\\ndef'),{removed:'',added:'\\ndef'});asser
   context,
 );
 console.log(
-  "PASS: 50 exact files, left alignment, admin editing, synthetic chat scopes/isolation, cancellation, comparison, manual apply/save, stale drafts, role loss and unchanged source snapshots.",
+  "PASS: exact Skill files, left alignment, admin editing, synthetic chat scopes/isolation, cancellation, comparison, manual apply/save, stale drafts, role loss and unchanged source snapshots.",
 );
 channels.forEach((c) => {
   c.port1.close();

@@ -15,9 +15,7 @@ export function GenerationCandidateIssues({
   return (
     <section aria-label="候选格式与校验问题">
       <h3 className="panel-pad">候选格式与校验问题</h3>
-      <p className="hint panel-pad">
-        这些原始候选已保留，尚未进入可应用建议；其他有效建议可继续审核入库。修正或忽略不会调用AI。
-      </p>
+      <p className="hint panel-pad">问题项待处理，其他候选可继续审核；修正不调用AI。</p>
       {issues.map((issue) => (
         <article className="code-finding" key={issue.key}>
           <span
@@ -121,9 +119,7 @@ export function CandidateIssueDialog({
             void save(button instanceof HTMLButtonElement && button.value === 'ignore');
           }}
         >
-          <p className="hint">
-            原始响应保持不变。修正后的候选需通过全部格式、来源及业务校验，再进入用例建议；不会直接写入用例库。
-          </p>
+          <p className="hint">修正校验通过后进入用例建议，仍需审核入库。</p>
           <label className="form-field mt">
             候选JSON
             <textarea

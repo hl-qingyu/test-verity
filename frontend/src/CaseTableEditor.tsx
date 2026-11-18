@@ -206,9 +206,7 @@ export function CaseTableEditor({
           </button>
         </div>
       </header>
-      <p className="doc-note">
-        逐行填写不同内容，跨页修改会保留，最后统一保存。序号和编号不可修改；修改设计会保留旧版本，新版重置为未测、待审核，测试人员留空。
-      </p>
+      <p className="doc-note">跨页修改会保留，点击保存后统一提交。</p>
       {error && (
         <p role="alert" className="form-error">
           {error} 草稿仍保留；若版本冲突，请先复制需要的内容，退出编辑并刷新后重试。
@@ -366,10 +364,10 @@ export function CaseTableEditor({
           )}
           {designChanged && (
             <p className="form-error">
-              设计内容发生变化的用例会生成新版本，重置为未测、待审核、测试人员留空；同时填写的测试结果不会沿用。旧版本与记录保留。
+              修改设计将生成新版本，重置为“未测、待审核”，测试人员清空；本次测试结果不沿用。
             </p>
           )}
-          <p className="hint">任一条失败或用例库已更新时，整批不保存。不自动重试。</p>
+          <p className="hint">任一条失败或版本已变化时，整批不保存。</p>
           <div className="row">
             <button disabled={busy} onClick={() => setConfirm(null)}>
               返回编辑

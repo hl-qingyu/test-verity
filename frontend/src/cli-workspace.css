@@ -1,0 +1,109 @@
+.cli-workspace {
+  width: min(1120px, calc(100vw - 32px));
+}
+.native-cli-surface {
+  height: min(640px, 65vh);
+  width: 100%;
+  min-width: 0;
+  background: #122d29;
+  padding: 8px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.native-cli-surface .xterm {
+  height: 100%;
+}
+.native-cli-container {
+  position: relative;
+  min-width: 0;
+}
+.native-cli-workspace[hidden] {
+  display: none;
+}
+.native-cli-container.is-restoring .xterm {
+  visibility: hidden;
+}
+.native-cli-restoring {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 24px;
+  color: #e2eee9;
+  text-align: center;
+}
+.native-cli-restoring-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.native-cli-restoring-label .generation-spinner {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
+.native-result-json {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cli-event-panel {
+  min-width: 0;
+  margin: 16px 0;
+}
+.cli-event-toolbar {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cli-event-output {
+  max-height: 340px;
+  overflow: auto;
+  background: #122d29;
+  color: #e2eee9;
+  border-radius: 8px;
+  padding: 16px;
+  font:
+    13px/1.6 ui-monospace,
+    Consolas,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.cli-event-output article + article {
+  margin-top: 12px;
+}
+.cli-event-output pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  margin: 4px 0 0;
+}
+.cli-event-heading {
+  color: #a9c8bf;
+}
+.cli-event-error,
+.cli-event-error .cli-event-heading {
+  color: #ffb6a8;
+}
+.cli-terminal-chat .code-chat-messages {
+  max-height: 420px;
+  overflow: auto;
+}
+.cli-terminal-chat .code-chat-messages .empty {
+  padding: 12px;
+}
+.cli-workspace .generation-chat-compose textarea {
+  min-height: 100px;
+}
+@media (max-width: 600px) {
+  .cli-workspace {
+    width: calc(100vw - 16px);
+  }
+  .cli-event-output {
+    padding: 10px;
+    max-height: 280px;
+  }
+}

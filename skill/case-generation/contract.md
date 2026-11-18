@@ -1,6 +1,6 @@
 # 用例生成简化输出契约 v3
 
-2026-10-26 · Skill 2.1.1。新任务使用 CASE_GENERATION 契约3；历史契约2见 [legacy-contract.md](legacy-contract.md)，旧固定输入/指令/报告不重写，旧严格校验按原版本保留。本文只规定模型输出，平台固定输入和来源绑定继续保存完整版本信息。
+2026-11-17 · Skill 2.1.2。新任务使用 CASE_GENERATION 契约3；历史契约2见 [legacy-contract.md](legacy-contract.md)，旧固定输入/指令/报告不重写，旧严格校验按原版本保留。本文只规定模型输出，平台固定输入和来源绑定继续保存完整版本信息。
 
 ## 输入
 
@@ -55,9 +55,11 @@ cases、notes、complete 必需。cases/notes 可为空；无可用正文或业�
 | sources | 非空字符串数组，至少一个有效当前材料或确认结论；仅合法引用，不要求精确摘录/片段覆盖 |
 | evidence_quotes | 本条需求/原型文字证据摘录数组，通常1–2条；每条仅source和quote，source必须为本条sources中的需求或原型snapshot_ref。生成时准确摘取该固定正文/批注中的连续原文，不用用例描述或改写摘要代替。平台最多5条、每条最多1000字符，新Skill建议每条≤300字符；匹配与未匹配时的保存方式见下方“保存、审核和历史”。旧响应缺此字段保持兼容；没有可摘录文字时可为空并说明 |
 | note | 可省略，简短原因、比较边界或人工改动待核对，不重复分析正文 |
-| notes[].kind | BUSINESS_QUESTION：缺决定性业务预期；EXECUTION_SETUP：账号/数据/权限/观察方法待补；UNFINISHED：确实未完成范围 |
+| notes[].kind | BUSINESS_QUESTION：复查后仍缺决定性业务预期；EXECUTION_SETUP：账号/数据/权限/观察方法待补；UNFINISHED：存在实际阻碍、当前确实无法完成的范围，不能代替仍可继续完成的设计工作 |
 | notes[].text / sources | 简短说明及有效来源引用；说明具体受影响范围，不能泛写尚未建模 |
 | complete | AI对本次范围的完成声明，不是平台证明；有 BUSINESS_QUESTION/UNFINISHED 必须 false；仅 EXECUTION_SETUP 可 true |
+
+先完成当前能够完成的设计工作，再按剩余缺口填写notes。未拆分的独立路径、尚未补齐的明确预期或尚能读取的资料不是主动结束的理由。若所有明确场景已处理但确有BUSINESS_QUESTION，complete仍为false；不得伪造已完成或业务规则来变成true。详细收尾要求见[覆盖反查](references/coverage-review.md)，不增加输出字段或平台拒绝保存条件。
 
 design 仅包含字符串字段：module、structure、case_type、priority、description、title、preconditions、steps、expected、remark、data_requirements、cleanup。新版Skill生成NEW时priority必须选择P0–P4；测试优先级未明确时提出待审核建议并在remark注明理由。structure写子功能/业务操作，case_type写验证类型，description写业务场景/目的，不与具体title混为同一字段。
 

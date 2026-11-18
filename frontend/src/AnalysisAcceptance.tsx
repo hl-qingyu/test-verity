@@ -102,7 +102,7 @@ export function AcceptanceEditor({
         </footer>
       }
     >
-      <p className="hint">{data.title} · 不需要再次确认已有AI条目。</p>
+      <p className="hint">{data.title}</p>
       <Form
         id={formId}
         className="aa-scope"
@@ -111,9 +111,7 @@ export function AcceptanceEditor({
           void submit();
         }}
       >
-        <p className="notice">
-          仅在发现原范围遗漏或需要维护人工基准时填写。基准覆盖率只代表此清单。
-        </p>
+        <p className="notice">仅登记原范围内的遗漏及人工基准。</p>
         <button
           type="button"
           disabled={busy}
@@ -206,7 +204,7 @@ export function AcceptanceEditor({
                 onChange={(v) => criterion(c.id, { matched_key: v })}
               />
             )}
-            <p className="hint">保存即确认属于本记录原固定范围；新增需求或范围外内容不记为遗漏。</p>
+            <p className="hint">保存即确认属于本记录原固定范围。</p>
             <button
               type="button"
               className="danger ghost small"
@@ -369,7 +367,6 @@ export function AcceptanceSummary({
       <div className="panel-head">
         <div>
           <h2>结果总览</h2>
-          <p className="hint">各模块独立统计；认可与采纳反映人工处理结果。</p>
         </div>
         <button className="ghost small" disabled={loading} onClick={() => setReload((v) => v + 1)}>
           {loading ? '读取中…' : '刷新指标'}
@@ -448,9 +445,7 @@ export function AcceptanceSummary({
           </article>
         ))
       )}
-      <p className="aa-footnote">
-        “—”表示尚无评价样本；处理结果自动来自详情确认和实际入库。覆盖率仅针对人工基准清单。
-      </p>
+      <p className="aa-footnote">“—”表示暂无评价样本；覆盖率仅针对人工基准清单。</p>
       <Rules />
     </section>
   );
@@ -559,9 +554,7 @@ function RecordPanel({
       {data && (
         <>
           <Values metrics={data.metrics} module={module} />
-          <p className="aa-footnote">
-            已确认／处理及实际入库同步计入认可；忽略／不适用仅计已处理，未被当作AI误报。
-          </p>
+
           <Rules />
           {data.stale && (
             <p className="notice">原报告已变化，旧清单保留审计；当前处理结果仍按原详情统计。</p>

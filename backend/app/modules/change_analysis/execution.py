@@ -13,6 +13,7 @@ from app.core.errors import AppError
 from app.db.models import ChangeAnalysisChatTurn, ChangeAnalysisTask, UserAccount
 from app.integrations import ai_client as responses
 from app.integrations.response_diagnostics import safe_snapshot
+from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.change_analysis import (
     artifacts,
@@ -292,6 +293,7 @@ def execute(task_id, session_factory):
             row.status, row.updated_at = "COMPLETED", datetime.now(UTC)
             db.commit()
     except Exception as exc:
+        propagate_database_outage(exc)
         failed(ChangeAnalysisTask, task_id, exc, session_factory, diagnostics=diagnostics)
 
 
@@ -364,4 +366,5 @@ def execute_chat(turn_id, session_factory):
                 turn.answer, turn.status, turn.updated_at = answer, "COMPLETED", datetime.now(UTC)
                 db.commit()
     except Exception as exc:
+        propagate_database_outage(exc)
         failed(ChangeAnalysisChatTurn, turn_id, exc, session_factory)

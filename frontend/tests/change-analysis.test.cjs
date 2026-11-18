@@ -339,8 +339,6 @@ test('React page keeps reviewed layout, escapes fixed content and exposes persis
   assert.match(empty, /导入分析结果/);
   assert.match(empty, /历史对话/);
   assert.match(empty, /code-analysis-workspace/);
-  assert.match(empty, /项目内共享固定版本报告/);
-  assert.match(empty, /个人AI/);
   const r = { ...record(), origin: 'IMPORT', status: 'COMPLETED', loaded: true, structured: {} };
   r.changes[0].title = '<img src=x onerror=alert(1)>';
   const preview = renderToStaticMarkup(
@@ -479,7 +477,7 @@ test('legacy batch progress remains readable while retry uses the complete fixed
     React.createElement(ChangeAnalysis, { ...props, rows: [parsed] }),
   );
   assert.match(prepared, /历史分批进度/);
-  assert.match(prepared, /新分析使用完整固定输入一次请求/);
+  assert.match(prepared, /历史批次，仅供查看/);
   assert.doesNotMatch(prepared, /开始分批分析/);
   const partial = renderToStaticMarkup(
     React.createElement(ChangeAnalysis, {
@@ -851,12 +849,7 @@ test('new dialog keeps prototype section order and external submit footer bound 
   assert.match(markup, /指定当前代码快照/);
   assert.match(markup, /现有用例/);
   assert.match(markup, /历史报告与人工结论快照/);
-  assert.match(
-    markup,
-    /完整固定所选双侧正文、补充上下文、用例、历史与附件，一次请求交给你的AI分析/,
-  );
-  assert.match(markup, /不按语义筛减内容，不自动分批或重试/);
-  assert.match(markup, /实际容量由本人模型服务判断/);
+  assert.match(markup, /所选资料将发送至你的AI服务/);
   assert.doesNotMatch(markup, /先准备分批计划|每批单独计费/);
   assert.ok(!markup.includes('<select'));
   const css = fs.readFileSync(source('change-analysis.css'), 'utf8');

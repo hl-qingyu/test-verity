@@ -11,11 +11,10 @@ const helpers = html.slice(html.indexOf('// Code finding presentation:'), html.i
 const targetHelpers = html.slice(html.indexOf('// Code analysis targets and input review'), html.indexOf('// End code analysis targets.'));
 assert.ok(html.includes('导入代码分析'));
 assert.ok(html.includes('function codeImportOpen('));
-assert.ok(html.includes('Skill v2的input.json与report.json'));
-assert.ok(html.includes('导入不调用AI'));
+assert.ok(html.includes('选择 v2 的 input.json 与 report.json，每份最大16MB'));
 assert.ok(html.includes('下载AI候选结果（演示）'));
 assert.ok(html.includes('重新校验候选（演示）'));
-assert.ok(html.includes('原始响应单独保存；结构或证据校验失败时仍可下载排查'));
+assert.ok(html.includes('可下载原始候选并重新校验'));
 const pickerCode = html.slice(html.indexOf('const DEMO_FILES='), html.indexOf('function refOptions('));
 const detail = html.slice(html.indexOf('function issueDetail('), html.indexOf('\nfunction ', html.indexOf('function issueDetail(') + 1));
 const saveHandler = line("case'save-issue':").slice("case'save-issue':".length).replace(/break;\}\s*$/, '}');

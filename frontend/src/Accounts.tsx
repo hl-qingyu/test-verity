@@ -217,12 +217,7 @@ export function Accounts({
             </div>
           </>
         )}
-        <p className="hint mt">
-          测试、开发、产品、经理的菜单与权限暂按普通用户处理；项目权限仍由项目负责人和成员配置决定。
-        </p>
-        <p className="hint mt">
-          平台账号不自动加入任何项目。删除后保留历史记录，原账号名不可重复使用。
-        </p>
+        <p className="hint mt">业务角色不影响项目权限，项目权限由负责人和成员配置决定。</p>
       </div>
       {action && (
         <AccountDialog
@@ -415,7 +410,7 @@ function AccountDialog({
                   </Select>
                 </label>
               </div>
-              <p className="hint">测试、开发、产品、经理的菜单与权限暂按普通用户处理。</p>
+
               {action.kind === 'edit' && (
                 <p className="hint">修改账号、角色或启用状态后，该用户需重新登录。</p>
               )}

@@ -395,7 +395,6 @@ function RiskWorkspace({
     return (
       <section className="panel empty">
         <h2>请先选择项目</h2>
-        <p>风险报告按项目共享。</p>
       </section>
     );
   const records = catalog
@@ -441,7 +440,7 @@ function RiskWorkspace({
       <header className="page-head">
         <div>
           <h1>需求分析</h1>
-          <p>多次分析的功能与风险累计展示，保留每条发现的来源与处理记录。</p>
+          <p>汇总各次分析的功能与风险。</p>
         </div>
         <div className="row">
           <button className="primary" onClick={() => setStarting(true)}>
@@ -711,9 +710,6 @@ function RiskWorkspace({
                 </table>
               </div>
             </details>
-            <p className="hint">
-              各次分析结果追加展示，同名功能保留来源区分；不会因新分析覆盖旧风险和处理结论。
-            </p>
           </section>
           <div className="risk-workspace">
             <aside className="panel risk-functions">
@@ -840,7 +836,7 @@ function RiskWorkspace({
               {!catalog.items.length && (
                 <div className="risk-empty">
                   <h3>当前范围没有可展示的风险</h3>
-                  <p>未完成的分析尚无结果；筛选为空不代表没有风险。</p>
+                  <p>未完成的分析尚无结果。</p>
                   <button
                     onClick={() => {
                       setCatalogFunction('');
@@ -890,7 +886,7 @@ function RiskWorkspace({
         <section className="panel risk-empty">
           <span className="risk-eyebrow">需求完善度审查</span>
           <h2>先找到问题，再形成共同理解</h2>
-          <p>首次分析完成后入库功能风险清单，后续分析继续追加。</p>
+          <p>分析完成后将在此显示。</p>
           <button className="primary" onClick={() => setStarting(true)}>
             新建分析会话
           </button>
@@ -908,7 +904,7 @@ function RiskWorkspace({
                 </span>
               </div>
               <h2>{detail.title}</h2>
-              <p className="hint">导入者：{detail.created_by} · 项目共享 · 输入与结果已校验</p>
+              <p className="hint">导入者：{detail.created_by}</p>
             </div>
             <div className="row">
               <button onClick={() => setHistory(true)}>分析记录</button>
@@ -934,7 +930,6 @@ function RiskWorkspace({
                     : '本次已检查范围未发现实质风险'}
               </h2>
               <p>{report.summary.conclusion}</p>
-              <p className="hint">报告已保存不等于需求已确认，风险处理不等于测试通过。</p>
             </div>
             <div className="risk-metrics">
               {Object.entries(riskLevels).map(([key, label]) => (
@@ -1075,7 +1070,7 @@ function RiskWorkspace({
                 {!rows.length && (
                   <div className="risk-empty">
                     <h3>当前范围没有风险项</h3>
-                    <p>无风险项不等于整个需求完备。</p>
+
                     <button
                       onClick={() => {
                         setLevel('');
@@ -1145,10 +1140,7 @@ function RiskWorkspace({
           {tab === 'sources' && (
             <section className="panel panel-pad">
               <h2>输入与固定来源</h2>
-              <p className="doc-note">
-                文字摘录已与导入的 input.json
-                核对；关联原件由导入者指定，不证明本地模型实际读取了该原件。
-              </p>
+              <p className="doc-note">摘录已匹配导入文本，关联原件仍需人工核对。</p>
               <p>本次关注点：{detail.input.focus || '未设置'}</p>
               <p className="hint">调用标识：{detail.input.request_id}</p>
               {detail.input.materials.map((m) => {
@@ -1182,9 +1174,6 @@ function RiskWorkspace({
       )}
       {history && (
         <CaseDialog title="分析记录" busy={false} onClose={() => setHistory(false)} wide>
-          <p className="doc-note">
-            每次报告独立保存，人工结论不被后续导入覆盖。不自动匹配或关闭跨报告风险。
-          </p>
           {items.map((item) => (
             <div className="evidence" key={item.id}>
               <div className="between">
@@ -1442,9 +1431,7 @@ function SourceDialog({
     binding = detail.bindings.find((b) => b.source_id === sourceId);
   return (
     <CaseDialog title={material?.name || '来源对照'} busy={false} onClose={onClose} wide>
-      <p className="doc-note">
-        固定分析输入与人工关联的系统资料分别展示。系统核对了文字摘录与输入，但不代替人工确认资料是否对应。
-      </p>
+      <p className="doc-note">请核对关联资料与本次分析输入是否对应。</p>
       {binding && (
         <details className="evidence">
           <summary>
@@ -1472,11 +1459,8 @@ function SourceDialog({
             </>
           ) : (
             <p className="hint">
-              {binding.url || binding.branch || '未提供地址'}
-              <br />
-              关联时记录提交：{binding.commit || '无'}
-              <br />
-              不自动打开链接或读取仓库，输入快照仍以下方内容为准。
+              {binding.url || binding.branch || '未提供地址'} <br /> 关联时记录提交：
+              {binding.commit || '无'}
             </p>
           )}
         </details>
@@ -1552,7 +1536,6 @@ function ScopeDialog({ detail, onClose }: { detail: RiskDetail; onClose: () => v
         <p>
           资料：{detail.input.materials.length} 份 · 状态：{outcomes[detail.report.outcome]}
         </p>
-        <p className="hint">不展示密钥、模型思考或上游原始错误，不伪造进度百分比。</p>
       </details>
       <div className="row prototype-editor-footer">
         <button type="button" onClick={onClose}>
@@ -1693,7 +1676,7 @@ export function HandleRisk({
           )}
           <section>
             <h3>人工处理</h3>
-            <p className="hint">修改处理状态不改写分析原文；已解决不等于测试通过。</p>
+
             <FormSelect
               label="处理状态"
               value={state}
@@ -1875,8 +1858,7 @@ export function ImportReport({
       >
         <div className="prototype-editor-content">
           <p className="doc-note">
-            同时选择 input.json 和结果 JSON（report.json 或
-            risk-report.json）。系统核对输入、证据与引用后整份入库，不调用 AI。每份最大 16 MB。
+            选择 input.json 与结果 JSON（report.json 或 risk-report.json），每份最大16MB。
           </p>
           <div className="risk-import-files">
             {(['input', 'report'] as const).map((kind) => (
@@ -1918,9 +1900,7 @@ export function ImportReport({
           {input && (
             <section>
               <h3>关联系统已有资料</h3>
-              <p className="hint">
-                按来源所属栏目选择资料，原件从系统读取，无需再次上传。人工关联不等于原件内容已与整个输入自动比对。
-              </p>
+              <p className="hint">选择项目中已有原件，无需重复上传。</p>
               {input.parsed.materials.map((m) => {
                 const b = bindings.find((b) => b.source_id === m.source_id),
                   option = options.find((o) => o.id === b?.document_id);
@@ -1985,11 +1965,6 @@ export function ImportReport({
                           })),
                         ]}
                       />
-                    )}
-                    {option && !['FILE', 'DIRECTORY'].includes(option.kind) && (
-                      <p className="hint">
-                        保存关联时的来源元数据；不会访问链接或仓库，本次依据仍为 input.json。
-                      </p>
                     )}
                   </div>
                 );
@@ -2254,18 +2229,16 @@ function StartAnalysis({
               disabled={busy}
             />
           </label>
-          <p className="hint">由平台调用你的个人AI服务，无需安装本机程序。</p>
+
           {retry ? (
             <section className="evidence">
               <strong>沿用原报告的所选资料快照</strong>
               <p>{retry.selections.length} 份固定资料</p>
-              <p className="hint">
-                本次新建报告，原结果与人工处理结论保留。需要变更资料范围时请新建分析。
-              </p>
+              <p className="hint">重试将创建新报告；修改资料范围请新建分析。</p>
             </section>
           ) : (
             <div className="risk-source-picker">
-              <p className="hint">需求资料或原型资料至少选择一项，各类来源均可不选。</p>
+              <p className="hint">至少选择一份需求或原型资料。</p>
               {(['REQUIREMENT', 'PROTOTYPE'] as const).map((purpose) => (
                 <fieldset className="risk-source-group" key={purpose}>
                   <legend>
@@ -2340,8 +2313,8 @@ function StartAnalysis({
           </label>
           <details className="risk-analysis-service">
             <summary>本次使用：{ai}</summary>
-            <p className="hint">重试使用当前操作者本人配置。</p>
-            <p>后台执行，可离开页面；仅发起人可取消，失败后人工重试。</p>
+
+            <p>后台执行，可离开页面。</p>
           </details>
           {error && (
             <p className="form-error" role="alert">
@@ -2548,7 +2521,7 @@ function CatalogRiskDialog({
           </section>
           <section className="risk-detail-section">
             <h3>人工处理</h3>
-            <p className="hint">修改状态不会改写原分析结论；标记已解决不等于运行验证通过。</p>
+
             <FormSelect
               label="处理状态"
               value={state}

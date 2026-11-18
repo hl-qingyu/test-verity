@@ -37,6 +37,7 @@ import {
   currentHandling,
   GENERATION_PAGE_SIZE,
   generationGroups,
+  generationRoundRecord,
   generationAdoption,
   generationDuration,
   generationKinds,
@@ -68,7 +69,16 @@ import {
   generationDetail,
 } from './generationApi';
 import { GenerationChat } from './GenerationChat';
+import { GenerationCliWorkspace } from './GenerationCliWorkspace';
 import { GenerationSingleReview, GenerationApplicationResult } from './GenerationReview';
+
+function CachedCliWorkspace(props: Parameters<typeof GenerationCliWorkspace>[0]) {
+  const [opened, setOpened] = useState(false);
+  useEffect(() => {
+    if (props.open) setOpened(true);
+  }, [props.open]);
+  return opened || props.open ? <GenerationCliWorkspace {...props} /> : null;
+}
 
 type Props = {
   onRecordDeleted?: () => void;
@@ -320,6 +330,7 @@ export function GenerationActivity({
     return () => window.clearInterval(timer);
   }, [active]);
   const phases: Record<string, string> = {
+    cli_native_running: '原生CLI执行中',
     preparing: '准备调用资料',
     request_sent: '连接AI，等待响应',
     connected: '已连接，等待AI输出',
@@ -372,7 +383,9 @@ export function GenerationActivity({
                       ? `正在生成 · ${phases[String(d.phase)] || '等待AI完成'}`
                       : b.candidateAvailable
                         ? 'AI已返回 · 候选待核对'
-                        : '生成失败'}
+                        : record.batches.some((v) => v.nativeResultId)
+                          ? '早期生成未完成 · 已保存对话候选'
+                          : '生成失败'}
                 </strong>
                 {running && elapsed !== null && (
                   <span className="hint">
@@ -380,11 +393,7 @@ export function GenerationActivity({
                   </span>
                 )}
               </div>
-              {(running || waiting) && (
-                <p className="hint">
-                  状态自动刷新，可以离开页面；未完成的响应尚未作为有效用例保存。
-                </p>
-              )}
+              {(running || waiting) && <p className="hint">任务在后台继续，可离开页面。</p>}
               {typeof d.received_bytes === 'number' && (
                 <p className="hint">
                   {d.call_mode === 'CODEX_EXEC' ? 'CLI事件已接收' : '已接收'}{' '}
@@ -414,7 +423,7 @@ export function GenerationActivity({
                   )}
                 </div>
               )}
-              {b.status === 'FAILED' && onRetry && b.id && (
+              {b.status === 'FAILED' && !b.nativeResultId && onRetry && b.id && (
                 <button className="small" disabled={busy} onClick={() => onRetry(b.id!)}>
                   人工重试（使用本人AI，可能计费）
                 </button>
@@ -524,9 +533,7 @@ export function GenerationGaps({
   return (
     <section className="panel-pad">
       <h3>{includeBusiness ? '简短说明与待处理范围' : '执行准备与未覆盖范围'}</h3>
-      <p className="hint">
-        执行准备待补不等于业务规则缺失；已形成的建议仍需人工审核，执行前补齐准备事项。
-      </p>
+      <p className="hint">执行前请补齐准备事项。</p>
       {gaps.map((gap) => (
         <article className="evidence" key={gap.id}>
           <span className="badge orange">
@@ -642,7 +649,7 @@ function GenerationScope({ record }: { record: GenerationRecord | null }) {
                   · {m.versionName || m.version || '未固定'}
                 </p>
                 {m.before && <p className="hint">旧基准：{m.beforeName || m.before}</p>}
-                {m.update && <p>{m.update}；补充未提及旧规则不算删除。</p>}
+                {m.update && <p>{m.update}</p>}
                 <p className="hint">
                   {m.readState === 'NOT_LOADED'
                     ? '正文尚未读取'
@@ -662,8 +669,7 @@ function GenerationScope({ record }: { record: GenerationRecord | null }) {
             ))}
             <p className="hint">{record.caseScope}</p>
             <div className="evidence">
-              {record.baselineId ? '可用固定历史基准' : '无历史生成基准也可维护'}
-              <p className="hint">保留当前人工内容；无历史时不推断何时变化。</p>
+              {record.baselineId ? '已固定历史基准' : '无历史生成基准'}
             </div>
             {record.decisions.map((d) => (
               <section className="evidence" key={d.key}>
@@ -676,13 +682,6 @@ function GenerationScope({ record }: { record: GenerationRecord | null }) {
                 </p>
               </section>
             ))}
-            <div className="evidence">
-              统一确认成功项即完成设计审核
-              <p className="hint">
-                人工统一确认后，成功新增/设计修改为已审核、未测；单条失败不回滚其他成功项。
-              </p>
-              <p className="hint">平台默认14列 · 本人AI · Skill固定版本</p>
-            </div>
             {record.limitations.map((l, i) => (
               <p className="hint" key={i}>
                 {l}
@@ -754,6 +753,7 @@ export function GenerationWorkspace({
     [reviewChecks, setReviewChecks] = useState<GenerationPreviewItem[]>([]),
     [reviewChoices, setReviewChoices] = useState<Record<string, ReviewItem>>({}),
     [resolveKey, setResolveKey] = useState('');
+  const [nativeRoundId, setNativeRoundId] = useState<string | null>(null);
   const [candidateIssue, setCandidateIssue] = useState<GenerationCandidateIssue | null>(null);
   const scopeTrigger = useRef<HTMLElement | null>(null),
     scopeToggle = useRef<HTMLButtonElement>(null),
@@ -792,6 +792,24 @@ export function GenerationWorkspace({
           (i) => i.key === detail && ['PENDING', 'RUNNING'].includes(String(i.status)),
         ),
     );
+  const nativeRound = nativeRoundId ?? record?.nativeRounds?.[0]?.id ?? '';
+  const roundRecord = generationRoundRecord(record, nativeRound);
+  useEffect(() => {
+    setNativeRoundId(null);
+  }, [record?.id]);
+  useEffect(() => {
+    if (nativeRoundId === null && record?.nativeRounds?.length)
+      setNativeRoundId(record.nativeRounds[0].id);
+  }, [nativeRoundId, record?.nativeRounds]);
+  useEffect(() => {
+    setChosen([]);
+    setFeature('');
+    setKind('');
+    setHandling('');
+    setTextQuery('');
+    setPage(1);
+    setDetail('');
+  }, [nativeRound]);
   useEffect(() => {
     setTextQuery('');
     setChosen([]);
@@ -868,6 +886,14 @@ export function GenerationWorkspace({
       setSelected(next.id);
       setNewOpen(false);
       setImportOpen(false);
+      if (
+        (path.endsWith('/start') || path.endsWith('/retry')) &&
+        next.batches.some((b) => b.terminalAvailable)
+      ) {
+        setChat(true);
+        setChatFunction('整体');
+        setReference('');
+      }
       return next;
     } catch (e) {
       if (!c.signal.aborted && alive.current) setError(generationError(e, onSessionEnd));
@@ -1072,7 +1098,7 @@ export function GenerationWorkspace({
     setPage(Math.floor(detailKeys.indexOf(nextDetailKey) / GENERATION_PAGE_SIZE) + 1);
     setDetail(nextDetailKey);
   }
-  const matching = (record?.suggestions || []).filter(
+  const matching = (roundRecord?.suggestions || []).filter(
       (s) =>
         (!kind || s.kind === kind) &&
         (!handling || (currentHandling(record!, s)?.status || '待审阅') === handling) &&
@@ -1096,12 +1122,19 @@ export function GenerationWorkspace({
       (currentPage - 1) * GENERATION_PAGE_SIZE,
       currentPage * GENERATION_PAGE_SIZE,
     );
+  const nativeChat = !!record?.batches.some((batch) => batch.terminalAvailable);
+  const historyTrigger = useRef<HTMLButtonElement>(null);
+  const wasChat = useRef(false);
+  useEffect(() => {
+    if (!chat && wasChat.current) historyTrigger.current?.focus();
+    wasChat.current = chat;
+  }, [chat]);
   const scopedQuestions =
     !!overviewTarget?.state &&
     record?.id === String(overviewTarget.id) &&
     overviewTarget.group === 'questions';
   const failed = record?.failures || [],
-    questionEntries = (record?.questions || []).filter(
+    questionEntries = (roundRecord?.questions || []).filter(
       (q) =>
         !overviewTarget?.state ||
         record?.id !== String(overviewTarget.id) ||
@@ -1261,7 +1294,6 @@ export function GenerationWorkspace({
           加载更多记录
         </button>
       )}
-      <p className="hint panel-pad">项目共享保存，记录按权限访问。</p>
     </aside>
   );
   function card(s: GenerationRecord['suggestions'][number]) {
@@ -1328,11 +1360,7 @@ export function GenerationWorkspace({
       <header className="page-head">
         <div>
           <h1>{chat ? '用例生成对话' : '用例生成'}</h1>
-          <p>
-            {chat
-              ? '按生成记录与功能隔离；普通聊天不会应用用例。'
-              : '按功能连续核对步骤与预期，支持行内展开与批量审核'}
-          </p>
+          {!chat && <p>查看候选、处理问题并审核入库</p>}
         </div>
         <div className="head-actions">
           {chat ? (
@@ -1355,7 +1383,7 @@ export function GenerationWorkspace({
                   取消生成
                 </button>
               )}
-              <button disabled={!project} onClick={() => setChat(true)}>
+              <button ref={historyTrigger} disabled={!project} onClick={() => setChat(true)}>
                 历史对话
               </button>
               <Link className="button-link" to="/cases">
@@ -1373,13 +1401,9 @@ export function GenerationWorkspace({
       {!project ? (
         <div className="panel empty">
           <h2>请先选择项目</h2>
-          <p>生成记录和人工处理按项目保存，访问遵守项目权限。</p>
         </div>
       ) : (
         <>
-          <p className="hint generation-boundary">
-            固定资料与用例版本，使用本人AI后台生成；候选经人工统一确认后逐条应用。
-          </p>
           {!chat && !!record?.candidateIssues?.some((issue) => issue.status === 'PENDING') && (
             <div className="notice row" role="status">
               <span>
@@ -1480,7 +1504,6 @@ export function GenerationWorkspace({
                   <Icon name="list" />
                   生成记录 · {recordChoices.length}
                 </button>
-                <span className="hint">按功能连续审阅 · 勾选后批量审核</span>
               </div>
               <button
                 ref={scopeToggle}
@@ -1501,12 +1524,40 @@ export function GenerationWorkspace({
             className={`generation-layout ${chat ? 'code-chat-layout' : `generation-workbench${historyOpen ? ' has-history' : ''}`}`}
           >
             {nav}
+            {nativeChat && project && record && (
+              <CachedCliWorkspace
+                key={`${user.id}:${project.id}:${record.id}`}
+                open={chat && !detailLoading}
+                projectId={project.id}
+                runId={record.id}
+                label={chatFunction}
+                reference={reference}
+                onSessionEnd={onSessionEnd}
+                onClose={() => setChat(false)}
+                onReviewResult={(id) => {
+                  setNativeRoundId(id);
+                  setTab('suggestions');
+                  setChat(false);
+                }}
+                onSaveResult={async (id, requestId) => {
+                  const next = await persist(`/${record.id}/terminal/results/${id}/save`, {
+                    request_id: requestId,
+                    confirmed: true,
+                  });
+                  if (next) {
+                    setNativeRoundId(id);
+                    setNotice('本轮候选已保存。');
+                  }
+                  return !!next;
+                }}
+              />
+            )}
             {detailLoading ? (
               <section className="panel empty" aria-busy="true">
                 <p role="status">正在读取所选生成记录的完整内容…</p>
               </section>
             ) : chat ? (
-              record && project ? (
+              nativeChat ? null : record && project ? (
                 <GenerationChat
                   key={`${record.id}:${chatFunction}`}
                   projectId={project.id}
@@ -1527,6 +1578,25 @@ export function GenerationWorkspace({
               )
             ) : (
               <section className="panel generation-results">
+                {!!record?.nativeRounds?.length && (
+                  <div className="panel-pad">
+                    <FormSelect
+                      label="候选轮次"
+                      value={nativeRound}
+                      options={[
+                        { value: '', label: '当前对话的全部轮次' },
+                        ...(record.suggestions.some((s) => !s.nativeResultId)
+                          ? [{ value: '__initial__', label: '首次生成候选' }]
+                          : []),
+                        ...record.nativeRounds.map((r) => ({
+                          value: r.id,
+                          label: `${new Date(r.timestamp).toLocaleString()} · ${r.caseCount}条候选`,
+                        })),
+                      ]}
+                      onChange={setNativeRoundId}
+                    />
+                  </div>
+                )}
                 <div className="tabs change-result-tabs" role="tablist" aria-label="生成结果">
                   {(Object.entries(generationTabs) as [GenerationTab, string][]).map(
                     ([key, name], i, list) => (
@@ -1570,7 +1640,7 @@ export function GenerationWorkspace({
                     <p>
                       {record?.cancelled
                         ? '生成已取消；已完成批次保留，未完成批次可人工重试。'
-                        : '勾选实际资料版本和用例范围，或导入配对的正式双JSON；没有结果不表示0条用例。'}
+                        : '请选择资料和用例范围，或导入已有结果。'}
                     </p>
                     {record?.status === 'PREPARED' && (
                       <section className="generation-batch-plan">
@@ -1788,12 +1858,12 @@ export function GenerationWorkspace({
                     tabIndex={0}
                   >
                     {!scopedQuestions &&
-                      record!.suggestions
+                      roundRecord!.suggestions
                         .filter((s) => s.blocked && !currentHandling(record!, s)?.resolved)
                         .map(card)}
-                    {!scopedQuestions && <GenerationGaps record={record!} />}
+                    {!scopedQuestions && <GenerationGaps record={roundRecord!} />}
                     <GenerationCandidateIssues
-                      issues={record!.candidateIssues || []}
+                      issues={roundRecord!.candidateIssues || []}
                       onEdit={(issue) => {
                         setError('');
                         setCandidateIssue(issue);
@@ -1840,9 +1910,9 @@ export function GenerationWorkspace({
                       );
                     })}
                     {!questionEntries.length &&
-                      !record!.suggestions.some((s) => s.blocked) &&
-                      !generationGaps(record!).length &&
-                      !record!.candidateIssues?.length && (
+                      !roundRecord!.suggestions.some((s) => s.blocked) &&
+                      !generationGaps(roundRecord!).length &&
+                      !roundRecord!.candidateIssues?.length && (
                         <div className="empty">暂无冲突与待澄清项。</div>
                       )}
                     <div className="panel-pad">
@@ -1861,7 +1931,7 @@ export function GenerationWorkspace({
                   >
                     <h2>完整生成报告</h2>
                     <p className="hint">{state(record!)}</p>
-                    <GenerationGaps record={record!} includeBusiness />
+                    <GenerationGaps record={roundRecord!} includeBusiness />
                     <p>{record!.scope}</p>
                     <div className="code-report-summary">
                       {Object.entries(generationKinds).map(([k, t]) => (
@@ -1872,25 +1942,35 @@ export function GenerationWorkspace({
                       ))}
                     </div>
                     <section className="generation-batch-plan mt">
-                      <h3>生成进度</h3>
+                      <h3>{record?.nativeRounds?.length ? '候选轮次与生成进度' : '生成进度'}</h3>
                       <p className="hint">
                         {record!.batches.length
-                          ? '以下为后台保存的真实批次状态；失败仅人工重试。'
+                          ? record!.nativeRounds?.length
+                            ? '已保存各轮候选。'
+                            : '以下为后台保存的真实批次状态；失败仅人工重试。'
                           : '尚未形成批次。'}
                       </p>
                       {record!.batches.map((b) => (
                         <div className="evidence" key={b.key}>
                           <strong>
-                            {b.key} · {b.function}
+                            {b.nativeResultId
+                              ? `候选轮次 ${new Date(record!.nativeRounds?.find((r) => r.id === b.nativeResultId)?.timestamp || '').toLocaleString()}`
+                              : b.key}{' '}
+                            · {b.function}
                           </strong>
                           <p>
-                            {b.status} · 尝试{b.attempts}次
+                            {b.status} · {b.nativeResultId ? '保存' : '尝试'}
+                            {b.attempts}次
                           </p>
                           <p className="hint">{generationFailure(b.reason)}</p>
                           <div className="row">
                             <button
                               className="small"
-                              disabled={loading || !['FAILED', 'CANCELLED'].includes(b.status)}
+                              disabled={
+                                loading ||
+                                !!b.nativeResultId ||
+                                !['FAILED', 'CANCELLED'].includes(b.status)
+                              }
                               onClick={() =>
                                 void persist(`/${record!.id}/batches/${b.id}/retry`, {
                                   request_id: crypto.randomUUID(),
@@ -1922,7 +2002,7 @@ export function GenerationWorkspace({
                         </div>
                       ))}
                     </section>
-                    {record!.rawReports?.map((raw, n) => (
+                    {roundRecord!.rawReports?.map((raw, n) => (
                       <GenerationReportDetails report={raw} index={n} key={n} />
                     ))}
                     <h3 className="mt">应用及失败记录</h3>
@@ -1939,7 +2019,6 @@ export function GenerationWorkspace({
                         {a.error && <p className="form-error">{generationFailure(a.error)}</p>}
                       </section>
                     ))}
-                    <p className="hint">应用与审核在每条事务内保存；失败清单保留原因与处理历史。</p>
                     <button className="small" onClick={() => setFailuresOpen(true)}>
                       查看需人工核对清单
                     </button>
@@ -1980,9 +2059,7 @@ export function GenerationWorkspace({
                         候选14列Excel
                       </button>
                     </div>
-                    <p className="hint">
-                      导出跨页全部建议，原双文件不被人工修订改写。候选编号/人员留空、结果未测。
-                    </p>
+                    <p className="hint">导出全部建议，不受分页限制。</p>
                     <h3>限制与待补充</h3>
                     {record!.limitations.map((l, i) => (
                       <p className="hint" key={i}>
@@ -2350,9 +2427,7 @@ export function GenerationWorkspace({
             </footer>
           }
         >
-          <p className="notice">
-            这是后台保存的失败条目。人工核对并保存修订后，重新预览，只选择失败项重试；成功项不重放。
-          </p>
+          <p className="notice">修订后可重新审核失败项，成功项保留。</p>
           {failed.map((f, i) => (
             <section className="evidence" key={`${f.key}:${i}`}>
               <strong>{f.key}</strong>

@@ -14,6 +14,7 @@ from app.db.models import (
 )
 from app.integrations import ai_client as responses
 from app.integrations.response_diagnostics import safe_snapshot
+from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.case_analysis import contract, service
 from app.modules.case_generation import sources
@@ -177,6 +178,7 @@ def execute_model(key, factory, chat=False):
             row.status, row.updated_at = "COMPLETED", datetime.now(UTC)
             db.commit()
     except Exception as exc:
+        propagate_database_outage(exc)
         with factory() as db:
             row = db.get(cls, key, with_for_update=True)
             if row and row.status == "RUNNING":

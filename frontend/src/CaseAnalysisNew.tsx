@@ -285,7 +285,7 @@ export function CaseAnalysisNew({
               />
             </label>
           </div>
-          <p className="hint">实际固定{selected.length}条，包含其他分页。准备阶段不调用AI。</p>
+          <p className="hint">已选{selected.length}条（含其他分页）；准备不调用AI。</p>
           {scope === 'selected' && (
             <>
               <div className="row">

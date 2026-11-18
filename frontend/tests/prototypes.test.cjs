@@ -180,7 +180,7 @@ test('link preview waits for click, isolates external frames and preserves the n
       React.createElement(PrototypeLinkPreview, { name: '页面', url: link.url }),
     );
     assert.ok(!idle.includes('<iframe'));
-    assert.match(idle, /未保存页面快照/);
+    assert.match(idle, /未保存快照/);
     assert.match(idle, /rel="noopener noreferrer"/);
     const loaded = load(file, {
       ...React,

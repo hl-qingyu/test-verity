@@ -309,7 +309,6 @@ function SkillWorkspace({ user, onSessionEnd }: Props) {
       <div className="page-head">
         <div>
           <h1>Skill 管理</h1>
-          <p>查看分析方法与完整文件内容，所有项目共用。</p>
         </div>
         <button
           type="button"
@@ -806,7 +805,7 @@ export function SkillEditor({
           <p className="hint">
             {confirm === 'discard'
               ? '对话历史仍保留，正文恢复到已保存文件。'
-              : '保存将备份旧文件并写回本地SKILL.md，影响所有项目的新分析；已固定的任务保持原内容。'}
+              : '保存影响所有项目的新分析，已有任务保留原规则。'}
           </p>
         </>
       ) : (
@@ -943,9 +942,7 @@ export function SkillEditor({
                 <p className="hint">{ai}。发送将调用本人AI服务，可能产生费用。</p>
                 <details className="sk-ai-context">
                   <summary>查看发送范围与参考文件</summary>
-                  <p className="hint">
-                    默认发送当前完整正文草稿、参与调用的只读规则和输出契约，可添加其他参考文件。
-                  </p>
+                  <p className="hint">发送当前草稿、只读规则和输出契约，可追加参考文件。</p>
                   {record.files
                     .filter((f) => f.type !== 'unsupported')
                     .map((f) => (
@@ -1084,11 +1081,10 @@ export function SkillEditor({
                     )}
                   </div>
                 </Form>
-                <p className="hint">对话按本人账号与Skill独立保存；建议不直接写文件。</p>
               </aside>
             )}
           </div>
-          <p className="hint mt">预览和AI建议均不代表保存。应用到草稿后，仍需管理员确认保存。</p>
+          <p className="hint mt">应用建议后需另行保存草稿。</p>
         </>
       )}
     </CaseDialog>

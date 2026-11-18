@@ -492,7 +492,6 @@ test('new generation prepares complete scope without asking users to accept batc
   );
   assert.match(html, /不对照已有用例/);
   assert.match(html, /读取资料并准备生成/);
-  assert.match(html, /完整所选资料一次交给本人AI/);
   assert.ok(!/500\+分批计划|已核对资料、用例范围和分批调用规则/.test(html));
 });
 

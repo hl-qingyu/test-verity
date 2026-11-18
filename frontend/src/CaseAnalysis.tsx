@@ -602,9 +602,6 @@ function ReviewWorkspace({ project, user, onSessionEnd, overviewTarget, onRecord
             </section>
           ) : tab === 'checks' ? (
             <>
-              <p className="hint panel-pad">
-                以下仅为AI检查声明，不证明需求符合或测试通过。问题数与涉及用例数不同。
-              </p>
               <div className="review-results">
                 {cases.slice((page - 1) * 10, page * 10).map((c) => {
                   const issue = findings.filter((f) => f.case_ids.includes(c.id)),
@@ -724,9 +721,7 @@ function ReviewWorkspace({ project, user, onSessionEnd, overviewTarget, onRecord
                     </div>
                   </article>
                 ))}
-                {!filtered.length && (
-                  <p className="hint">本次未发现匹配问题，不代表符合需求或测试通过。</p>
-                )}
+                {!filtered.length && <p className="hint">当前筛选未发现问题。</p>}
               </div>
               <Pagination page={page} count={filtered.length} onChange={setPage} />
               <div className="review-bottom between">
@@ -1119,7 +1114,7 @@ function ReviewDetail({
           />
         </label>
       </Form>
-      <p className="hint">已解决不代表测试通过；入库不自动关闭问题。</p>
+      <p className="hint">入库不会自动关闭问题。</p>
       {(error || localError) && (
         <p className="inline-error" role="alert">
           {error || localError}
@@ -1200,7 +1195,7 @@ function ReviewDraft({
         </>
       }
     >
-      <p className="hint">只暂存草案，审核确认才写用例库。缺失场景需补齐完整设计。</p>
+      <p className="hint">草案须审核后入库，缺失场景需补齐设计。</p>
       {fixed && current?.version !== fixed.version && (
         <p className="inline-error">目标设计已变化或删除，请核对当前库内容。</p>
       )}
@@ -1534,7 +1529,7 @@ function ReviewAudit({
         </section>
       </div>
       {error && <p className="inline-error">{error}</p>}
-      <p className="hint">逐条失败继续，成功不重放；应用成功不自动关闭问题。</p>
+      <p className="hint">失败项可单独重试，成功项保留。</p>
     </ReviewDialog>
   );
 }
@@ -1634,7 +1629,6 @@ function ReviewChat({
           使用本人AI发送
         </button>
       </Form>
-      <p className="hint">普通对话不修改问题、需求或用例；新增事项需人工核对。</p>
     </div>
   );
 }
@@ -1679,9 +1673,7 @@ function ReviewImport({
         </>
       }
     >
-      <p>
-        配对已有固定input.json与report.json，不接受旧覆盖率报告；原件必须属于本项目已有准备记录。
-      </p>
+      <p>配对导入本项目准备记录的 input.json 与 report.json；不支持旧覆盖率报告。</p>
       <FilePicker accept=".json" onChange={(files) => void read(files[0], setInput)} />
       <FilePicker accept=".json" onChange={(files) => void read(files[0], setReport)} />
       {(error || localError) && <p className="inline-error">{error || localError}</p>}

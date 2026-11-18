@@ -9,15 +9,25 @@ from app.core.errors import AppError
 
 _stop: ContextVar[Event | None] = ContextVar("ai_scheduler_stop", default=None)
 _control: ContextVar["CallControl | None"] = ContextVar("ai_call_control", default=None)
+_receipt: ContextVar[str | None] = ContextVar("cli_result_receipt", default=None)
+_transient_error: ContextVar[object] = ContextVar("cli_transient_error", default=None)
 
 
 @contextmanager
-def execution_scope(stop):
+def execution_scope(stop, *, receipt=None, transient_error=None):
     token = _stop.set(stop)
+    receipt_token = _receipt.set(receipt)
+    transient_token = _transient_error.set(transient_error)
     try:
         yield
     finally:
         _stop.reset(token)
+        _receipt.reset(receipt_token)
+        _transient_error.reset(transient_token)
+
+
+def receipt_id():
+    return _receipt.get()
 
 
 def connected(response):
@@ -28,13 +38,14 @@ def connected(response):
 
 
 class CallControl:
-    def __init__(self, callback):
+    def __init__(self, callback, *, keep_cli_on_outage=False):
         self.callback = callback
         self.stop = _stop.get()
         self.finished = Event()
         self.lock = Lock()
         self.error = None
         self.response = None
+        self.transient_error = _transient_error.get() if keep_cli_on_outage else None
 
     def check(self):
         with self.lock:
@@ -46,6 +57,10 @@ class CallControl:
                 if self.callback:
                     self.callback()
             except Exception as exc:
+                if self.transient_error and self.transient_error(exc):
+                    # The task's next check uses a fresh Session. A database outage
+                    # does not cancel a CLI that is already running independently.
+                    return
                 self.error = exc
                 self.abort()
                 raise

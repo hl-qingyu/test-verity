@@ -139,9 +139,7 @@ function CandidateWorkspace({
         </>
       ) : (
         <>
-          <p className="hint">
-            原始响应和每次人工修订均保留。此处可查看所有可解析候选及重复字段；候选尚未通过完整校验，引用关系和业务结论仍需核对。保存、校验不会调用AI。
-          </p>
+          <p className="hint">候选待校验，可免费修正；原始响应保留。</p>
           {busy && <p role="status">正在读取或校验候选…</p>}
           {error && (
             <p className="form-error" role="alert">

@@ -1,0 +1,18 @@
+{
+  "name": "verity-cli-file-access",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
+  "description": "Official MCP filesystem server used by Codex CLI in read-only mode",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "2.3.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0"
+  }
+}

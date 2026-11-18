@@ -144,9 +144,7 @@ function DirectoryPrototypePair({
           }}
         />
       )}
-      <p className="hint">
-        按所选相对路径读取两个固定版本，明确区分新增、修改和删除；未选择的依赖不会自动发送。
-      </p>
+      <p className="hint">仅发送所选文件，依赖需另行勾选。</p>
     </section>
   );
 }
@@ -333,7 +331,7 @@ function GithubPrototypePair({
           />
         </>
       )}
-      <p className="hint mt">开始分析后读取所选固定提交正文；不修改仓库、不执行HTML或脚本。</p>
+      <p className="hint mt">分析时读取所选固定提交。</p>
     </section>
   );
 }
@@ -493,9 +491,7 @@ function LinkPrototypePair({
           {error}
         </p>
       )}
-      <p className="hint mt">
-        新侧目前读取页面目录、选择范围；页面正文固定与差异比较待接入，不将目录哈希当正文版本。旧新页面对应需人工核对，不自动判删除。
-      </p>
+      <p className="hint mt">页面正文固定与差异比较待接入；当前仅可选择页面目录。</p>
     </section>
   );
 }

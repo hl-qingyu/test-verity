@@ -147,7 +147,6 @@ export function CodeAnalysisChat({
       <div className="panel-head">
         <div>
           <h2>{record.title} · 对话</h2>
-          <p className="hint">固定提交和选定文件 · 仅本记录上下文</p>
         </div>
       </div>
       <div className="code-chat-messages">
@@ -157,9 +156,7 @@ export function CodeAnalysisChat({
           </button>
         )}
         {loading && <p role="status">正在加载对话…</p>}
-        {!loading && !turns.length && (
-          <p className="hint">暂无历史对话。可以询问调用链、字段映射或证据缺口。</p>
-        )}
+        {!loading && !turns.length && <p className="hint">暂无历史对话，可直接提问。</p>}
         {turns.map((turn) => (
           <div className="code-chat-turn" key={turn.id}>
             <article className="code-chat-message mine">
@@ -215,9 +212,7 @@ export function CodeAnalysisChat({
             placeholder="例如：请核对这条调用链还缺少哪些证据"
           />
         </label>
-        <p className="hint">
-          使用你的个人AI配置；仅携带当前分析的固定输入、报告、处理和本对话历史。回答不会自动修改发现。
-        </p>
+
         {!allowed && <p className="hint">需先完成或导入v2代码分析报告。</p>}
         {error && (
           <p className="form-error" role="alert">

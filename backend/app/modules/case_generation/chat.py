@@ -18,6 +18,7 @@ def view(turn, actor):
         "answer": turn.answer,
         "status": turn.status,
         "error_code": turn.error_code,
+        "call_mode": turn.ai_config.get("call_mode", "RESPONSES_API"),
         "actor_id": turn.actor_id,
         "can_cancel": turn.actor_id == actor.id and turn.status in service.ACTIVE,
         "created_at": turn.created_at.isoformat(),
@@ -51,9 +52,18 @@ def enqueue(project_id, run_id, payload, actor, db):
             and previous.finding_key == payload.finding_key,
             "generation_request_conflict",
         )
+        contract.require(
+            bool(previous.context.get("cli_only")) == payload.cli_only,
+            "generation_request_conflict",
+        )
         return view(previous, actor)
+    config, _ = analysis_configuration(actor, db)
+    cli_only = payload.cli_only
+    if cli_only:
+        contract.require(config.get("call_mode") == "CODEX_EXEC", "generation_cli_mode_required")
+        contract.require(run.actor_id == actor.id, "generation_owner_only")
     pairs = service.reports(run, db)
-    contract.require(pairs, "generation_report_not_ready")
+    contract.require(pairs or cli_only, "generation_report_not_ready")
     fs, finding_functions = service.function_views(run, db)
     contract.require(not payload.function_key or payload.function_key in fs)
     selected = {**service.suggestion_map(run, db), **service.question_map(run, db)}
@@ -78,7 +88,6 @@ def enqueue(project_id, run_id, payload, actor, db):
         "generation_chat_busy",
     )
     sources.recheck(project_id, run.metadata_snapshot, actor, db)
-    config, _ = analysis_configuration(actor, db)
     messages = []
     for turn in db.scalars(
         select(CaseGenerationChatTurn)
@@ -86,9 +95,12 @@ def enqueue(project_id, run_id, payload, actor, db):
             CaseGenerationChatTurn.run_id == run_id,
             CaseGenerationChatTurn.function_key == payload.function_key,
             CaseGenerationChatTurn.status == "COMPLETED",
+            *([CaseGenerationChatTurn.actor_id == actor.id] if cli_only else []),
         )
         .order_by(CaseGenerationChatTurn.id)
     ):
+        if "native_terminal" in turn.context:
+            continue
         messages.extend(
             [
                 {"role": "user", "content": turn.question},
@@ -121,7 +133,9 @@ def enqueue(project_id, run_id, payload, actor, db):
         "run_id": run_id,
         "function_key": payload.function_key,
         "finding_key": payload.finding_key,
-        "inputs": [copy.deepcopy(i) for i, _ in pairs],
+        "inputs": [copy.deepcopy(i) for i, _ in pairs]
+        if pairs
+        else [copy.deepcopy(b.input_snapshot) for b in service.batches(run, db)],
         "items": selected_items,
         "evidence": [
             copy.deepcopy(e)
@@ -131,7 +145,10 @@ def enqueue(project_id, run_id, payload, actor, db):
         ],
         "handling": handling,
         "messages": messages,
+        "cli_only": cli_only,
     }
+    if cli_only:
+        context["skill_reference"] = copy.deepcopy(run.metadata_snapshot.get("skill", {}))
     contract.require(
         len(json.dumps(context, ensure_ascii=False).encode()) <= contract.LIMIT,
         "generation_chat_too_large",

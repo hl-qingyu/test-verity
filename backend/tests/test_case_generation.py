@@ -1,19 +1,21 @@
 import copy
 import hashlib
 import json
+import logging
 import os
 import tempfile
 import unittest
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import test_auth
 import test_requirements
 from pydantic import ValidationError
 from sqlalchemy import event, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
@@ -2131,3 +2133,258 @@ class GenerationDatabaseTests(unittest.TestCase):
         self.assertNotEqual(
             added.json()["suggestions"][1]["key"], added.json()["suggestions"][0]["key"]
         )
+
+    def test_cli_timeline_is_task_scoped_private_and_viewing_never_calls_ai(self):
+        row = self.prepare()
+        bid = row["batches"][0]["id"]
+        attempt_id = str(uuid4())
+        with self.factory() as db:
+            batch = db.get(CaseGenerationBatch, bid)
+            batch.attempts = [{"status": "FAILED", "diagnostics": {"cli_attempt_id": attempt_id}}]
+            db.commit()
+        with (
+            patch(
+                "app.modules.case_generation.cli.codex_events.read_events",
+                return_value={
+                    "items": [{"sequence": 1, "type": "error", "text": "synthetic reconnect"}],
+                    "next_cursor": 1,
+                    "has_more": False,
+                    "available": True,
+                },
+            ) as read,
+            patch.object(execution.responses, "converse") as no_model,
+        ):
+            url = self.api + f"/{row['id']}/batches/{bid}/cli-events"
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            self.assertEqual(response.json()["items"][0]["text"], "synthetic reconnect")
+            read.assert_called_once_with(attempt_id, 0)
+            self.login(self.admin_name)
+            denied = self.client.get(url)
+            self.assertEqual(denied.status_code, 403, denied.text)
+            self.assertEqual(read.call_count, 1)
+            no_model.assert_not_called()
+
+    def test_native_terminal_is_bound_to_generation_and_cannot_start_an_independent_job(self):
+        from app.modules.case_generation import native_terminal
+
+        row = self.prepare()
+        bid = row["batches"][0]["id"]
+
+        def config(actor, db, version=None, **kwargs):
+            value, key = self.configuration(actor, db, version)
+            return {**value, "call_mode": "CODEX_EXEC"}, key
+
+        with (
+            patch.object(service, "analysis_configuration", side_effect=config),
+            patch.object(native_terminal, "analysis_configuration", side_effect=config),
+            patch.object(
+                native_terminal,
+                "Settings",
+                return_value=SimpleNamespace(ai_cli_terminal_user_ids=None),
+            ),
+            patch.object(native_terminal.ai_client, "terminal") as no_start,
+        ):
+            independent = self.post(f"/{row['id']}/terminal", {"request_id": str(uuid4())})
+            self.assertEqual(independent.status_code, 409, independent.text)
+            queued = self.post(
+                f"/{row['id']}/start",
+                {
+                    "revision": row["serverRevision"],
+                    "confirmed": True,
+                    "ai_call_mode": "CODEX_EXEC",
+                },
+            )
+            self.assertEqual(queued.status_code, 202, queued.text)
+            self.assertTrue(queued.json()["batches"][0]["terminalAvailable"])
+            current = self.client.get(self.api + f"/{row['id']}/terminal").json()
+            self.assertEqual(current["session"]["id"], bid)
+            self.assertEqual(current["session"]["kind"], "generation")
+            with self.factory() as db:
+                batch = db.get(CaseGenerationBatch, bid)
+                identity = batch.ai_config["generation_terminal"]["identity"]
+                self.assertEqual(
+                    list(
+                        db.scalars(
+                            select(native_terminal.CaseGenerationChatTurn).where(
+                                native_terminal.CaseGenerationChatTurn.run_id == int(row["id"])
+                            )
+                        )
+                    ),
+                    [],
+                )
+                bound = native_terminal.generation_binding(
+                    self.project, int(row["id"]), bid, db.get(UserAccount, self.member_id), db
+                )
+                self.assertEqual(bound["identity"], identity)
+                self.assertEqual(bound["execution"], -bid)
+            again = self.post(f"/{row['id']}/terminal", {"request_id": str(uuid4())})
+            self.assertEqual(again.json()["session"]["id"], bid)
+            self.assertEqual(again.json()["session"]["kind"], "generation")
+            self.post(f"/{row['id']}/cancel")
+            continued = self.post(
+                f"/{row['id']}/terminal", {"request_id": str(uuid4()), "resume": True}
+            )
+            self.assertEqual(continued.status_code, 202, continued.text)
+            tid = continued.json()["session"]["id"]
+            with self.factory() as db:
+                turn = db.get(native_terminal.CaseGenerationChatTurn, tid)
+                self.assertEqual(turn.context["native_terminal"]["identity"], identity)
+                self.assertTrue(turn.context["native_terminal"]["resume"])
+            self.post(f"/{row['id']}/chat/{tid}/cancel")
+            retry = self.post(f"/{row['id']}/batches/{bid}/retry", {"request_id": str(uuid4())})
+            self.assertEqual(retry.status_code, 202, retry.text)
+            with self.factory() as db:
+                batch = db.get(CaseGenerationBatch, bid)
+                self.assertNotEqual(batch.ai_config["generation_terminal"]["identity"], identity)
+                self.assertEqual(
+                    batch.attempts[-1]["ai_config"]["generation_terminal"]["identity"], identity
+                )
+            self.login(self.admin_name)
+            denied = self.client.get(self.api + f"/{row['id']}/terminal")
+            self.assertEqual(denied.status_code, 403, denied.text)
+            no_start.assert_not_called()
+
+    @unittest.skipUnless(os.name == "nt", "Windows native CLI")
+    def test_generation_start_real_cli_returns_candidate_through_original_validation(self):
+        from test_codex_probe import FakeProvider
+
+        from app.core.config import Settings
+        from app.integrations import codex_terminal
+
+        row = self.prepare()
+        bid = row["batches"][0]["id"]
+        with self.factory() as db:
+            data = copy.deepcopy(db.get(CaseGenerationBatch, bid).input_snapshot)
+        expected = self.answer(None, None, None, None, None, [{"text": json.dumps(data)}])
+        settings = Settings()
+        with tempfile.TemporaryDirectory() as folder, FakeProvider(text=expected) as provider:
+
+            def config(actor, db, version=None, **kwargs):
+                value, key = self.configuration(actor, db, version)
+                return {**value, "call_mode": "CODEX_EXEC", "base_url": provider.url}, key
+
+            local = SimpleNamespace(
+                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+            )
+            with (
+                patch.object(service, "analysis_configuration", side_effect=config),
+                patch.object(execution, "analysis_configuration", side_effect=config),
+                patch.object(codex_terminal, "Settings", return_value=local),
+            ):
+                start = self.post(
+                    f"/{row['id']}/start",
+                    {
+                        "revision": row["serverRevision"],
+                        "confirmed": True,
+                        "ai_call_mode": "CODEX_EXEC",
+                    },
+                )
+                self.assertEqual(start.status_code, 202, start.text)
+                with self.factory() as db:
+                    self.assertEqual(execution.claim(db), bid)
+                    identity = db.get(CaseGenerationBatch, bid).ai_config["generation_terminal"][
+                        "identity"
+                    ]
+                execution.execute(bid, self.factory)
+                done = self.client.get(self.api + f"/{row['id']}").json()
+                self.assertEqual(done["status"], "COMPLETED", done)
+                self.assertEqual(len(done["suggestions"]), 1)
+                self.assertEqual(len(provider.requests), 1)
+                with self.factory() as db:
+                    batch = db.get(CaseGenerationBatch, bid)
+                    self.assertEqual(batch.input_snapshot, data)
+                    self.assertEqual(
+                        execution.candidate_path(batch).read_text(encoding="utf-8"), expected
+                    )
+                self.assertTrue(
+                    (codex_terminal.directory(identity) / "output" / f"{-bid}.enc.jsonl").is_file()
+                )
+                self.assertEqual(
+                    self.client.post(self.cases_api + "/search", json={}).json()["total"], 0
+                )
+
+    @unittest.skipUnless(os.name == "nt", "Windows native CLI")
+    def test_cli_result_delivery_resumes_after_database_outage_without_another_call(self):
+        from test_codex_probe import FakeProvider
+
+        from app import chat_worker
+        from app.core.config import Settings
+        from app.integrations import cli_results, codex_terminal
+
+        row = self.prepare()
+        bid = row["batches"][0]["id"]
+        with self.factory() as db:
+            data = copy.deepcopy(db.get(CaseGenerationBatch, bid).input_snapshot)
+        expected = self.answer(None, None, None, None, None, [{"text": json.dumps(data)}])
+        settings = Settings()
+        state = {"available": True, "outage_seen": False}
+        receipt = str(uuid4())
+
+        @contextmanager
+        def interrupted_factory():
+            if not state["available"]:
+                state["outage_seen"] = True
+                raise OperationalError(None, None, RuntimeError("synthetic database outage"))
+            with self.factory() as db:
+                yield db
+
+        with tempfile.TemporaryDirectory() as folder, FakeProvider(text=expected) as provider:
+
+            def config(actor, db, version=None, **kwargs):
+                value, key = self.configuration(actor, db, version)
+                return {**value, "call_mode": "CODEX_EXEC", "base_url": provider.url}, key
+
+            original = codex_terminal.run
+
+            def during_cli(*args, **kwargs):
+                state["available"] = False
+                return original(*args, **kwargs)
+
+            local = SimpleNamespace(
+                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+            )
+            stop = Mock()
+            stop.is_set.return_value = False
+            stop.wait.side_effect = lambda seconds: state.update(available=True) or False
+            with (
+                patch.object(service, "analysis_configuration", side_effect=config),
+                patch.object(execution, "analysis_configuration", side_effect=config),
+                patch.object(codex_terminal, "Settings", return_value=local),
+                patch.object(cli_results, "Settings", return_value=local),
+                patch.object(codex_terminal, "run", side_effect=during_cli),
+                patch.object(chat_worker.reservations, "release") as release,
+            ):
+                started = self.post(
+                    f"/{row['id']}/start",
+                    {
+                        "revision": row["serverRevision"],
+                        "confirmed": True,
+                        "ai_call_mode": "CODEX_EXEC",
+                    },
+                )
+                self.assertEqual(started.status_code, 202, started.text)
+                with self.factory() as db:
+                    self.assertEqual(execution.claim(db), bid)
+                chat_worker._run_task(
+                    CaseGenerationBatch,
+                    execution.execute,
+                    bid,
+                    receipt,
+                    interrupted_factory,
+                    stop,
+                    logging.getLogger("test"),
+                )
+                done = self.client.get(self.api + f"/{row['id']}").json()
+                self.assertTrue(state["outage_seen"])
+                self.assertEqual(done["status"], "COMPLETED", done)
+                self.assertEqual(len(done["suggestions"]), 1)
+                self.assertEqual(len(provider.requests), 1)
+                self.assertFalse(cli_results.pending(receipt))
+                with self.factory() as db:
+                    batch = db.get(CaseGenerationBatch, bid)
+                    self.assertEqual(
+                        execution.candidate_path(batch).read_text(encoding="utf-8"), expected
+                    )
+                release.assert_called_once()

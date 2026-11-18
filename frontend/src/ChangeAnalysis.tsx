@@ -517,11 +517,6 @@ function ChangeWorkspace({
       <header className="page-head">
         <div>
           <h1>{chat ? '变更分析对话' : '变更分析'}</h1>
-          <p>
-            {chat
-              ? '按记录组织固定新旧上下文与独立历史。'
-              : '比较固定新旧版本，识别业务影响、问题归因和回归范围。'}
-          </p>
         </div>
         <div className="head-actions">
           {chat ? (
@@ -555,10 +550,7 @@ function ChangeWorkspace({
           )}
         </div>
       </header>
-      <p className="notice">
-        <Icon name="info" />
-        项目内共享固定版本报告，后台使用发起人个人AI；静态结论和回归建议不代表测试通过。
-      </p>
+
       {error && (
         <p className="notice error" role="alert">
           {error}
@@ -572,7 +564,6 @@ function ChangeWorkspace({
       {!project ? (
         <section className="panel panel-pad">
           <h2>请先选择项目</h2>
-          <p className="hint">记录和对话按当前项目权限隔离。</p>
         </section>
       ) : (
         <>
@@ -608,9 +599,9 @@ function ChangeWorkspace({
                           {record.batches.failed > 0 && ` · 失败 ${record.batches.failed} 批`}
                         </summary>
                         <p className="hint">
-                          历史执行方式仅供核对原进度、成果和依据；新分析使用完整固定输入一次请求。
+                          历史批次，仅供查看。
                           {record.batches.version === 2 &&
-                            `原计划含 ${record.batches.review_batches || 0} 批关联复核；以下大小仅含原资料，指令、复核报告和附件另计。`}
+                            ` · 关联复核 ${record.batches.review_batches || 0} 批`}
                         </p>
                         <div className="change-batch-list">
                           {record.batches.batches.map((batch) => (
@@ -777,7 +768,6 @@ function ChangeWorkspace({
                 <div className="panel-head">
                   <div>
                     <h2>本次变更结果</h2>
-                    <p className="hint">按记录查看，保留各自固定范围。</p>
                   </div>
                   <button
                     className="ghost small"
@@ -952,7 +942,7 @@ function ChangeWorkspace({
                       </h3>
                       <p className="hint">
                         {record && record.status !== 'COMPLETED'
-                          ? '请核对当前任务状态；排队、失败或取消不能按零风险解读。'
+                          ? '当前任务尚无结果。'
                           : '可以新建分析或导入已有结果；没有条目不代表无影响。'}
                       </p>
                     </div>
@@ -1037,7 +1027,7 @@ function ChangeWorkspace({
           <p className="notice">
             {record.status !== 'COMPLETED'
               ? '当前任务未完成，以下仅显示已固定范围。'
-              : '以下是本次固定两侧证据；导入快照不代表已与真实仓库自动比对。'}
+              : '导入快照尚未与真实仓库比对。'}
           </p>
           {record.pairs.map((p, i) => (
             <section className="evidence" key={i}>
@@ -1060,9 +1050,7 @@ function ChangeWorkspace({
       )}
       {record && exporting && (
         <CaseDialog title="导出完整变更记录" busy={false} onClose={() => setExporting(false)}>
-          <p className="hint">
-            包含当前记录全部分页、证据和人工处理；不受当前筛选影响，原始报告不改写。
-          </p>
+          <p className="hint">导出当前记录的全部结果与人工处理，不受筛选限制。</p>
           <div className="row mt">
             <button className="primary" onClick={() => void exportRecord('markdown')}>
               Markdown
@@ -1126,9 +1114,6 @@ function ChangeDetail({
         </footer>
       }
     >
-      <p className="notice">
-        固定双侧报告；人工处理独立保存，不改写原始分析。回归采纳不代表执行通过。
-      </p>
       <div className="row change-detail-badges">
         <span className="badge blue">{changeTabs[tab]}</span>
         {item.cause && (
@@ -1160,7 +1145,7 @@ function ChangeDetail({
             <p>
               {item.caseRef} · {item.suggested} · {item.priority}
             </p>
-            <p className="hint">KEEP保留设计，仍可纳入回归；停用建议不修改测试结果。</p>
+            <p className="hint">保留设计的用例仍可纳入回归。</p>
           </div>
           <div className="evidence">
             <strong>前置条件与数据</strong>
@@ -1244,7 +1229,7 @@ function ChangeDetail({
               />
             </label>
           </div>
-          <p className="hint">采纳回归只确认建议范围，不代表测试通过；旧问题不自动关闭。</p>
+          <p className="hint">仅采纳回归范围，不执行测试。</p>
           {history.map((h, i) => (
             <p className="hint" key={i}>
               {h.time} · {h.status}：{h.note}

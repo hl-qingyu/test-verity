@@ -42,9 +42,7 @@ export function EvidenceCard({
       </p>
       <p>{evidence.observation}</p>
       {evidence.excerpt && <pre className="code">{evidence.excerpt}</pre>}
-      {segment?.image_ref && (
-        <p className="hint">图片／PDF证据来自本次固定资料附件；此处展示报告观察。</p>
-      )}
+      {segment?.image_ref && <p className="hint">本次固定附件的报告观察。</p>}
     </details>
   );
 }
@@ -215,9 +213,7 @@ export function CodeFindingDetail({
         ))}
         <section className="code-detail-section">
           <h3>调用链与证据</h3>
-          <p className="hint">
-            仅展示有代码依据的节点；连接含义与缺口单独说明，不代表运行过程已验证。
-          </p>
+
           {chains.map((chain) => (
             <div key={chain.key}>
               <ol className="code-evidence-chain">
@@ -257,7 +253,7 @@ export function CodeFindingDetail({
               ))}
             </div>
           ))}
-          {!chains.length && <p className="hint">本条没有独立调用链，直接查看固定证据。</p>}
+          {!chains.length && <p className="hint">暂无独立调用链，可查看固定证据。</p>}
           <details className="evidence">
             <summary>本条全部证据 · {finding.evidence_refs.length}项</summary>
             {refs(finding.evidence_refs)}
@@ -292,7 +288,7 @@ export function CodeFindingDetail({
                   </li>
                 ))}
               </ul>
-              <p className="hint">不会自动读取范围外文件。</p>
+              <p className="hint">范围外文件需另行选择。</p>
             </section>
           )}
         </section>
@@ -321,7 +317,7 @@ export function CodeFindingDetail({
                 />
               </label>
             </div>
-            <p className="hint">人工处理独立留痕，不修改原始报告，不代表代码已修复或测试通过。</p>
+
             {error && (
               <p className="form-error" role="alert">
                 {error}

@@ -6,6 +6,10 @@ export const aiErrors: Record<string, string> = {
   ai_cli_not_installed: '后端尚未安装受控 Codex CLI；可保存配置，暂不能使用。',
   ai_cli_unsupported_version: '后端 Codex CLI 版本不受支持；暂不能使用此方式。',
   ai_cli_unverified: '后端 Codex CLI 运行环境尚未就绪，请检查固定版本及安装状态。',
+  ai_cli_node_unavailable: 'CLI 文件读取需要后端安装 Node.js 24 或更新版本。',
+  ai_cli_filesystem_not_installed: '后端尚未安装标准文件读取服务，请联系管理员完成安装。',
+  ai_cli_reading_unavailable:
+    '本次资料的阅读文件准备或完整性核对失败；原件保留，请联系管理员核查。',
   ai_cli_attachment_unsupported: 'Codex CLI 当前支持文字和图片；PDF等附件请使用 API 方式。',
   ai_cli_invalid_input: 'Codex CLI 输入或图片附件格式不正确，本次未调用模型。',
   ai_cli_execution_failed:
@@ -14,6 +18,9 @@ export const aiErrors: Record<string, string> = {
   ai_cli_incomplete_response: 'Codex CLI 输出未完整结束，未自动重试。',
   ai_cli_tools_forbidden: 'Codex CLI 出现未授权工具事件，本次结果已拒绝。',
   ai_cli_output_too_large: 'Codex CLI 输出超过接收容量，未当成成功结果。',
+  ai_cli_result_incomplete:
+    'CLI 原执行进程已退出，未取得完整结果；已阻止重复调用，请查看原执行记录。',
+  ai_cli_saved_result_mismatch: '本地 CLI 结果与当前固定请求不一致，未应用，也未重新调用模型。',
   ai_cli_call_limit: 'CLI 连接测试已达到单次请求上限，已阻止追加请求；请核对服务兼容性。',
   ai_cli_probe_invalid_request: 'CLI 未生成受支持的固定文字测试请求，本次测试已停止。',
   ai_personal_required: '请先配置你自己的AI服务。',

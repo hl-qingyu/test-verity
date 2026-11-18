@@ -36,6 +36,7 @@ export type GenerationEvidence = {
   quoteWarning?: string;
 };
 export type GenerationSuggestion = {
+  nativeResultId?: string;
   functionRef?: string;
   key: string;
   kind: GenerationKind;
@@ -58,6 +59,7 @@ export function generationGroups(rows: GenerationSuggestion[]) {
   return groups;
 }
 export type GenerationQuestion = {
+  nativeResultId?: string;
   functionRef?: string;
   key: string;
   function: string;
@@ -90,6 +92,7 @@ export type GenerationDecision = {
   version: number;
 };
 export type GenerationCandidateIssue = {
+  nativeResultId?: string;
   key: string;
   issueId: string;
   batchId: number;
@@ -104,6 +107,8 @@ export type GenerationCandidateIssue = {
   canEdit: boolean;
 };
 export type GenerationBatch = {
+  nativeResultId?: string;
+  terminalAvailable?: boolean;
   startedAt?: string | null;
   progressAt?: string | null;
   diagnostics?: Record<string, string | number>;
@@ -126,6 +131,14 @@ export type GenerationFailure = {
   categoryMode?: 'KEEP' | 'SET' | 'CLEAR';
 };
 export type GenerationRecord = {
+  nativeRounds?: {
+    id: string;
+    batchId: number;
+    batchRef: string;
+    timestamp: string;
+    caseCount: number;
+    status: string;
+  }[];
   candidateIssues?: GenerationCandidateIssue[];
   timings?: { startedAt: string | null; finishedAt: string | null }[];
   riskReportIds?: number[];
@@ -181,6 +194,27 @@ export type GenerationRecord = {
   parentId?: string;
   decisionKey?: string;
 };
+
+export function generationRoundRecord(
+  record: GenerationRecord | null,
+  id: string,
+): GenerationRecord | null {
+  if (!record || !id) return record;
+  const rounds = record.nativeRounds || [],
+    round = rounds.find((r) => r.id === id),
+    refs = new Set(rounds.map((r) => r.batchRef));
+  const match = (value: { nativeResultId?: string }) =>
+    id === '__initial__' ? !value.nativeResultId : value.nativeResultId === id;
+  return {
+    ...record,
+    suggestions: record.suggestions.filter(match),
+    questions: record.questions.filter(match),
+    candidateIssues: record.candidateIssues?.filter(match),
+    rawReports: record.rawReports?.filter((r) =>
+      id === '__initial__' ? !refs.has(String(r.batch_ref)) : r.batch_ref === round?.batchRef,
+    ),
+  };
+}
 export type GenerationSummary = Pick<
   GenerationRecord,
   'id' | 'projectId' | 'title' | 'createdAt' | 'mode' | 'timings'

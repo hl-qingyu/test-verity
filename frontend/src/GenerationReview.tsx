@@ -334,7 +334,6 @@ export function GenerationReview({
               · {items.filter((i) => problem(i)).length}条需处理，暂不入库
             </span>
           )}
-          <p className="hint">点左侧用例查看内容，不想入库的取消勾选。</p>
         </div>
         <div>
           <FormSelect
@@ -624,7 +623,7 @@ export function GenerationApplicationResult({
       }
     >
       <p className="notice" role="status">
-        {status}。成功项会保留，不重复入库；可关闭后继续查看其他用例。
+        {status}。可关闭后继续查看其他用例。
       </p>
       <div className="code-report-summary">
         <strong>成功 {count('COMPLETED') - ignored}条</strong>
@@ -633,7 +632,7 @@ export function GenerationApplicationResult({
         <span>待处理 {count('PENDING') + count('RUNNING')}条</span>
       </div>
       {application.status === 'QUEUED' && (
-        <p className="hint">若长时间没有更新，请检查后台Worker是否运行。</p>
+        <p className="hint">长时间未更新时，请刷新或联系管理员。</p>
       )}
       {application.error && (
         <p className="form-error" role="alert">

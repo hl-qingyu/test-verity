@@ -77,7 +77,24 @@ function harness(mode = 'remote') {
     generationAction: async (project, route, body) => {
       actions.push({ route, body });
       const row = structuredClone(props.rows[0]);
-      if (route.endsWith('/handling')) {
+      if (route.endsWith('/start')) {
+        row.status = 'QUEUED';
+        row.batches[0].status = 'QUEUED';
+        row.batches[0].terminalAvailable = mode === 'start-cli';
+      } else if (route.includes('/terminal/results/')) {
+        row.status = 'COMPLETED';
+        row.batches[0].status = 'FAILED';
+        row.nativeRounds = [
+          {
+            id: 'a'.repeat(64),
+            batchId: 10,
+            batchRef: 'cli-a',
+            timestamp: '2026-11-17T06:12:00Z',
+            caseCount: 0,
+            status: 'COMPLETED',
+          },
+        ];
+      } else if (route.endsWith('/handling')) {
         row.handling.C1 = [
           { draft: body.draft, revision: 1, status: '待审阅', evidenceChecked: true },
         ];
@@ -162,12 +179,33 @@ function harness(mode = 'remote') {
     cancelled: false,
   });
   const props = { project: { id: 7 }, user: { id: 3 }, onSessionEnd() {} },
-    remote = ['export', 'single'].includes(mode) ? GenerationWorkspace : CaseGeneration(props).type;
+    remote = ['export', 'single', 'start-cli', 'start-api'].includes(mode)
+      ? GenerationWorkspace
+      : CaseGeneration(props).type;
   hooks.length = 0;
   cursor = 0;
   if (mode === 'target')
     props.overviewTarget = { id: 3, recordType: 'run', group: 'suggestions', state: 'PENDING' };
   if (mode === 'export') Object.assign(props, { rows: [full('2')], summaries, onChange() {} });
+  if (mode === 'start-cli' || mode === 'start-api') {
+    Object.assign(props, {
+      rows: [
+        {
+          ...full('2'),
+          status: 'PREPARED',
+          ownerId: 3,
+          outcome: '',
+          rawReports: [],
+          reportText: '',
+          batches: [{ id: 9, key: 'B1', status: 'PREPARED', inputBytes: 100 }],
+          aiPreview: { version: 1, call_mode: mode === 'start-cli' ? 'CODEX_EXEC' : 'API' },
+        },
+      ],
+      onChange(rows) {
+        props.rows = rows;
+      },
+    });
+  }
   if (mode === 'single') {
     const design = load(path.resolve(__dirname, '../src/caseApi.ts')).blankDesign();
     Object.assign(design, { title: '本条用例', steps: '提交', expected: '成功' });
@@ -267,6 +305,40 @@ function harness(mode = 'remote') {
     },
   };
 }
+
+test('native generation opens the existing history area and retains its cached terminal when returning to the report', async () => {
+  for (const mode of ['start-cli', 'start-api']) {
+    const h = harness(mode);
+    try {
+      h.render();
+      assert.equal(h.button('CLI 工作区（试用）'), undefined);
+      h.button('继续并开始本人AI生成').props.onClick();
+      await h.settle();
+      assert.equal(h.actions.length, 1);
+      assert.equal(h.actions[0].route, '/2/start');
+      const cached = h.component('CachedCliWorkspace');
+      if (mode === 'start-cli') {
+        assert.equal(cached.props.runId, '2');
+        assert.equal(cached.props.open, true);
+        assert.equal(
+          h.component('GenerationChat'),
+          undefined,
+          'native history must not create another API chat',
+        );
+        h.button('返回生成报告').props.onClick();
+        await h.settle();
+        assert.equal(h.component('CachedCliWorkspace').key, cached.key);
+        assert.equal(h.component('CachedCliWorkspace').props.open, false);
+        h.button('历史对话').props.onClick();
+        await h.settle();
+        assert.equal(h.component('CachedCliWorkspace').props.open, true);
+        assert.equal(h.actions.length, 1, 'navigation must not create or cancel model tasks');
+      } else assert.equal(cached, undefined);
+    } finally {
+      h.close();
+    }
+  }
+});
 
 test('single confirmation stays above the same detail instance through cancel and direct application', async () => {
   const h = harness('single');
@@ -454,5 +526,31 @@ test('combined export reads every selected full record including unopened histor
     } finally {
       h.close();
     }
+  }
+});
+
+test('saving a CLI round keeps the original conversation and reviews that round on request', async () => {
+  const h = harness('start-cli');
+  try {
+    h.render();
+    h.button('继续并开始本人AI生成').props.onClick();
+    await h.settle();
+    const native = h.component('CachedCliWorkspace');
+    assert.equal(native.props.open, true);
+    assert.equal(await native.props.onSaveResult('a'.repeat(64), 'save-request'), true);
+    await h.settle();
+    assert.equal(h.actions[1].route, '/2/terminal/results/' + 'a'.repeat(64) + '/save');
+    assert.deepEqual(h.actions[1].body, { request_id: 'save-request', confirmed: true });
+    assert.equal(h.component('CachedCliWorkspace').key, native.key);
+    assert.equal(h.component('CachedCliWorkspace').props.runId, '2');
+    assert.equal(h.component('CachedCliWorkspace').props.open, true);
+    h.component('CachedCliWorkspace').props.onReviewResult('a'.repeat(64));
+    await h.settle();
+    assert.equal(h.component('CachedCliWorkspace').props.open, false);
+    assert.ok(h.button('历史对话'));
+    assert.equal(h.actions.filter((a) => a.route.endsWith('/start')).length, 1);
+    assert.equal(h.actions.filter((a) => a.route.endsWith('/cancel')).length, 0);
+  } finally {
+    h.close();
   }
 });

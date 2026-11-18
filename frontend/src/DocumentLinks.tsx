@@ -45,11 +45,9 @@ export function DocumentLinks({
   }, [base, version.id, revision, onSessionEnd]);
   return (
     <>
-      <p className="hint">
-        点击链接关联项目附件；已关联链接可打开固定版本。不会访问原地址或加载文内图片。
-      </p>
+      <p className="hint">文内链接可关联项目附件，不访问原网站。</p>
       {links && !links.editable && (
-        <p className="doc-note">历史版本的关联只读，修改请在当前文档版本中进行。</p>
+        <p className="doc-note">历史版本的关联只读，请在当前版本修改。</p>
       )}
       {error && (
         <p role="alert" className="form-error">
@@ -343,9 +341,7 @@ function LinkPicker({
             ))}
           </Select>
         </label>
-        <p className="hint">
-          同名仅用于推荐，需确认后关联。目标上传新版仍保留所选版本；历史来源版本只读。
-        </p>
+        <p className="hint">请核对附件及版本后关联。</p>
         {links && !links.editable && (
           <p role="alert" className="form-error">
             来源已成为历史版本，不能修改关联。

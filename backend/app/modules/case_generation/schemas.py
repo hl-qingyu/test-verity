@@ -148,10 +148,42 @@ class Import(Request):
 
 
 class Chat(Request):
+    cli_only: bool = False
     request_id: UUID
     function_key: str = Field(default="", max_length=200)
     finding_key: str = Field(default="", max_length=200)
     question: str = Field(min_length=1, max_length=10000)
+
+
+class TerminalStart(Request):
+    request_id: UUID
+    resume: bool = True
+    rows: int = Field(default=30, ge=8, le=120)
+    cols: int = Field(default=110, ge=20, le=300)
+
+
+class TerminalResultSave(Request):
+    request_id: UUID
+    confirmed: Literal[True]
+
+
+class TerminalInput(Request):
+    type: Literal["input", "resize"]
+    data: str | None = Field(default=None, max_length=8192)
+    rows: int | None = Field(default=None, ge=8, le=120)
+    cols: int | None = Field(default=None, ge=20, le=300)
+
+    @model_validator(mode="after")
+    def correct_command(self):
+        if self.type == "input" and (
+            not self.data or self.rows is not None or self.cols is not None
+        ):
+            raise ValueError("invalid terminal input")
+        if self.type == "resize" and (
+            self.rows is None or self.cols is None or self.data is not None
+        ):
+            raise ValueError("invalid terminal dimensions")
+        return self
 
 
 class ChatDraft(Request):

@@ -1708,16 +1708,22 @@ class CaseGenerationBatch(Base):
     __tablename__ = "case_generation_batch"
     __table_args__ = (
         UniqueConstraint("run_id", "batch_ref", name="uq_case_generation_batch_request"),
-        {"comment": "用例生成固定批次及原始报告；失败只人工重试"},
+        {"comment": "用例生成固定批次及同对话原生候选轮次；保留各次报告和审阅"},
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, comment="主键")
     run_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("case_generation_run.id"), index=True, comment="所属生成记录ID"
     )
-    batch_ref: Mapped[str] = mapped_column(String(200), comment="固定计划批次标识；重试沿用")
-    request_id: Mapped[str] = mapped_column(String(36), comment="实际本次模型调用请求UUID")
+    batch_ref: Mapped[str] = mapped_column(
+        String(200), comment="固定计划或原生候选轮次标识；同生成记录内唯一"
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(36), comment="AI调用或原生候选轮次保存请求UUID；按来源幂等"
+    )
     actor_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("user_account.id"), comment="本次调用人ID；重试使用重试者AI"
+        BigInteger,
+        ForeignKey("user_account.id"),
+        comment="本次AI调用或候选保存人ID；AI重试用本人配置",
     )
     status: Mapped[str] = mapped_column(
         String(16),
@@ -1725,10 +1731,14 @@ class CaseGenerationBatch(Base):
         comment="PREPARED未发起、QUEUED排队、RUNNING处理中、COMPLETED完成、FAILED失败、CANCELLED取消",
     )
     input_snapshot: Mapped[dict] = mapped_column(
-        JSONB, server_default="{}", comment="本批固定输入；重试仅更换请求身份"
+        JSONB,
+        server_default="{}",
+        comment="本批或本轮固定校验输入；候选轮次保留业务原文并独立分配请求和建议命名空间",
     )
     report: Mapped[dict] = mapped_column(
-        JSONB, server_default="{}", comment="严格校验后的原始本批报告；未成功为空"
+        JSONB,
+        server_default="{}",
+        comment="本批或本轮通过结构和引用校验的候选报告；根结构不可用时为空，局部问题另存待处理",
     )
     ai_config: Mapped[dict] = mapped_column(
         JSONB,
@@ -1738,7 +1748,7 @@ class CaseGenerationBatch(Base):
     attempts: Mapped[list] = mapped_column(
         JSONB,
         server_default="[]",
-        comment="每次调用的候选标识、状态、开始/进度时间及安全诊断；人工重试保留历史，不含密钥或上游原文",
+        comment="AI调用或原生候选保存的来源、状态、时间、安全诊断与审计；历史保留，不含密钥或上游原文",
     )
     error_code: Mapped[str] = mapped_column(
         String(100), server_default="", comment="安全失败码；无原始上游错误"

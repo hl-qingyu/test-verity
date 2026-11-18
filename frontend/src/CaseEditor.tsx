@@ -141,9 +141,7 @@ export function CaseEditor({
           {detail && (
             <section className="evidence">
               <strong>生命周期：{detail.lifecycle === 'RETIRED' ? '停用' : '活动'}</strong>
-              <p className="hint">
-                启停保留编号、设计和测试历史；停用后不能新增测试执行记录，普通设计编辑不自动恢复。
-              </p>
+              <p className="hint">停用后不能新增测试记录，编辑设计不会自动恢复。</p>
               <label className="form-field">
                 启停理由
                 <input
@@ -248,9 +246,7 @@ export function CaseEditor({
                 用例编号
                 <input readOnly value={detail?.number ?? metadata.next_number} />
               </label>
-              <p className="hint">
-                导入用例保留原文件编号；缺少编号或手工新建时由平台分配。分类不占默认14列。
-              </p>
+              <p className="hint">新建用例自动分配编号。</p>
               {CASE_COLUMNS.filter(([key]) => key !== 'serial' && key !== 'number').map(
                 ([key, name]) => {
                   if (key === 'serial' || key === 'number') return null;
@@ -310,7 +306,7 @@ export function CaseEditor({
                 },
               )}
             </div>
-            <p className="hint">字段可留空；多个步骤对应场景级预期，不要求行数相同。</p>
+            <p className="hint">步骤与预期不要求逐行对应。</p>
             {changed && (
               <p className="doc-note">
                 设计内容已修改，保存将生成新版，并重置为“未测、待审核”，测试人员留空；旧版记录保留。
@@ -336,7 +332,7 @@ export function CaseEditor({
                     <option>已审核</option>
                   </Select>
                 </label>
-                <p className="hint">需求验收点与Skill关联待接入；审核不等于测试通过。</p>
+                <p className="hint">需求验收点与Skill关联待接入。</p>
                 {(['data_requirements', 'cleanup'] as const).map((f, i) => (
                   <label className="form-field" key={f}>
                     {i ? '清理要求' : '测试数据要求'}

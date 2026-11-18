@@ -183,9 +183,7 @@ export function ChangeImport({
       }
     >
       <Form id={formId} onSubmit={(e) => void submit(e)}>
-        <p className="notice">
-          双JSON及原件绑定通过服务端校验后保存；代码快照由用户提供，引用有效不表示已与真实仓库自动比对。
-        </p>
+        <p className="notice">导入快照尚未与真实仓库比对。</p>
         <div className="form-grid">
           {(['input', 'report'] as const).map((kind) => (
             <section className="evidence" key={kind}>

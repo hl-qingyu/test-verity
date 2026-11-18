@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 from app.core.errors import AppError
 from app.db.models import SkillChatTurn, UserAccount
 from app.integrations import ai_client as responses
+from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.skills import files, service
 
@@ -144,6 +145,7 @@ def execute(turn_id, session_factory):
                 row.status, row.updated_at = "COMPLETED", datetime.now(UTC)
                 db.commit()
     except Exception as exc:
+        propagate_database_outage(exc)
         code = exc.detail if isinstance(exc, AppError) else "skill_chat_internal_error"
         with session_factory() as db:
             db.execute(

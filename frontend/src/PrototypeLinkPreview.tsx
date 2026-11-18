@@ -57,14 +57,10 @@ export function PrototypeLinkPreview({ name, url }: { name: string; url: string 
         ) : (
           <div className="empty">
             <h3>原型链接预览</h3>
-            <p>点击加载后访问原网站，展示其页面树、画面与批注。</p>
+            <p>加载将访问原网站。</p>
           </div>
         )}
-        <p className="hint mt">
-          实时网页 ·
-          未保存页面快照。若空白、被限制或需要登录，请使用新窗口打开；平台不会自动抓取或发送页面给
-          AI。
-        </p>
+        <p className="hint mt">实时网页，未保存快照；无法显示时请在新窗口打开。</p>
       </div>
       {expanded && (
         <CaseDialog
@@ -79,7 +75,7 @@ export function PrototypeLinkPreview({ name, url }: { name: string; url: string 
             {external}
             <button onClick={() => setExpanded(false)}>关闭</button>
           </div>
-          <p className="hint">未保存页面快照；外站可能限制内嵌显示。</p>
+          <p className="hint">外站可能限制内嵌显示。</p>
         </CaseDialog>
       )}
     </>

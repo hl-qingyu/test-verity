@@ -19,8 +19,15 @@ class ChatWorkerTests(unittest.TestCase):
         self.session = self.patches.enter_context(patch.object(worker, "Session"))
         self.session.return_value.__enter__.return_value.scalar.return_value = None
         self.engine = self.patches.enter_context(patch.object(worker, "get_engine")).return_value
+        self.patches.enter_context(
+            patch.object(worker, "get_scheduler_engine", return_value=self.engine)
+        )
+        self.patches.enter_context(
+            patch.object(worker, "SchedulerConnection", side_effect=lambda engine: engine.connect())
+        )
         self.sleep = self.patches.enter_context(patch.object(worker.time, "sleep"))
         self.patches.enter_context(patch.object(worker.reservations, "recover_exited"))
+        self.patches.enter_context(patch.object(worker, "_restore_cli_results"))
         for module in (
             worker.chat_execution,
             worker.risk_analysis_execution,
@@ -43,8 +50,8 @@ class ChatWorkerTests(unittest.TestCase):
         context, conn = self.connection(False)
         self.engine.connect.return_value = context
         with patch.object(worker, "_schedule") as schedule:
-            with self.assertRaisesRegex(SystemExit, "Worker已运行"):
-                worker.main()
+            self.sleep.side_effect = KeyboardInterrupt
+            worker.main()
             schedule.assert_not_called()
         self.session.assert_not_called()
         conn.invalidate.assert_called_once()
@@ -69,18 +76,26 @@ class ChatWorkerTests(unittest.TestCase):
         for conn in connections:
             conn.invalidate.assert_called_once()
 
-    def test_lost_lock_stops_running_call_before_returning(self):
+    def test_lost_lock_reconnects_without_stopping_running_call(self):
         lock = MagicMock()
         lock.scalar.side_effect = [True, False]
+        replacement = MagicMock()
+        replacement.scalar.side_effect = [True, True, KeyboardInterrupt]
+        lock.engine.connect.return_value = replacement
         entered, ended = Event(), Event()
+        stop = Event()
+        original_wait = stop.wait
 
-        def execute(key, factory):
-            from app.integrations.call_control import CallControl
+        def wait(seconds):
+            if seconds == 5:
+                self.assertFalse(stop.is_set(), "database outage must not set CLI stop")
+                return False
+            return original_wait(seconds)
 
+        def execute(model, execute, key, reservation, factory, stop, logger):
             entered.set()
-            control = CallControl(None)
             try:
-                control.stop.wait(3)
+                stop.wait(3)
             finally:
                 ended.set()
 
@@ -90,40 +105,40 @@ class ChatWorkerTests(unittest.TestCase):
         with (
             patch.object(worker, "Settings", return_value=MagicMock(ai_max_concurrent=1)),
             patch.object(worker.scheduling, "claim", side_effect=claim),
-            patch.object(worker.skills_execution, "execute", side_effect=execute),
-            patch.object(worker.reservations, "release") as release,
+            patch.object(worker, "_run_task", side_effect=execute),
+            patch.object(worker, "Event", return_value=stop),
+            patch.object(stop, "wait", side_effect=wait),
         ):
             self.sleep.side_effect = lambda _: entered.wait(2)
-            with self.assertRaises(OperationalError):
+            with self.assertRaises(KeyboardInterrupt):
                 worker._schedule(lock, self.session, logging.getLogger("test"))
             self.assertTrue(ended.is_set())
-            release.assert_called_once()
-            self.assertTrue(release.call_args.kwargs["interrupted"])
+            replacement.scalar.assert_any_call(unittest.mock.ANY, {"key": worker.SCHEDULER_LOCK_ID})
+            self.assertEqual(replacement.scalar.call_count, 3)
 
     def test_unknown_live_call_blocks_recovery_and_new_work(self):
         context, conn = self.connection()
         self.engine.connect.return_value = context
         self.session.return_value.__enter__.return_value.scalar.return_value = "unknown-call"
         with patch.object(worker, "_schedule") as schedule:
-            with self.assertRaisesRegex(SystemExit, "尚未核验结束"):
-                worker.main()
+            self.sleep.side_effect = KeyboardInterrupt
+            worker.main()
+            schedule.assert_not_called()
         worker.skills_execution.recover.assert_not_called()
         schedule.assert_not_called()
         conn.invalidate.assert_called_once()
 
     def test_two_slots_run_together_without_claiming_a_third(self):
         lock = MagicMock()
-        lock.scalar.side_effect = [True, True, False]
+        lock.scalar.side_effect = [True, True, KeyboardInterrupt]
         entered = [Event(), Event()]
         ended = [Event(), Event()]
         claims = []
 
-        def execute(key, factory):
-            from app.integrations.call_control import CallControl
-
+        def execute(model, execute, key, reservation, factory, stop, logger):
             entered[key - 1].set()
             try:
-                CallControl(None).stop.wait(3)
+                stop.wait(3)
             finally:
                 ended[key - 1].set()
 
@@ -138,13 +153,10 @@ class ChatWorkerTests(unittest.TestCase):
         with (
             patch.object(worker, "Settings", return_value=MagicMock(ai_max_concurrent=2)),
             patch.object(worker.scheduling, "claim", side_effect=claim),
-            patch.object(worker.skills_execution, "execute", side_effect=execute),
-            patch.object(worker.case_analysis_execution, "execute", side_effect=execute),
-            patch.object(worker.reservations, "release") as release,
+            patch.object(worker, "_run_task", side_effect=execute),
         ):
             self.sleep.side_effect = cycle
-            with self.assertRaises(OperationalError):
+            with self.assertRaises(KeyboardInterrupt):
                 worker._schedule(lock, self.session, logging.getLogger("test"))
             self.assertEqual(claims, [1, 2])
             self.assertTrue(all(event.is_set() for event in ended))
-            self.assertEqual(release.call_count, 2)

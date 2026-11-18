@@ -76,15 +76,11 @@ function Pending({ name }: { name: string }) {
       <div className="page-head">
         <div>
           <h1>{name}</h1>
-          <p>业务功能待确认实现</p>
         </div>
       </div>
       <section className="panel panel-pad">
         <span className="badge">尚未实现</span>
-        <h2 className="mt">先确认流程，再落地功能</h2>
-        <p className="muted smalltext mt">
-          保留原型中的模块位置。此模块的具体页面与业务能力，在确认实现范围后按原型落地。
-        </p>
+        <h2 className="mt">功能待接入</h2>
       </section>
     </>
   );
@@ -492,10 +488,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: (user: User | nul
           )}
           {help && (
             <div role="status" className="panel panel-pad mb">
-              <p className="smalltext">
-                界面以已确认原型为准，业务功能逐项确认后实现。Git
-                只允许读取和拉取，禁止推送、上传及其他远端写入。
-              </p>
+              <p className="smalltext">Git 来源仅支持读取。</p>
             </div>
           )}
           <Routes>

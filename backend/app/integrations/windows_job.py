@@ -69,3 +69,16 @@ class WindowsJob:
         if self.handle:
             self.kernel.CloseHandle(self.handle)
             self.handle = None
+
+    def assign_pid(self, pid):
+        """Attach a ConPTY-owned child before accepting any interactive input."""
+        self.kernel.OpenProcess.restype = wintypes.HANDLE
+        self.kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        process = self.kernel.OpenProcess(0x0101, False, pid)
+        if not process:
+            raise OSError("job_process_open_failed")
+        try:
+            if not self.kernel.AssignProcessToJobObject(self.handle, process):
+                raise OSError("job_assignment_failed")
+        finally:
+            self.kernel.CloseHandle(process)

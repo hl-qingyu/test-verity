@@ -122,7 +122,7 @@ export function ChangeContext({
         <button type="button" className="small mt" disabled={busy} onClick={() => void loadCases()}>
           读取当前用例范围
         </button>
-        <p className="hint">只带入勾选用例的内部ID与实际设计版本；建议不修改用例或测试记录。</p>
+
         <div className="code-file-tree mt">
           {caseRows.map((c) => (
             <label className="check-label" key={c.id}>
@@ -231,7 +231,7 @@ export function ChangeContext({
             </button>
           </p>
         ))}
-        <p className="hint">复核仅记录本次判断，不自动关闭历史问题；未带旧正文时不证明问题修复。</p>
+        <p className="hint">历史问题需另行关闭。</p>
       </section>
       {error && (
         <p className="form-error" role="alert">

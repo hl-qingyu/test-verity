@@ -15,7 +15,7 @@ from app.integrations import codex_exec, codex_probe
 
 
 class FakeProvider:
-    def __init__(self, mode="ok", text="OK"):
+    def __init__(self, mode="ok", text="OK", tool_program=None):
         self.requests = []
         self.release = Event()
         owner = self
@@ -27,6 +27,8 @@ class FakeProvider:
             def do_POST(self):
                 payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 owner.requests.append((self.path, self.headers.get("Authorization"), payload))
+                if mode == "gated":
+                    owner.release.wait(15)
                 if mode == "silent":
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
@@ -56,7 +58,19 @@ class FakeProvider:
                     "content": [{"type": "output_text", "text": text}],
                 }
                 output = [message]
-                if mode == "tool" or (
+                if tool_program and len(owner.requests) == 1:
+                    output = [
+                        {
+                            "id": "call_reading",
+                            "type": "custom_tool_call",
+                            "call_id": "call_reading",
+                            "name": "exec",
+                            "namespace": "functions",
+                            "input": tool_program,
+                            "status": "completed",
+                        }
+                    ]
+                elif mode == "tool" or (
                     mode in ("native_round", "native_file") and len(owner.requests) == 1
                 ):
                     output = [
@@ -76,9 +90,15 @@ class FakeProvider:
                             "call_id": "call_fake",
                             "name": "exec",
                             "namespace": "functions",
-                            "input": "const r=await tools.mcp__verity_input__read_input("
-                            "{path:'input.json',offset_bytes:0,max_bytes:32768});"
-                            "text({tools:ALL_TOOLS.map(x=>x.name),data:r})",
+                            "input": "const r=await tools.mcp__filesystem__read_text_file("
+                            "{path:'input.json'});"
+                            "let data=r.structuredContent?.content;"
+                            "if(typeof data!=='string'){"
+                            "let p=r.content[0].text;"
+                            "try{const o=JSON.parse(p);data=o.structuredContent?.content"
+                            "??o.content?.[0]?.text??p;}catch{data=p;}}"
+                            "text({tools:ALL_TOOLS.map(x=>x.name),characters:data.length,"
+                            "head:data.slice(0,150),tail:data.slice(-150)})",
                             "status": "completed",
                         }
                 response = {

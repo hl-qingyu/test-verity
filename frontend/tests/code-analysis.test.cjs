@@ -332,7 +332,7 @@ test('new/import dialogs and file tree retain prototype controls and ordering', 
   const imported = renderToStaticMarkup(React.createElement(ImportCodeAnalysis, props));
   assert.match(imported, /input.json/);
   assert.match(imported, /report.json/);
-  assert.match(imported, /导入不调用AI/);
+  assert.match(imported, /每份最大16MB/);
   assert.equal((imported.match(/选择文件/g) || []).length, 2);
   assert.match(fs.readFileSync(source('CodeAnalysis.tsx'), 'utf8'), /AI候选原文/);
   assert.match(fs.readFileSync(source('CodeAnalysis.tsx'), 'utf8'), /ai-candidate\.txt/);

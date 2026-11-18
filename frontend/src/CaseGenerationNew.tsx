@@ -380,14 +380,10 @@ export function CaseGenerationNew({
       <Form id={formId} onSubmit={submit} aria-busy={inFlight}>
         {inFlight && (
           <p className="notice" role="status">
-            <span className="generation-spinner" aria-hidden="true" />
-            正在读取所选资料并保存固定输入，请稍候。此时尚未调用AI，准备完成后再确认开始生成。
+            <span className="generation-spinner" aria-hidden="true" /> 正在准备资料，尚未调用AI…
           </p>
         )}
         <fieldset disabled={inFlight} className="generation-prepare-fields">
-          <p className="notice">
-            准备实际资料与用例快照，查看输入估算后开始本人AI生成；维护无需历史生成记录。
-          </p>
           <label className="form-field">
             名称
             <input
@@ -431,7 +427,7 @@ export function CaseGenerationNew({
                   ? '正在读取所选历史基准…'
                   : base
                     ? '已选固定历史范围，可配对相同资料旧版本。'
-                    : '保留原编号及当前人工内容；没有旧需求时不推断历史变化，不因未提及而停用。'}
+                    : '保留原编号与当前人工内容。'}
               </div>
             </>
           )}
@@ -741,9 +737,7 @@ export function CaseGenerationNew({
               </div>
             </section>
           )}
-          <p className="hint">
-            将冻结{selectedCases.length}条完整设计及版本，不以显示编号定位；开始生成后才发送本人AI。
-          </p>
+          <p className="hint">已选{selectedCases.length}条用例，包含完整设计与版本。</p>
           <label className="check-label">
             <input
               type="checkbox"
@@ -778,9 +772,6 @@ export function CaseGenerationNew({
             补充关注点
             <textarea maxLength={4000} value={focus} onChange={(e) => setFocus(e.target.value)} />
           </label>
-          <p className="hint">
-            完整所选资料一次交给本人AI。准备后显示文本输入估算，资料较大时可继续生成或缩小范围；不会自动拆分或重试。
-          </p>
         </fieldset>
         {(error || serverError) && (
           <p className="form-error" role="alert">

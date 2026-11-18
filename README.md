@@ -57,7 +57,7 @@ AI和GitHub配置归个人所有，分析和对话使用操作者本人配置。
 | 组件 | 要求 |
 | --- | --- |
 | Python | 3.12–3.14，依赖固定在 `backend/pyproject.toml` |
-| Node.js | 建议22或24，按 `frontend/package-lock.json` 安装依赖 |
+| Node.js | 前端建议22或24；CLI标准文件服务需要24以上，按各package-lock.json安装依赖 |
 | PostgreSQL | 推荐17，根目录提供可选数据库容器配置 |
 | 浏览器 | 支持Web Crypto；本地目录功能还需支持目录选择并授予只读权限 |
 | Codex命令行 | 可选，在后端Windows环境运行，当前固定版本0.166.0 |
@@ -112,6 +112,7 @@ backend/.venv/Scripts/python.exe -m pip install -e "./backend[dev]"
 Set-Location frontend
 npm ci
 Set-Location ..
+npm ci --prefix backend/mcp --ignore-scripts
 ```
 
 ### 2. 配置后端和数据库
@@ -135,6 +136,7 @@ if (-not (Test-Path backend/.env)) {
 | `AI_MAX_PER_CREDENTIAL` | 同一服务密钥同时调用数，默认1，与连接测试共享预算 |
 | `AI_CLI_EXECUTABLE` | 可选，固定版本Codex程序的绝对路径，须为Windows可执行文件 |
 | `AI_CLI_WORK_PATH` | 可选，Codex任务私有工作目录 |
+| `AI_CLI_NODE_EXECUTABLE` | 可选，后端Node.js 24以上可执行文件路径；默认从PATH查找node |
 
 新环境生成主密钥后，手动填入配置。已有环境不要重新生成替换：
 

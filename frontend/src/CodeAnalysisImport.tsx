@@ -131,10 +131,7 @@ export function ImportCodeAnalysis({
       className="code-analysis-dialog requirement-ui"
     >
       <Form onSubmit={(event) => void submit(event)}>
-        <p className="doc-note">
-          同时选择Skill
-          v2的input.json与report.json，每份最大16MB。校验目标、来源、行号、原文和引用后整份保存；导入不调用AI。
-        </p>
+        <p className="doc-note">选择 v2 的 input.json 与 report.json，每份最大16MB。</p>
         <div className="risk-import-files">
           {(['input', 'report'] as const).map((kind) => (
             <section className="evidence" key={kind}>
@@ -176,9 +173,7 @@ export function ImportCodeAnalysis({
                 <p className="mono hint">{source.snapshot_ref}</p>
               </div>
             ))}
-            <p className="hint">
-              这些是用户导入的代码快照；结构及引用校验不代表系统已与真实仓库自动比对。代码内容和报告将保存在当前项目。
-            </p>
+            <p className="hint">导入快照将保存在本项目，尚未与真实仓库比对。</p>
           </section>
         )}
         {report && (
@@ -195,9 +190,7 @@ export function ImportCodeAnalysis({
         {input && input.parsed.materials.length > 0 && (
           <section>
             <h3>关联系统已有资料</h3>
-            <p className="hint">
-              参考需求分析导入方式关联固定原件，不重复上传；关联不等于文字已自动与原件全文比对。
-            </p>
+            <p className="hint">关联项目中已有原件，无需重复上传。</p>
             {input.parsed.materials.map((material) => {
               const binding = bindings.find((b) => b.source_id === material.source_id),
                 option = options.materials.find((m) => m.id === binding?.document_id);

@@ -326,7 +326,7 @@ export function PrototypeEditor({
                   placeholder="https://…"
                 />
               </label>
-              <p className="hint mt">保存后可加载网页预览；实时页面不等于已保存快照。</p>
+              <p className="hint mt">网页预览为实时内容，未保存快照。</p>
             </fieldset>
           )}
           {kind === 'GITHUB' && (
@@ -402,7 +402,6 @@ export function PrototypeEditor({
               <fieldset className="prototype-form-section">
                 <legend>文件清单</legend>
                 <div className="prototype-section-caption">
-                  <p className="hint">读取后默认全选，可取消不需要的文件。</p>
                   <button
                     type="button"
                     className="small"
@@ -462,9 +461,7 @@ export function PrototypeEditor({
                         </label>
                       ))}
                     </div>
-                    <p className="hint prototype-section-note">
-                      保存前会再次核实提交及文件；分支更新时需重新读取。
-                    </p>
+                    <p className="hint prototype-section-note">分支更新后请重新读取。</p>
                   </>
                 ) : (
                   <div className="prototype-files-empty">尚未读取文件清单</div>
@@ -475,9 +472,7 @@ export function PrototypeEditor({
           {directory && (
             <fieldset className="prototype-form-section">
               <legend>{source ? '上传完整目录新版本' : '本地目录'}</legend>
-              <p className="hint">
-                上传所选文件到平台，保留相对目录结构并在项目内共享。新版不覆盖旧版本和历史分析依据。
-              </p>
+              <p className="hint">所选文件将上传到项目资料库，保留目录结构。</p>
               <FilePicker
                 accept=""
                 multiple
@@ -575,12 +570,12 @@ export function PrototypeEditor({
           )}
           <p className="hint prototype-section-note">
             {directory
-              ? '仅保存勾选文件，上传不自动调用 AI。分析时可选择固定版本和其中的文件。'
+              ? '仅上传勾选文件。'
               : kind === 'FILE'
                 ? html
-                  ? '原件完整保存，提供源码预览与下载；不执行脚本、不读取外部依赖。上传不自动调用 AI。'
+                  ? '源码预览不执行脚本、不读取外部依赖。'
                   : '原件完整保存，新版本不覆盖历史文件。'
-                : '保存实时来源配置，不手动生成资料版本；链接预览不是页面快照。'}
+                : '链接预览为实时内容，未保存页面快照。'}
           </p>
           {error && (
             <p className="form-error" role="alert">

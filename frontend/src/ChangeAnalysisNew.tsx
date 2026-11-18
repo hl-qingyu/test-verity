@@ -295,15 +295,11 @@ function CodeComparison({
                 新：{fixed.after}
               </p>
               <CodeFileTree paths={files} selected={selected} onChange={choose} disabled={busy} />
-              <p className="hint">
-                仅选择文件范围，尚未计算代码差异或读取正文用于分析。未变文件可作为关联上下文补选。
-              </p>
+              <p className="hint">请选择文件范围，未变文件可补选为上下文。</p>
             </>
           )}
           {source === 'LOCAL' && (
-            <p className="hint">
-              仅使用当前账号本浏览器已有快照。不上传源码，不新建读取历史；缺基准时请先到项目设置读取。
-            </p>
+            <p className="hint">使用本浏览器已有快照；缺少基准请先到项目设置读取。</p>
           )}
         </>
       )}
@@ -560,9 +556,7 @@ export function ChangeAnalysisNew({
       }
     >
       <Form id={formId} onSubmit={(e) => void submit(e)}>
-        <p className="notice">
-          使用你的个人AI配置在后台分析；固定选定双侧内容和补充依据，离开页面后继续。结果在当前项目共享。
-        </p>
+        <p className="notice">所选资料将发送至你的AI服务。</p>
         <label className="form-field">
           分析名称
           <input
@@ -644,9 +638,7 @@ export function ChangeAnalysisNew({
                 添加补充文件配对
               </button>
             </div>
-            <p className="hint mt">
-              勾选资料后，在同一项选择旧基准和新目标；默认上一版对最新版。只有一个版本时，旧基准留空，不伪造历史版本。
-            </p>
+            <p className="hint mt">选择旧基准与新目标；无旧版时留空。</p>
             <div className="change-version-list mt">
               {materials
                 .filter((m) => m.purpose === 'REQUIREMENT')
@@ -740,9 +732,7 @@ export function ChangeAnalysisNew({
                       移除配对
                     </button>
                   </div>
-                  <p className="hint">
-                    旧基准文件＋新版补充文件，分别固定版本；补充未提及的旧规则继续适用。
-                  </p>
+                  <p className="hint">新版补充未提及的旧规则继续适用。</p>
                   <div className="form-grid mt">
                     {(['before', 'after'] as const).map((side) => (
                       <div className="stack" key={side}>
@@ -814,9 +804,7 @@ export function ChangeAnalysisNew({
             {!materials.length && (
               <p className="hint">暂无已有文件版本，请先登记需求或原型资料。</p>
             )}
-            <p className="hint mt">
-              需求按已有固定文件版本对比；GitHub和链接原型请选择“原型变更”。
-            </p>
+            <p className="hint mt">GitHub和链接原型请选“原型变更”。</p>
           </section>
         ) : mode === 'PROTOTYPE_CHANGE' ? (
           <ChangePrototypeSources
@@ -993,10 +981,10 @@ export function ChangeAnalysisNew({
         <div className="evidence" role="status">
           {problem || '范围选择条件满足，开始后固定正文并进行后台分析。'}
           {targets.includes('代码实现跟进') && (
-            <p className="hint">只核对指定当前实现；缺实现依据时该目标标明不足，其他目标继续。</p>
+            <p className="hint">缺少实现依据的目标将标记为待核对。</p>
           )}
           {targets.includes('用例维护与回归建议') && (
-            <p className="hint">未带入用例不能判断用例无影响。</p>
+            <p className="hint">分析用例影响需带入用例。</p>
           )}
         </div>
         <label className="form-field">
@@ -1011,10 +999,7 @@ export function ChangeAnalysisNew({
         </label>
         <section className="evidence">
           <strong>本人AI配置</strong>
-          <p className="hint">
-            完整固定所选双侧正文、补充上下文、用例、历史与附件，一次请求交给你的AI分析。
-            平台不按语义筛减内容，不自动分批或重试；实际容量由本人模型服务判断。
-          </p>
+
           <p className="hint">
             {options.ai?.error_code
               ? codeError(new Error(options.ai.error_code), onSessionEnd)

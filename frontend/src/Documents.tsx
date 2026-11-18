@@ -246,9 +246,7 @@ export function OriginalPreview({
     return (
       <article className="doc-original">
         {['docx', 'xlsx'].includes(version.extension) && (
-          <p className="doc-note">
-            内容预览保留文字及表格内容，不还原排版、嵌入图片或公式计算结果；完整内容以原件为准。
-          </p>
+          <p className="doc-note">文字与表格预览，完整排版及图片请查看原件。</p>
         )}
         {version.extension === 'md' && readOnly ? (
           <MarkdownPreview text={preview.text} />
@@ -491,7 +489,6 @@ export function Documents({
     return (
       <section className="panel panel-pad">
         <h2>请选择项目</h2>
-        <p className="muted">在项目中上传和管理需求原始资料。</p>
       </section>
     );
   return (
@@ -515,7 +512,6 @@ export function Documents({
       <header className="page-head">
         <div>
           <h1>需求资料</h1>
-          <p>保存原始文档与截图；一份资料可包含多个需求，多份资料也可共同说明一个需求。</p>
         </div>
         <div className="row">
           <button
@@ -539,9 +535,7 @@ export function Documents({
           </button>
         </div>
       </header>
-      <p className="doc-note">
-        拖动文件可切换分组，也可勾选后批量整理。分组仅用于整理原始资料，需求提炼与确认在后续需求分析中完成。
-      </p>
+      <p className="doc-note">拖动文件或勾选后批量切换分组。</p>
       {error && (
         <div role="alert" className="doc-error">
           {error}
@@ -773,7 +767,7 @@ export function Documents({
               <div className="empty">
                 <Icon name="file" />
                 <h2>上传第一份需求资料</h2>
-                <p>原始文档与截图可以组合使用，无需先拆分成独立需求。</p>
+
                 <button disabled={busy || loading || !library} onClick={() => openUpload(null)}>
                   选择文件
                 </button>
@@ -860,7 +854,7 @@ export function Documents({
                     placeholder="例如：成员管理页面截图"
                   />
                 </label>
-                <p className="hint">空分组会保留，上传时可直接选择。</p>
+
                 <button className="primary" disabled={busy || !groupName.trim()}>
                   {busy ? '正在保存…' : modal === 'rename' ? '保存名称' : '创建分组'}
                 </button>
@@ -874,9 +868,7 @@ export function Documents({
                   onChange={setGroup}
                   disabled={busy}
                 />
-                <p className="hint">
-                  将{checked.length}份所选资料移入该分组，历史原文和分析依据保持不变。
-                </p>
+                <p className="hint">将{checked.length}份资料移入此分组。</p>
                 <button
                   className="primary"
                   disabled={busy}
@@ -961,7 +953,7 @@ export function Documents({
                     </li>
                   ))}
                 </ul>
-                <p className="hint">文件保存在项目私有资料库，不发送给AI。新版本不会覆盖旧原件。</p>
+                <p className="hint">文件保存在本项目，上传不调用AI。</p>
                 <button
                   className="primary"
                   disabled={busy || !files.length}

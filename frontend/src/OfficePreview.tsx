@@ -18,7 +18,7 @@ export function OfficePreview({
   if (preview.kind === 'word')
     return (
       <article className="office-word">
-        <p className="doc-note">正文与表格内容预览；图片、批注和复杂排版请查看原件。</p>
+        <p className="doc-note">复杂排版、图片和批注请查看原件。</p>
         {preview.blocks.map((block, index) =>
           block.kind === 'table' ? (
             <div className="office-table-scroll" key={index}>
@@ -70,9 +70,7 @@ export function OfficePreview({
           </span>
         )}
       </div>
-      <p className="doc-note">
-        展示保存时的单元格值，保留行列位置及合并区域；公式不重新计算，图表和复杂格式请查看原件。
-      </p>
+      <p className="doc-note">公式使用已保存值，不重新计算；图表和复杂格式请查看原件。</p>
       {sheet ? <SheetTable sheet={sheet} /> : <p className="panel-pad muted">未找到工作表。</p>}
       {(preview.truncated || sheet?.truncated) && (
         <p className="doc-note">

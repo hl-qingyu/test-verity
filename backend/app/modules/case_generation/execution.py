@@ -21,6 +21,7 @@ from app.db.models import (
 )
 from app.integrations import ai_client as responses
 from app.integrations.response_diagnostics import safe_snapshot
+from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.case_generation import (
     compact,
@@ -188,6 +189,8 @@ def failure(cls, key, exc, factory, request_id=None, diagnostics=None):
                 if diagnostics is not None:
                     update_attempt(row, diagnostics)
                 refresh_run(db, db.get(CaseGenerationRun, row.run_id))
+            elif cls is CaseGenerationChatTurn and diagnostics is not None:
+                row.context = {**row.context, "cli_diagnostics": safe_snapshot(diagnostics)}
             db.commit()
 
 
@@ -220,6 +223,7 @@ def execute(batch_id, factory):
                 return
             run_id, actor_id = batch.run_id, batch.actor_id
             request_id = batch.request_id
+            terminal_spec = copy.deepcopy(batch.ai_config.get("generation_terminal"))
             actor = db.get(UserAccount, actor_id)
             run = db.get(CaseGenerationRun, run_id)
             project_id = run.project_id
@@ -281,6 +285,7 @@ def execute(batch_id, factory):
             call_mode=config.get("call_mode", "RESPONSES_API"),
             diagnostics=diagnostics,
             instruction_messages=instruction_messages,
+            **({"terminal_spec": terminal_spec} if terminal_spec is not None else {}),
         )
         diagnostics["phase"] = "validating_report"
         with factory() as db:
@@ -334,6 +339,7 @@ def execute(batch_id, factory):
             refresh_run(db, run)
             db.commit()
     except Exception as exc:
+        propagate_database_outage(exc)
         failure(CaseGenerationBatch, batch_id, exc, factory, request_id, diagnostics)
 
 
@@ -381,6 +387,14 @@ def candidate(project_id, run_id, batch_id, actor, db):
 
 
 def execute_chat(turn_id, factory):
+    from app.modules.case_generation import native_terminal
+
+    with factory() as db:
+        turn = db.get(CaseGenerationChatTurn, turn_id)
+        native = bool(turn and "native_terminal" in turn.context)
+    if native:
+        return native_terminal.execute(turn_id, factory)
+    diagnostics = {"phase": "preparing"}
     try:
         with factory() as db:
             turn = db.get(CaseGenerationChatTurn, turn_id)
@@ -406,10 +420,10 @@ def execute_chat(turn_id, factory):
                 {"role": "user", "content": turn.question},
             ]
 
-        last_check = 0.0
+        last_check, saved_attempt = 0.0, None
 
         def check():
-            nonlocal last_check
+            nonlocal last_check, saved_attempt
             if monotonic() - last_check < 1:
                 return
             last_check = monotonic()
@@ -422,6 +436,23 @@ def execute_chat(turn_id, factory):
                     db.get(CaseGenerationChatTurn, turn_id).status == "RUNNING",
                     "generation_chat_cancelled",
                 )
+                attempt_id = diagnostics.get("cli_attempt_id")
+                # Persist the journal link once; event polling reads the encrypted journal,
+                # rather than rewriting a potentially large fixed context every few seconds.
+                if attempt_id and attempt_id != saved_attempt:
+                    current = db.get(
+                        CaseGenerationChatTurn,
+                        turn_id,
+                        with_for_update=True,
+                        populate_existing=True,
+                    )
+                    contract.require(current.status == "RUNNING", "generation_chat_cancelled")
+                    current.context = {
+                        **current.context,
+                        "cli_diagnostics": safe_snapshot(diagnostics),
+                    }
+                    db.commit()
+                    saved_attempt = attempt_id
 
         check()
         answer = responses.converse(
@@ -433,6 +464,7 @@ def execute_chat(turn_id, factory):
             messages,
             on_progress=check,
             call_mode=config.get("call_mode", "RESPONSES_API"),
+            diagnostics=diagnostics,
         )
         check()
         with factory() as db:
@@ -442,7 +474,9 @@ def execute_chat(turn_id, factory):
             analysis_configuration(actor, db, config)
             turn = db.get(CaseGenerationChatTurn, turn_id, with_for_update=True)
             if turn.status == "RUNNING":
+                turn.context = {**turn.context, "cli_diagnostics": safe_snapshot(diagnostics)}
                 turn.answer, turn.status, turn.updated_at = answer, "COMPLETED", datetime.now(UTC)
                 db.commit()
     except Exception as exc:
-        failure(CaseGenerationChatTurn, turn_id, exc, factory)
+        propagate_database_outage(exc)
+        failure(CaseGenerationChatTurn, turn_id, exc, factory, diagnostics=diagnostics)

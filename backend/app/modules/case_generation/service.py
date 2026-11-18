@@ -3,6 +3,7 @@
 import copy
 import json
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from sqlalchemy import func, select
 
@@ -20,7 +21,7 @@ from app.modules.ai.service import (
     configuration_snapshot,
     current_metadata,
 )
-from app.modules.case_generation import contract, delivery_files, sources
+from app.modules.case_generation import contract, delivery_files, native_rounds, sources
 from app.modules.cases.schemas import DESIGN_FIELDS
 from app.modules.documents import service as documents
 from app.modules.projects.record_deletion import require_visible
@@ -212,6 +213,7 @@ def projection(row, actor, db):
             }
         )
     suggestions, questions, details = [], [], []
+    round_by_ref = {b.batch_ref: native_rounds.info(b) for b in bs if native_rounds.info(b)}
     function_labels, function_keys = function_views(row, db, bs)
     render_pairs = reports(row, db, bs) + [
         (
@@ -234,6 +236,11 @@ def projection(row, actor, db):
             suggestions.append(
                 {
                     "key": s["key"],
+                    **(
+                        {"nativeResultId": round_by_ref[r["batch_ref"]]["id"]}
+                        if r.get("batch_ref") in round_by_ref
+                        else {}
+                    ),
                     "kind": s["kind"],
                     "function": function_labels[function_keys[s["key"]]],
                     "functionRef": function_keys[s["key"]],
@@ -267,6 +274,11 @@ def projection(row, actor, db):
             questions.append(
                 {
                     "key": q["key"],
+                    **(
+                        {"nativeResultId": round_by_ref[r["batch_ref"]]["id"]}
+                        if r.get("batch_ref") in round_by_ref
+                        else {}
+                    ),
                     "function": fs[q["function_ref"]],
                     "functionRef": q["function_ref"],
                     "title": q["question"],
@@ -332,8 +344,18 @@ def projection(row, actor, db):
         "suggestions": suggestions,
         "questions": questions,
         "candidateIssues": [
-            problem for batch in bs for problem in delivery_files.views(batch, actor)
+            {
+                **problem,
+                **(
+                    {"nativeResultId": native_rounds.info(batch)["id"]}
+                    if native_rounds.info(batch)
+                    else {}
+                ),
+            }
+            for batch in bs
+            for problem in delivery_files.views(batch, actor)
         ],
+        "nativeRounds": native_rounds.summaries(bs),
         "handling": handling,
         "decisions": row.handling.get("decisions", []),
         "failures": row.handling.get("failures", []),
@@ -343,6 +365,12 @@ def projection(row, actor, db):
             {
                 "key": b.batch_ref,
                 "id": b.id,
+                **(
+                    {"nativeResultId": native_rounds.info(b)["id"]} if native_rounds.info(b) else {}
+                ),
+                "terminalAvailable": bool(
+                    b.ai_config.get("generation_terminal") and b.actor_id == actor.id
+                ),
                 "function": b.input_snapshot["scope"]["name"],
                 "status": b.status,
                 "attempts": len(b.attempts)
@@ -408,6 +436,8 @@ def projection(row, actor, db):
             row.metadata_snapshot.get("attachment_bytes", 0),
         )
         if len(bs) == 1
+        else "同一对话保留各轮候选及独立审核记录。"
+        if round_by_ref
         else "历史分批记录：保留已完成成果；失败仅人工重试原固定输入。",
         "skillVersion": row.metadata_snapshot.get("skill", {}).get("version", ""),
         "aiPreview": personal,
@@ -626,6 +656,15 @@ def start(project_id, run_id, payload, actor, db):
     )
     for b in batches(row, db):
         b.ai_config = configuration_snapshot(config)
+        if config.get("call_mode") == "CODEX_EXEC":
+            b.ai_config = {
+                **b.ai_config,
+                "generation_terminal": {
+                    "identity": str(uuid4()),
+                    "execution": -b.id,
+                    "version": 1,
+                },
+            }
         b.status = "QUEUED"
     row.status = "QUEUED"
     row.updated_at = datetime.now(UTC)
@@ -651,6 +690,8 @@ def retry(project_id, run_id, batch_id, payload, actor, db):
     row = own(project_id, run_id, actor, db, True)
     b = db.get(CaseGenerationBatch, batch_id, with_for_update=True)
     contract.require(b and b.run_id == row.id)
+    if native_rounds.info(b):
+        raise AppError(422, "generation_native_round_retry_forbidden")
     if b.request_id == str(payload.request_id):
         return projection(row, actor, db)
     contract.require(
@@ -679,6 +720,9 @@ def retry(project_id, run_id, batch_id, payload, actor, db):
         "ai_config": copy.deepcopy(b.ai_config),
     }
     attempts = copy.deepcopy(b.attempts)
+    for attempt in attempts:
+        if attempt.get("request_id") == b.request_id:
+            attempt.setdefault("ai_config", copy.deepcopy(b.ai_config))
     if not attempts or attempts[-1].get("request_id") != b.request_id:
         attempts.append(previous)
     b.attempts = attempts
@@ -690,6 +734,15 @@ def retry(project_id, run_id, batch_id, payload, actor, db):
         "",
     )
     b.ai_config = configuration_snapshot(config)
+    if config.get("call_mode") == "CODEX_EXEC":
+        b.ai_config = {
+            **b.ai_config,
+            "generation_terminal": {
+                "identity": str(uuid4()),
+                "execution": -b.id,
+                "version": 1,
+            },
+        }
     row.status = "QUEUED"
     row.updated_at = datetime.now(UTC)
     db.commit()

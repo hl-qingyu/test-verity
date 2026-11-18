@@ -161,17 +161,13 @@ export function LocalCode({ project, user, onSessionEnd }: Props) {
           </button>
         )}
       </div>
-      <p className="hint">
-        授权你自己电脑上的目录，按需读取最新内容，不需要手动上传新版。代码和读取历史仅保存在当前浏览器，不上传后端、不执行代码。
-      </p>
+      <p className="hint">授权本机目录，所选代码和读取历史仅保存在当前浏览器。</p>
       {!directorySupported() && (
         <p className="form-error mt" role="status">
           当前浏览器不支持目录授权，请使用支持此功能的Chrome或Edge，通过HTTPS或本机地址访问。
         </p>
       )}
-      <p className="hint mt">
-        目录权限属于授权人，其他成员只能查看关联信息。更换电脑或浏览器需重新授权；清除网站数据会丢失本地快照。分析功能尚未接入，后续分析需发送所选代码时会另行说明。
-      </p>
+      <p className="hint mt">仅授权人可读取；换设备需重新授权，清除网站数据会丢失本地历史。</p>
       {error && (
         <div role="alert" className="form-error mt">
           {error}
@@ -247,9 +243,7 @@ export function LocalCode({ project, user, onSessionEnd }: Props) {
           )}
         </div>
       )}
-      <p className="hint mt">
-        只在点击读取时检查变化，不后台监控磁盘。记录的是发现时间与两次读取差异，不是完整编辑记录或Git提交历史。
-      </p>
+      <p className="hint mt">仅点击读取时检查变化，显示发现时间。</p>
       {editor && (
         <LocalEditor
           {...{ project, user, onSessionEnd }}
@@ -451,9 +445,7 @@ function LocalEditor({
             </button>
           </div>
         </div>
-        <p className="hint">
-          浏览器只提供目录名称，不暴露绝对路径。选择目录后先读取文件树并勾选范围；保存和后续读取仅将代码存入本浏览器。新目录请新建来源，不能覆盖旧目录历史。
-        </p>
+        <p className="hint">选择目录后勾选读取范围；新目录请新建来源。</p>
         {tree ? (
           <section className="panel panel-pad">
             <div className="between">
@@ -480,8 +472,8 @@ function LocalEditor({
             </div>
             {!tree.files.length && <p className="hint">此目录没有可选择的文件。</p>}
             <p className="hint mt">
-              已选择 {tree.files.filter((entry) => inScope(entry.path, scope)).length}{' '}
-              个当前文件。勾选子目录包含其后续新增文件；只勾选单文件不会自动扩大范围。取消目录内某项后，其余已选项转为当前单文件范围。
+              已选{tree.files.filter((entry) => inScope(entry.path, scope)).length}
+              个当前文件；勾选目录包含后续新增文件。
             </p>
             <p className="hint">范围：{scope.join('、') || '尚未勾选'}</p>
           </section>
@@ -489,7 +481,7 @@ function LocalEditor({
           <p className="hint">尚未读取文件树。没有扫描完成前不能保存读取记录。</p>
         )}
         <p className="hint">
-          不设文件数量、单文件大小或总大小上限。默认排除.git、.env、常见凭据、依赖、构建产物及二进制文件；非UTF-8文件明确标为未能比较，读取失败不会当作删除。浏览器内存或存储不足时会提示失败并保留旧记录。
+          默认排除凭据、依赖、构建产物和二进制文件；无法读取的文件不会记为删除。
         </p>
         {error && (
           <p className="form-error" role="alert">
@@ -627,9 +619,7 @@ function LocalHistory({
   }
   return (
     <CaseDialog title={`读取变化记录 · ${source.name}`} busy={false} onClose={onClose} wide>
-      <p className="hint">
-        仅当前账号在本浏览器读取过的内容。时间为本机发现时间，不是实际修改时间；首次读取建立基准，范围变更单独标注。读取不是文件系统原子快照，期间改动可能需要再次读取核对。
-      </p>
+      <p className="hint">显示本浏览器的读取历史，时间为发现时间。</p>
       {error && (
         <p className="form-error" role="alert">
           {error}

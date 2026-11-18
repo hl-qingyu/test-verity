@@ -2547,3 +2547,270 @@ AI 分析工作台
 下次会话入口可用：
 
 > 在D:\Project\test-verity继续，先读AGENTS.md和docs/SESSION_CONTEXT.md。登录、账号管理和密码请求加密已完成。下一项是按已有总HTML原型实现平台设置中的AI服务，先核对原型并确认尚未确定的流程、密钥规则、接口与验收标准，再实施。Git只读，禁止上传推送。
+
+
+## 2026-11-13：用例生成 CLI 网页工作区最小试用
+
+用户授权最小网页终端式交互并复用历史对话。用例生成页头增加发起人可见入口，模态工作区展示批次按次历史事件与原平台对话；输入仍复用原chat持久队列、本人配置/预算/权限，显式cli_only禁止API回退。无正式生成报告时可据完整固定批次输入和Skill参考继续讨论，但回答不替换报告或自动应用。历史原生ephemeral会话已清理，不声称原生resume；新轮重建平台固定上下文及本人历史成功问答，不支持运行中插话。详见CASE_GENERATION.md和AI_CODEX_CLI_IMPLEMENTATION.md。
+
+共享CLI stdout新增脱实际Key后的逐事件加密timeline日志，错误/重连不再等退出才能读；原完整events.enc仍按原机制归档。API按项目/记录/执行发起人校验服务端attempt身份，游标每页100，浏览器最近200显示；旧归档无时间戳明确标记。原始工具正文和未公开推理不进入显示投影。没有新依赖/表/迁移或真实收费验证；没有重试原失败任务。
+
+验证：前端218项测试/check/build通过，原有大chunk提示；后端新增6项CLI专项、原生CLI+本地假provider7项、进度3项及架构通过。Windows模拟进程/协议8项通过，数据库未启用的其他AI测试跳过。用例生成真实PostgreSQL回滚回归44项中42项通过、2项因连接超时/失效事务失败，隔离重测两项通过，不宣称同一轮全绿。新增鉴权接口真实回滚测试通过；未调用真实模型。
+
+浏览器真实登录验证了1752历史两次执行切换、读取/重连/终态错误、空输入禁用与非空可发送（未点击真实发送）、下拉Esc和焦点、390px无横向溢出、关闭重开。原型主文件新增独立明确合成演示的同入口，脚本语法检查通过。当前浏览器工作区留供用户试用。最后确认无活动/排队或HELD预留后重载API/Worker，API live/ready=200，Worker ready。数据库连接仍有本轮既有波动，非本次已修复项。
+
+
+## 2026-11-13：用户纠正为直接展示原生 CLI（当前待权限选择）
+
+用户否定上一版事件查看器，要求真实CLI原生画面与输入。已实现Windows ConPTY、xterm.js、同源WebSocket双向原始VT/键盘传输，复用原chat任务队列/预算和本人配置，保留独立CLI state/input，并准备固定Skill、资料和平台历史上下文。新增依赖pywinpty3.1.2(Windows)、websockets16.0、@xterm/xterm6.0.0、addon-fit0.11.0。原生工作目录默认 ~/.test-verity/cli-workspaces/，以单任务标记隔离项目根，不信任整个仓库；相应源读取及输出不转成平台操作标签或Markdown对话。
+
+重要：本地合成测试实证原生 !命令可执行无害echo并在只读任务目录写文件，禁用模型shell工具不能禁止用户shell命令。因此按AGENTS“架构/业务约定改变先确认”“不引入任意脚本执行器”要求，已询问用户是否明确允许本人、本机完整CLI命令能力，尚未收到选择。所有原生启动/写入默认受AI_CLI_TERMINAL_USER_IDS空白名单拒绝，仅允许读取已保存画面；WS及写请求限定已配置本机loopback Origin。不能在未获明确选择时开启白名单。原生预览会话75/76均由代理创建，未提交真实分析，现已取消；原失败生成1752没有重试。
+
+测试：原生VT/键盘、跨块Key脱敏、控制schema和鉴权4项，真实固定CLI+本地假provider启动/原生命令5项组合通过，未发真实收费请求。WS原始画面和键盘回传/恶意Origin2项通过；真实PostgreSQL回滚接口测试通过，验证raw输出、键盘、同会话幂等、原生目录复用和拒绝他人。前端220项/check/build通过，原有大chunk提示。需以当前白名单守卫补测及最终状态为准。
+
+本机数据库连接波动曾中断空白原生预览75并遗留旧Worker占位/咨询锁；核实原进程36432已退出、唯一占位对应代理预览75且持锁服务端连接986628是旧Worker的idle连接后，关闭该失效连接并让新Worker按原恢复逻辑回收；未改业务报告、未重发AI。原生会话不是绕过数据库鉴权/失锁机制的例外。完整开放前需用户权限选择，不能声称当前已支持无限制原生交互。
+
+最终守卫状态：原生预览76已取消，活动对话与HELD均0；API/Worker已重载空白名单守卫。原生画面已在实际网页回放并保存outputs/native-cli-original-screen-20261113.png，启动/继续输入控件禁用；异步权限选择仍待用户答复，不可自行启用。白名单/原生raw请求回滚、WS/恶意Origin、架构、前端220项与构建已通过；最终更新后UI规范/类型再检查通过。
+
+
+## 2026-11-16：按用户要求限制原生 CLI 的执行能力
+
+用户答复“那需要处理”，明确采用保留原生界面/正常对话并限制本机命令，不是授权完整主机权限。已用固定0.166.0原生TUI的--remote通道接入每任务私有RPC代理，实际app-server只有stdio。代理白名单放行状态、历史、对话，拒绝thread/shellCommand、command/exec、process/spawn、fs操作、插件/配置/MCP写入口等；线程创建/恢复/轮次固定cwd、never审批、verity只读配置，移除动态工具，拒绝客户端越权配置和外部路径。服务器权限申请不交给客户端批准。TUI没有模型Key，仅持临时代理令牌；模型Key仅app-server环境持有。原始VT与普通文本（包括!、!=、换行）不重组/字符过滤。代理不可用时不回退到未过滤的本机CLI。
+
+试用用户限制改为None沿用本机项目记录发起人权限、[]显式禁用、非空列表进一步收窄；不再要求用户开放本机命令。现有CLI在用户shell被拒绝后可能退出，后端记录明确command_blocked原因，用户手动继续恢复历史，不重发模型请求。旧临时会话无法补恢复。模块说明/架构与总原型说明已同步，无新依赖、表、字段或迁移，不改原报告/已应用用例。
+
+验证：真实固定CLI+本地假provider完成普通含!消息回复、!echo写文件在执行前被拒绝且文件不存在、随后原生续接恢复原问答且供应商请求数不增加；启动与原生状态命令、无过滤回退禁止、密钥脱敏等8项通过。RPC策略6项（含多种命令/进程/fs/权限/外部路径绕过）、实际loopback网关鉴权/stdio拒绝/服务器授权申请拒绝1项、浏览器WS/Origin2项及架构通过。真实PostgreSQL回滚的native终端归属/同会话复用回归通过。前端220项、check/build通过，仍有已有chunk警告。测试全用合成模型、假Key，不使用本人真实Key发模型分析，未重试1752。
+
+已实时核对无活动/排队任务及HELD调用后重载本机API/Worker，live/ready=200且Worker ready。待补充最终网页验收与交付状态。
+
+最终网页验收：实际本机页面登录后打开受限原生终端，/status正常显示Profile verity(read-only,never)及Token usage 0；用无文件写入的!echo测试得到generation_terminal_command_blocked，UI明确“未执行”；手动继续同一会话恢复成功。未发送任何真实模型提问、未重试1752；真实聊天/历史非空恢复由本地假provider集成验证。桌面和390px DOM横向溢出检查通过，已恢复1920px视口。证据outputs/cli-command-blocked-20261116.png与cli-readonly-ready-20261116.png。终端会话82处于原生空闲输入状态，留给用户试用，使用结束需点“结束进程”释放本人预算槽；关闭网页不停止CLI。前端220项/check/build及后端8项native、6项policy、1项gateway、2项WS、架构/真实回滚接口专项通过。
+
+## 2026-11-16：将实际用例生成接入同一个原生 CLI
+
+用户明确纠正“单搞窗口没意义”，要求开始生成真正使用该终端。新建/人工重试的 CLI 生成在原 CaseGenerationBatch 的 ai_config 扩展快照绑定私有原生目录；Worker 领取原批次，经公共 ai_client 启动同一个 TUI，自动提交完整固定输入、Skill 与预选图片，不另排独立终端任务。前端开始/重试成功自动打开绑定批次的原始 ANSI 终端，关闭不取消，取消调用原生成接口。后端只取该生成轮正常完成的最终完整 agentMessage，交回原候选保存、契约和引用校验；建议仍须人工审核应用。失败/中断/空结果不作为完整报告。
+
+生成完成释放进程与预算，保留原生历史；显式继续通过原 chat 队列续接同一会话，后续聊天不自动覆盖报告。人工重试建立新目录，旧尝试保留原绑定/配置；主生成负执行编号与后续 chat 正编号隔离日志/按键文件，避免两张表自增主键碰撞。WS 检测根绑定变化后断开重播，前端按 request epoch 重连。旧独立终端只保留回放，不再创建新的脱离生成会话；旧非交互分析、API 与历史失败任务不自动切换或重试。继续保持 RPC 执行能力限制及本人配置，无新依赖、物理表/字段或迁移。
+
+验证：28项相关后端（原生 TUI、完整生成/图片、RPC/WS、架构、旧事件兼容）通过；另补预选图片精确路径/内容白名单回归，7项 policy 通过。两项真实 PostgreSQL 回滚测试通过，其中使用真实固定 exe + 本地假 provider 完成“开始→原批次领取→自动 CLI→完整候选→原校验→待审核建议”，实际用例库仍空；同时覆盖不另建 chat、取消、同根续接与人工重试保留旧绑定。前端222项/check/build通过；关闭焦点修复后相关6项与UI/终端8项、check/build/格式再次通过。总原型用例生成检查及脚本语法通过。全部模型验证使用合成资料、假Key和本地假 provider，没有重试1752或发真实收费请求，不能称为实际中转服务验证。
+
+本机服务已重载。先重载API让旧独立会话只读，再核验83原生最后状态确为 idle 后经原 cancel 服务关闭，历史保留；实时确认无活动/排队任务及 HELD 预留才重载Worker。API /api/health/live、ready均200。浏览器实点旧会话只读回放与新接入说明，390px无页面横向溢出、Esc关闭及焦点回到CLI入口通过，临时viewport已重置。新生成自动打开由前端交互回归验证，真实 exe/数据库闭环由本地假provider验证；未在真实用户资料上点击收费生成。当前页面仍为原失败1752，需用户本人明确开始/人工重试才产生新模型调用。
+
+
+## 2026-11-16：修复原生会话续接后普通追问被误拦截
+
+用户截图显示原会话 Conversation interrupted，随后输入“继续”被 turn/start 的权限提示拒绝。实时核验：生成批次910/记录1752于11:50已失败，错误 generation_terminal_response_incomplete；截图 RUNNING 对应后来手动续接的 chat87，并非生成仍在跑。私有原生历史只保留到 task_started→turn_aborted(interrupted)，没有原始失败响应或完整RPC错误，不能据此确认首次中断根因。stderr仅有PATH别名警告，不将警告认定为根因。
+
+已用真实固定0.166.0+本地假provider稳定复现续接误拦截：TUI恢复历史后发送的 turn/start 含 collaborationMode.settings.developer_instructions 默认模式模板，原策略拒绝整个请求。现仅对 default 模式丢弃客户端模板，由服务器继续固定原Skill/权限；普通文本原样保留，其他协作模式、命令、任意路径和权限扩展仍拒绝。补真实第二轮“继续分析”回归，确认同一thread、原问答和固定Skill保留，两个合成请求均成功。先前只打开历史未发送第二轮，不能替代此回归。
+
+另外，turn/start 服务端RPC错误会结束本次候选等待，不再等待未发生的turn/started；失败与中断分别显示。私有 *.rpc.enc.jsonl 加密记录轮次状态/原始错误、显式中断和策略拒绝原因，脱Key且不记录普通提问正文/任意参数，不把旧缺失证据补写为已知。对话RUNNING改为“对话进程运行中”，原生画面和历史不改写。没有新依赖、物理表或迁移；未自动重试1752或发真实模型分析。
+
+验证：相关后端26项（含真实CLI两轮、图片、网关拒绝留痕、错误结束等待、WS、架构）通过；前端相关请求/用例生成/UI规范59项、check/build通过，已有chunk警告保留；总原型检查/脚本语法、Ruff及diff检查通过。日志 outputs/cli-continue-backend-final.log 与 cli-continue-frontend-*.log。真实exe模型验证只用本地假provider和合成资料，不能称为真实中转服务验证。
+
+实时核验87已取消、活动/排队任务及HELD均0后重载Worker，ready已记录；API live/ready均200。浏览器从原记录点击续接，chat88恢复到同一原生目录723cfadf-ddb4-4ec7-a568-64626c07404e，界面显示“对话进程运行中”、保留原输入和中断历史、输入焦点正确。没有输入/发送真实提问，原生event_msg的task_started仍1、turn_aborted仍1，未增加分析轮。88为等待用户输入的原生终端，占本人预算槽；留给用户继续使用，不能在下次续作中未经核验打断它。主生成仍FAILED，后续对话不自动覆盖原报告。若后续再失败，先读取88的私有RPC错误，不自动重发收费调用。
+
+
+2026-11-16 续接后排队核验：用户反馈生成排队并询问并发。实时配置仍为全局2、单用户1、同服务Key1（11日已确认配置），并未改成同账号多分析并行。当前用户已人工提交批次910新尝试（原生目录3331c069-a07e-40f8-977c-54c3cc41ad11），被此前恢复的空闲chat88占用本人/Key名额而阻塞。确认88最后原生状态idle、没有新增分析轮后，经原cancel服务关闭空闲进程，保留全部历史；Worker自动释放88预留并领取910。随后再次核验910仍RUNNING，HELD只对应case_generation_batch910。本轮没有改代码、并发限额、AI配置，也没有另提交/重试模型调用；只是让用户已排队的请求继续执行。后续不能把旧“88等待输入”状态当现状，也不能未经核验重启Worker打断910。空闲原生对话按进程生命周期占预算仍是当前实现限制。
+
+
+## 2026-11-16：按用户指令移除自写CLI读取工具，改用现成MCP服务
+
+用户明确“别自己造轮子给cli用”“有现成的库调用就行，别自己搞”。此前截图的两次工具失败已定位：先请求max_bytes=60000超过自定义32768；后按固定32768累加偏移，1081343落进UTF-8字符中，正确边界为1081341。日志另有明确turn/interrupt，不能把工具错误直接等同于中断来源。曾在本地修复工具并验证原文件1,151,703字节完整重组，但用户随后明确反对自写工具；最终未保留该修补路线。
+
+最终实现：删除 backend/app/integrations/codex_files.py 及其专用测试，原生TUI与非交互大输入均直接启动 MCP 项目维护的 @modelcontextprotocol/server-filesystem@2.3.0 原包 stdio 入口，使用上游 --read-only --confine-roots 和本次input目录；不再实现字节分片、UTF-8解析或自定义MCP读取协议。Python codex_filesystem.py仅负责现成服务的启动配置和运行环境检查。依赖独立锁在 backend/mcp/package.json/package-lock.json；Node.js>=24，本机24.14.1，AI_CLI_NODE_EXECUTABLE可选指定路径，未改实际.env。npm官方registry清洁ci验证通过，生产server依赖2.3.0，开发测试使用现成MCP Client SDK2.4.0；供应商代码未改写。启动缺Node/包时明确失败，不回退旧自写工具。frontend仅补环境未安装错误文案，无页面布局变化。
+
+旧原生会话的input.json/Skill instructions.txt不覆盖，恢复时生成单独instructions-filesystem-v1.txt追加工具迁移说明；实际3331c069-a07e-40f8-977c-54c3cc41ad11原文件及指令哈希均核对不变，迁移说明已生成。老事件与会话中出现verity_input仅是历史，不再注册这些工具。后续使用标准filesystem.read_text_file等；文件内容和原角色顺序保持。标准工具可完整返回文件，CLI原生上下文/显示压缩不据此视为已读完全部资料。
+
+验证：用标准MCP Client SDK读取该实际文件，返回1,151,703字节且SHA256相同；无模型调用。官方服务真实stdio回归验证大Unicode原件完整读取、目录外拒绝、写工具不注册且无法覆写，npm清洁ci和test通过。真实固定CLI+本地假provider相关33项通过，追加原生TUI实际调用filesystem读取大输入与架构2项通过；包含完整尾标记、非交互完整字符数/末尾、同线程续接与图片原件。前端相关11项、check/build、格式和最后3项通过；Ruff/格式/diff检查通过。日志 outputs/official-filesystem-*.log。未使用本人真实Key做分析验证，未追加或重试收费模型调用。
+
+实时核验89已FAILED、无HELD且无活动/排队任务后重载Worker和API；Worker新PID25708记录ready，API live/ready200。未重开会占预算的空闲终端。主批次910仍保留FAILED，89仍FAILED，历史不改写；下次由用户明确开始或续接时使用标准服务。README、AI_CODEX_CLI_IMPLEMENTATION、CASE_GENERATION和ARCHITECTURE已更新安装/现行规则，无新数据库表、字段或迁移。
+
+
+## 2026-11-16：关闭终端弹窗不中断后台，重开仅恢复显示
+
+用户截图显示部分JSON后Conversation interrupted且输入框出现DA/颜色应答碎片，补充刚才关闭弹窗，明确应后台继续、重开恢复原会话；随后要求先当作浏览器操作原生CLI，其他限制后补。本轮仅修显示连接与输入回传，不添加内容过滤、工具参数限制或额外确认流程，现有权限策略不扩展。
+
+实时chat90原生轮次运行约81.9秒后有明确turn/interrupt和interrupted完成，后端进程仍RUNNING等待输入。旧前端会把历史ANSI重新播放，同时xterm onData把旧DA/DSR/颜色查询应答回传当前PTY；Esc关闭弹窗也可先进入CLI中断快捷键。修复为：xterm初始化/重连/回放时disableStdin，WS首次追平输出发送ready，等待xterm写入解析回调后才开放实时输入并调整尺寸；历史画面原文不改写，新实时查询仍用xterm原生机制回复。连接关闭/卸载撤销输入，失效回调不写PTY。终端Esc键只关闭弹窗，不传入CLI；取消/结束进程仍由显式按钮操作。后端WS断开仅停止传输，不取消Worker进程或当前轮。未引入新的文件/终端解析库或自写控制码过滤。
+
+验证：真实CLI+本地门控假provider运行同一轮，关闭WS显示、再接入、再次关闭后在无浏览器时完成，再开回放完整结果；只有1次合成模型请求，无输入/取消写入。真实xterm组件回归验证历史DA/DSR不回传、ready之后新DA可正常应答、普通输入保留、Esc不发中断、卸载旧回调失效及重开恢复新增结果。相关后端/架构4项、前端225项、check/build、Ruff及原型检查通过；已有构建chunk提示保持。日志outputs/terminal-reopen-*.log，未发真实模型请求或重试用户分析。
+
+仅API重载以加载WS协议，Worker保持运行，未中断90。实际网页打开→终端聚焦按Esc关闭→重开同一会话验证通过；90仍RUNNING、原RPC事件仍5条、中断仍原1次，没有新增模型轮次或turn/interrupt。原中断历史及原输入框已有控制字符保留，未擅自清除用户草稿或补造完整结果。截图outputs/terminal-reopen-verified.jpg。当前chat90仍占本人预算等待输入，后续不能当作已完成或未经核验重启Worker。已中断轮次不会因重开自动续跑；用户明确发送下一条才会再请求模型。
+
+
+2026-11-16 15:23–15:28“内容卡着不动”排查：当前原生chat91曾经RUNNING，原生最后working，供应商RPC记录14:55/14:56两次responseStreamDisconnected（流在response.completed前断开，原生Reconnecting1/5、2/5）。15:06:30原Worker25708记录analysis_worker_stopping_active_calls count=1，15:06:38记录数据库OperationalError；实时查验原Worker/TUI/app-server均已退出，91预留仍HELD，任务状态未同步。不能把此前部分JSON视为完整报告，也不能把这次卡住归因于网页Esc或回放错误。原输出91.enc.jsonl共30,952,500字节保留，原生历史无该轮完成事件/完整assistant消息。
+
+确认reservations.proven_exited(91.process_identity)=True且没有其他本项目Worker进程后，启动原start-dev.ps1 -Service worker；新Worker13876（父39984）15:26:27记录ready，经既有recover_exited/recover流程将91改为FAILED/generation_worker_interrupted，HELD清零。调度咨询锁已由新Worker连接持有，不曾手动终止数据库连接或改预留。API live/ready200；未改代码、未重发或续跑模型、未覆盖资料/输出。现在原生进程已经结束，重开只能回放历史；用户明确续接后才会恢复原生会话发下一轮。本次根因层次为上游流重连在先、数据库异常后Worker停止且遗留运行状态，供应商最初断流的网络/服务端具体原因仍无证据。后续若要改变数据库短断线即停止CLI的机制，需另按任务生命周期设计处理，不本轮自行放开。
+
+
+## 2026-11-16：数据库异常不再终止CLI，完整结果落盘后恢复交付
+
+用户明确要求CLI自己正常就继续跑，平台数据库异常恢复后应拿同一结果继续执行。此授权替代原“调度失锁立即停止活动CLI”的限制；本轮只处理数据库/调度恢复，不开放工具权限或自动重发模型。已修改单调度Worker：连接故障/锁丢失暂停领取，每5秒重连取锁，保留同一线程池和活动任务，不设置CLI停止信号、不全局recover正在运行的行。显式进程停止仍通知取消；并发预留保持。
+
+公共CLI调用使用原预留UUID的加密结果记录（integrations/cli_results.py，AI_CLI_WORK_PATH/results）：启动前原子写started，返回完整结果/失败后fsync并原子替换，加密沿原主密钥；业务入库失败只重做固定任务校验/交付，重复进入ai_client读取同一结果而不重启CLI。交付结束追加delivered标记，原结果保留。Worker重启在中断旧任务前先核对未交付结果的任务/请求/操作者，恢复交付；只有启动标记而无完整结果不重发未知收费请求。请求指纹不一致、取消、权限或配置版本变化仍拒绝应用旧结果。
+
+CallControl仅对Worker作用域内CLI的OperationalError/InterfaceError检查容错，下一次用新Session复核；其他错误/用户取消仍停止。五类分析、对话和Skill执行器只增加数据库异常向恢复层传递，共用ai_client保证结果复用；API调用未加入收费重试。保存和预留释放遇断连等待恢复，单任务异常不再把调度进程一同退出。没有新依赖、物理表/字段或迁移。此机制能保护数据库断连期间的健康CLI，不能保证Worker被操作系统强杀或机器重启后仍保住运行中的进程；已经完整落盘的结果可以跨Worker重启交付。
+
+验证：CLI故障恢复、真实TUI+本地假provider、原会话关闭回放、调度重新取锁、API区分及架构23项通过；公共CLI/进程/文本图片/大输入15项回归通过。真实PostgreSQL回滚两项通过，其中用实际固定exe和合成provider模拟生成期数据库不可用，确认结果落盘，恢复后原候选校验/建议保存成功且供应商请求只有1次；没有让实际数据库停机。恢复后不重复领取、重复交付幂等、started未知尝试不重发、取消保留及Worker重启后从文件交付有专项覆盖。早期一组合并回归有原生画面尚未绘制就结束进程的时序失败，已为已完成响应保留2秒TUI最终绘制时间并复测该用例通过；此为完成后的终端绘制，不是模型超时/重试。前端相关9项与check/build、Ruff/格式/diff通过，构建原有chunk提示保留。证据outputs/cli-outage-backend-final2.log、cli-outage-shared-regressions.log、cli-outage-postgres-final.log、cli-outage-frontend-*.log。没有真实收费分析验证。
+
+实时核验全部活动/排队任务0和HELD0后重载Worker，新子进程33448（父34028）15:59:32记录ready，调度咨询锁1，API live/ready200。旧91仍FAILED，原输出保留，未追补或自动重跑旧失败。更新ARCHITECTURE、AI_CODEX_CLI_IMPLEMENTATION、AI_SERVICE、CASE_GENERATION现行规则；旧历史的失锁即停止说法不再作为当前行为。
+
+
+## 2026-11-17：修复失败轮次仍被误认为分析进行中
+
+用户次日截图“怎么还在进行中”。实时核验原生chat92（1752，47c9aee5-efc0-40f4-9453-c5706966e127）进程仍RUNNING，最后一轮01a1e3b3-74d5-71f3-a826-99edb2ec7489已于11月16日19:03完成为failed：上游流在response.completed前断开，原生依次Reconnecting1/5至5/5后失败。没有完整assistant消息/有效最终JSON，只有原始终端输出约96MB。原生最后OSC状态error，后端进程是在等待输入，不是分析运行了一夜。公开界面原先只显示“对话进程运行中”，未展示轮次失败，这是本次误导来源；供应商断流的具体网络/服务端根因未确认。
+
+修复：原生RPC日志同时记录turn/started，按官方轮次通知读取turn_status/turn_error，与数据库进程状态分开。前端显示正在分析/本轮已完成/本轮已失败/本轮已中断，进程仍RUNNING而轮次已结束则标明CLI等待输入；失败显示原有错误，常见stream closed before response.completed作中文说明。进程已结束时不把残留running轮次显示成正在分析。WebSocket先推送状态再回放历史，并按完整状态变化发送，解决大历史和进程一直RUNNING掩盖失败。没有解析或改写模型内容，没有新增工具/权限限制或模型调用；结束进程后输入禁用，恢复仍靠显式继续按钮。
+
+收尾前再次核验原生最后task_complete与该failed turn ID一致，没有更新的分析轮。画面文件曾因页面重绘更新时间，第一次基于旧大小的安全检查拒绝操作，未强行终止；改以原生生命周期确认后，经原cancel服务只关闭失败后的空闲进程，session、原输入与全部输出保留，92当前CANCELLED，HELD清零。此前旧Worker33448在09:30断库后遗留远端调度锁，导致首次新Worker无法取得调度权而退出。核对原预留RELEASED且proven_exited=True、PID33448不存在、本机54375端口无连接后，仅按pid1047747/2026-11-16 15:59:32.833359+08 backend_start/client192.168.0.63:54375/idle/指定调度锁谓词终止这一条已证实的孤立数据库连接，未修改业务数据；随后重新启动Worker。此为一次受限运维清理，没有加入自动终止数据库连接代码。API/Worker已加载修复。
+
+验证：相关后端22项（轮次失败再开始清除旧错误、历史未回放完先发状态、进程RUNNING不变仍更新轮次、真实CLI文本图片/标准文件服务/续接、WS、架构）通过；前端相关14项通过，最终终端/UI规范13项、check/build通过，Ruff/格式/总原型脚本检查通过，已有chunk提示保留。模型验证仅本地假provider、假Key和合成资料，没有重跑用户真实分析。实际网页关闭重开后显示“本轮已失败”和“上游响应在完成前断开”；390px页面宽度390、弹窗356、错误可见，viewport已重置。截图outputs/terminal-turn-failed-20261117.jpg。日志outputs/terminal-turn-state-*.log。当前窗口留在旧失败历史上，只有用户明确继续/重试才会发新分析；不能把旧“92正在分析”交接继续当现状。
+
+
+## 2026-11-17：修复数据库调度锁遗留根因与启动退出缺陷
+
+用户指出只能恢复不能不修复（注释指向“断连后留下了一条数据库调度锁”）。此前已受限清理旧孤立连接，仅是运维恢复；本轮进一步修代码。根因：普通池化会话持有session advisory lock，网络失联时服务端无空闲回收（实际SHOW idle_session_timeout=0）；旧进程消失/TCP未判死可长期占锁，而新Worker首次取锁失败即SystemExit，未等待自动恢复。
+
+修复：db/session.py新增专用get_scheduler_engine（NullPool、固定application_name），业务与调度连接都启用libpq TCP keepalive/tcp_user_timeout识别失联；只对专用调度连接设置AUTOCOMMIT、idle_session_timeout/idle_in_transaction_session_timeout=60s、statement_timeout=15s。db/scheduler.py用标准SQLAlchemy、Psycopg及线程同步在同一连接每5s保活，心跳独立于任务准备/结果交付；连接发生错误后缓存故障，禁止SQLAlchemy悄悄重连后继续沿用旧锁身份。正常关闭销毁物理连接，不放回业务池；客户端心跳停止后由PostgreSQL原生超时终止会话并释放咨询锁，无生产自动pg_terminate_backend逻辑。主Worker占不到锁或发现仍活跃原调用时等待重试，不SystemExit、不全局恢复/领取新任务，不干扰正在跑的CLI。保留之前数据库断连CLI继续与结果落盘交付机制。调度15秒SQL超时不是CLI/模型时长限制；业务连接的服务器空闲/事务空闲超时仍0。
+
+验证：真实PostgreSQL专用测试键（不同于生产调度锁）验证心跳正常时超过测试1秒空闲窗口仍保持锁；停止测试心跳而不close客户端、不调用终止/解锁函数，数据库自动收回旧连接，新Worker等待后自行接管且只运行一次恢复/调度；旧已失效对象重用会重复抛同一错误而不透明重连。额外验证业务连接超时保持0、专用连接默认1min与NullPool。结合调度单元、CLI故障/结果落盘/重启交付、真实CLI+本地假provider及实际PostgreSQL回滚的候选保存/校验测试17项通过；其中数据库不可用时只发一次合成模型请求，恢复后成功保存建议。Ruff、格式、架构及diff检查通过。日志outputs/scheduler-lock-final.log和scheduler-lock-delivery-final.log。未真实收费分析、未改变数据库表/字段/迁移或引入依赖；本轮无UI改动。
+
+确认全库活动/排队任务0与HELD0后重载Worker/API，未中断任何模型请求。新Worker子PID23340（父33236）10:25:41日志确认scheduler_database_session_ready idle_timeout_ms=60000 heartbeat_seconds=5和Worker ready；生产调度连接PID1082430，application_name=test-verity-scheduler，AUTOCOMMIT会话xact_start=None，生产咨询锁唯一1个，HELD0，API live/ready200。本轮没有再手动清理数据库连接。ARCHITECTURE、AI_CODEX_CLI_IMPLEMENTATION和AI_SERVICE已同步现行行为。旧无超时版本连接不会被新代码追溯设置，但当前生产持锁连接已由新版本重新建立，不再沿用此前0超时连接。
+
+
+## 2026-11-17：修复CLI大文件阅读截断与内嵌图片仅作Base64文本
+
+用户截图显示原生chat93本轮已完成、等待输入，最终JSON却complete=false并承认部分正文/图片未读。用户选择仅处理“大文件未读完、提前结束”，未授权导入当前155条或追加收费分析。随后追问工具为什么截断。实际run1752/batch910仍为原FAILED，93是后续原生对话，不能把其生成JSON自动覆盖原报告。
+
+证据：私有会话47c9aee5-efc0-40f4-9453-c5706966e127保留的input.json为1151703字节、134个文本块，最大HTML块1015484字符，19处data:image（17 WebP和2 SVG）URI占971699字符。旧轮filesystem完整读取后直接打印结果，工具日志明确Warning: truncated output(original token count:580734)，又有11187/20397token输出截断；文件在JS内读全不代表展示给模型读全。11月17日10:31开始续聊，30分6秒后正常task_complete，输出107149字符、155条cases、10条notes、complete=false；本轮没有新工具读取，沿用上一轮部分上下文。不是平台30分钟超时，也不能将未读归因为具体模型/推理档位不支持。
+
+修复公共integrations/cli_reading：在同一任务私有input目录生成以原件哈希命名的不可变reading-v1目录，保留原始input.json。按原message角色/顺序/content序号列完整正文，无损正文文件最多4096字符，目录6144字节分页（目录本身也递归分页）。有效PNG/JPEG/WebP/GIF data URI解码为原字节本地图片、正文只替换该URI，保留原坐标/URI前缀/字节哈希/替换映射；重复图只存一份、每处引用保留。非法URI及SVG原样留文，原生input_image附件仍沿原生传输。全部仍由官方标准filesystem服务read_text_file/read_media_file读取，无新MCP协议或自定义读工具/命令/权限。真实CLI+假provider验证图片经functions.exec的image内容转发进入模型视觉输入，文本没有truncated。
+
+TUI新建/续接从实际保留input.json生成阅读目录，指令另写按内容哈希命名的新文件，追加先核对目录/补读缺失资料/正文每次一个文件/截断后重新分次读取/图片走视觉输入；不覆盖旧Skill、instructions.txt、原生历史或结果。真实固定0.166.0续接测试用旧指引创建第一轮，第二轮同thread新指引已进入请求且历史/固定Skill保留。非交互大文件入口共用；API与小输入保持。没有业务拆批、多次独立分析拼接、自动补调、工具读次数门槛或强制complete=true；真实上下文/工具限制及业务待澄清仍需如实保留，不能保证模型一定完整理解全部业务。
+
+验证：用原输入的临时副本离线逐字还原全部134块通过，146正文文件（最大4096字符）、17处图片对应9份独立原图、9个目录文件（最大6082字节），原件不变，0模型请求；仅安全数字摘要outputs/cli-reading-verified-20261117.json。36项相关后端全部通过，含真实CLI+本地假provider的读取/视觉传输/新旧会话续接、原生上下文/权限/架构，以及原文重构、目录有界、篡改拒绝；日志outputs/cli-reading-backend-20261117.log。前端相关16项、check/build及Ruff/格式/diff检查通过；无可见布局/字段改动，仅新增准备失败中文错误映射，原有chunk警告保留。不把假provider测试当真实中转/业务覆盖验收。
+
+93已明确正常完成、无pending输入、最后task_complete仍01a1e758-7fa0-7fb3-b583-8695e929a78a后，通过原chat.cancel关闭空闲进程使新指引能在下次恢复加载；原生历史/155条结果原文仍在私有会话，不自动导入。随后全库五类分析/各对话排队运行均0、HELD0才重载本地服务。用户需要手动“继续同一CLI对话”才创建下一次模型轮；本次未发送新收费分析，也未切换配置或推送远端。新规则只影响下一次进程启动/续接，旧正在运行app-server不会热替换固定指令。
+
+重载核验：API与5173代理ready均200；新Worker子进程21048于2026-11-17 11:20:45记录scheduler_database_session_ready及analysis_chat_worker_ready，父进程28960存活。未重新打开占预算的空闲终端或发送用户问题。
+
+
+## 2026-11-17：旧CLI恢复复用阅读目录与历史，取消反复重建/全量重读要求
+
+用户询问每次进入原CLI是否都需要重新加载资料，说明后要求“改一下”。本轮优化恢复行为，不重新执行其实际分析。
+
+公共cli_reading首次构建后用原有后端Fernet主密钥保存认证加密的原件哈希/阅读文件摘要清单；后续build仅流式校验input.json及缓存文件哈希，复用已有目录，不再JSON解析整包、正文拆分、图片Base64解码或创建临时阅读目录。清单原子发布，绑定原件SHA256；篡改清单/原文片段、增删文件、符号链接均拒绝，不回退为默认信任。缺少清单的旧目录完整对照一次后补清单，既有阅读文件与mtime保持。哈希检查仍会本地读文件，但不会把资料再次发送给AI，也不声称零磁盘读取。
+
+新建指引仍要求首次完整阅读固定范围；恢复同一个原生会话另附明确指引：复用历史中已完整读取且当前仍可用的内容、阅读记录和成果，不因恢复从头重读或每次重新打开目录，仅补读未读/截断/上下文压缩后缺失/当前问题要核对的部分。缓存不等于AI已读，不伪造阅读完成标记，不新增语义完成门槛。原input/Skill/instructions/history不覆盖，阅读指引仍是新哈希命名文件。关闭弹窗重开只恢复显示连接，用户发问才进入下一轮，不自动模型请求。
+
+验证：39项相关后端通过，含真实0.166.0 CLI配本地假provider恢复同一thread并保留历史/Skill，新指引进入请求且materialize禁止调用时仍可恢复；以及阅读无损/图片/目录有界/旧目录一次升级/缓存复用不改mtime/同大小同时间内容篡改拒绝/伪造清单及缺文件拒绝、终端/权限/架构回归。日志outputs/cli-reading-reuse-backend-20261117.log。Ruff、格式检查通过，无新增依赖、数据库结构或UI布局/请求变更，不需前端重建或新数据库迁移。无真实收费AI验证、未导入旧155条候选、未推送远端。
+
+AI_CODEX_CLI_IMPLEMENTATION、CASE_GENERATION及ARCHITECTURE现行描述已直接修订，替代此前“每次恢复重新构建再逐字比较”的行为。服务重载前实时核查五类及全部对话任务排队/运行均0、HELD0；未中断用户模型调用。旧原生会话的已读情况由其真实历史保留，不能以本次优化保证模型永不按需复读。
+
+本轮重载后API及5173代理ready均200；新Worker子15940于11:33:07记录专用调度会话和Worker ready，原生历史保留，未创建新的终端任务或发送问题。
+
+
+## 2026-11-17：原生CLI复用历史对话，缓存画面并从末尾增量恢复
+
+用户指出每次打开CLI重复滚动，要求缓存；随后明确“CLI应该放到历史对话里，之前说过复用，不要新弹窗”。按当前明确要求，移除页头独立CLI工作区入口与弹窗，把GenerationCliWorkspace嵌入原历史对话主区域；原生批次开始/重试成功进入该历史区域。API记录仍复用原GenerationChat，不为CLI新增另一套模型问答。功能/引用标签保持，但原生CLI使用同一个完整线程。原CaseDialog本轮曾临时试加open属性，最终全部撤回，不改变共用弹窗。
+
+GenerationWorkspace按用户/项目/记录key懒创建CachedCliWorkspace，第一次进入后保留同一xterm实例、已解析屏幕和WebSocket；返回报告只隐藏终端并禁用输入，新增输出继续到缓存。再进入只复查当前执行/权限，直接scrollToBottom，不reset或从头回放。修复父回调身份变化引发终端/连接重复创建的根因：结束会话回调通过ref读取，不参与实例/连接生命周期依赖；自动轮询/父组件更新不再销毁画面。首次冷恢复仍需解析原始ANSI，但过程隐藏，ready及异步解析完成后一次显示底部；已结束socket在解析完成前关闭也可正常展示末尾。Esc返回报告且恢复历史入口焦点，不向CLI发送中断。
+
+断线重连按已接收帧数cursor请求新增原始输出（nativeTerminalApi终端WS查询参数，terminal_transport解析0至JS安全整数）；仍沿原Origin/cookie/项目/执行发起人鉴权，不接收任意路径。新执行/epoch改变清空旧缓存与cursor，失效连接回调丢弃。缓存仅当前页面内存，记录/项目/用户切换、页面离开或刷新后需重新恢复，不写localStorage/IndexedDB或复制会话到其他用户。原始服务端历史保留，未改模型输入/调用/取消/预算或报告结果。
+
+验证：前端232项全部通过、check/build通过；新增真实xterm回归覆盖返回报告缓存同实例/单连接、隐藏禁输入且接收后台尾部、cursor重连、父回调改变不重建、新epoch清除及旧回调隔离、首次隐藏解析/底部显示/完成socket先关闭，生成入口测试验证进入历史且无新弹窗/API问答。后端5项WS（含真实CLI+本地假provider关闭显示仍后台完成）、架构与Ruff通过；cursor新增测试覆盖仅新帧和非法游标拒绝。日志outputs/cli-history-cache-frontend-tests-20261117.log；原型check-case-generation对根verity-prototype.html通过，原CLI弹窗演示替换为已有历史区域内的CLI示意，未改项目外原型。
+
+视觉使用正式GenerationWorkspace/终端组件配合成HTTP和WS，不登录实际账号、不发模型请求：返回报告→后台新增→再次历史，终端连接数保持1、xterm数量1、尾部含新增、dialog数量0、无恢复loading。390px无横向溢出，终端焦点/末尾/返回操作核验。首次调试暴露父回调导致重建，修复后新建独立tab重验无console error；旧tab保留的修前错误没有当作修后结果。证据outputs/cli-history-cache-qa-20261117/history.png、mobile.png、proof.json（errors空）；临时前端HTML已移至该证据目录，浏览器tab关闭、视口复原。生产构建原有chunk提示保持。
+
+只重载本地API以加载增量cursor传输，Worker15940仍是11:33:05原进程且存活，未中断或新发用户CLI模型轮；API和5173代理ready均200。前端Vite已加载新界面，用户刷新后从“历史对话”进入原会话即可。本轮没有真实收费重试、候选导入、数据库迁移/新依赖、远端推送或发布。
+
+
+## 2026-11-17：历史终端回放错列残字与冷恢复速度，恢复遮罩增加loading
+
+用户先发“正在恢复终端最新画面”截图，随后说明画面已出来但左侧竖列出现重复字，最后要求遮罩增加loading图标。实时确认仍是1752的已结束chat93，没有新模型轮：CANCELLED、turn completed，原生画面33112406字节、50366个加密片段，解密字符18653656。原先每页50片段，需要约千次读取/传输；数据不是空或生成还在运行。
+
+残字根因用实际原画面离线复现：93保留的启动尺寸34行/126列，新历史区域按104列直接解释原光标控制会在末尾34行产生16行异常行首字符；同一原始日志先按126列恢复、再resize到104列，异常行首变0。没有删改原始JSON或过滤文本掩盖，不是模型重复输出。私有诊断临时明文只在原会话state目录创建，Node/xterm检查后finally删除，公开摘要只数值（outputs/cli-replay-geometry-20261117.json）。
+
+修复：会话DTO带replay_rows/replay_cols（旧记录从原context读取；未显式保存的生成启动默认30/110）。前端回放开始设置原行列尺寸，恢复期间禁止fit/向PTY发resize，ready且异步解析完成后才适配当前区域、显示末尾。新原生执行在单独*.sizes.enc.jsonl中按原始帧cursor记录初始/后续窗口尺寸，沿原密钥加密；与原ANSI日志写入共享锁，原ANSI正文保持不变。输出页附相对片段位置的resizes，前端校验位置/尺寸范围并在对应文本之间排队应用，支持之后真实窗口变化的回放；旧历史缺失的中途resize不能补造，本次93初始126列修复已复现有效。
+
+冷恢复输出改为有界大页（最多2048片段、累计约256Ki字符后换页，单片段原样保留），前端合并连续片段写入xterm，cursor仍按原片段计数，历史顺序/内容不变。实际50366片段减少为72页，离线服务端完整读取1.251秒（不含网络、数据库鉴权/节流和浏览器绘制）；原件/全部18653656字符保留。恢复遮罩复用generation-spinner，显示24px旋转图标与原文字，结束自动移除；减少动态效果偏好仍遵循现有主题，错误状态不持续假转圈。
+
+验证：前端235项通过，包含原尺寸恢复后适配无错列残字、片段间resize、非法尺寸/位置拒绝及全部旧缓存/回调/增量/输入保护回归；check/build、UI规范和Ruff/格式通过。后端16项（原生TUI、WS、架构，含真实固定CLI+本地假provider），额外实际原生生成1项验证新尺寸记录确实生成并传到输出；合成5000片段有界分页逐字一致/resize位置保持通过。日志outputs/cli-replay-fix-backend-20261117.log及cli-replay-fix-frontend-20261117.log，构建原有chunk提示保持。没有真实收费模型请求或重跑用户分析。
+
+正式页面组件配合成数据浏览器验证：恢复期间spinner存在且computed animationName=generation-spin；恢复后loading消失、原生输入可见、无dialog或console error；390px无横向溢出。截图outputs/cli-replay-fix-qa-20261117/loading.png与restored.png，临时前端页面已移至该目录fixture.html，tab关闭、视口恢复。原型根文件同步恢复说明，check-case-generation通过；未修改项目外旧原型。
+
+实时核对所有分析及对话任务活动/排队均0、HELD0后重载API/Worker，加载尺寸记录与传输；原93及全部原生历史保留，没有自动新建会话、发送提问、导入候选或调用模型。数据库结构/依赖/权限均未扩大，后台模型时限不变。
+
+本轮加载核验：API及5173代理ready均200；新Worker子4324于12:22:55记录调度会话及Worker ready；实际授权会话视图93返回replay_rows=34/replay_cols=126。未自动打开CLI或发送新问题，原状态仍CANCELLED/本轮已完成。
+
+
+## 2026-11-17：用例生成Skill 2.1.2收紧可继续设计却提前收尾
+
+用户截图原生CLI回答“还有设计未完成和缺业务规则两类原因，complete=false”，并明确指出应改Skill。只读核查当前chat94仍RUNNING但原生最后一轮已完成等待输入；6:12 UTC一轮输出41条候选、6条BUSINESS_QUESTION、1条UNFINISHED，随后用户问为何false，模型解释承认部分独立输入/边界/拒绝原因仍未拆分。没有追加模型工具执行或收费请求。
+
+根因规则存在矛盾出口：主Skill允许“资料不可用或本次设计未完成”归UNFINISHED，evidence-and-scope允许“模型尚未处理则记UNFINISHED”，roles-and-state也将分类未处理归UNFINISHED。虽然coverage-review原本要求补漏，宽泛出口仍允许以承认遗漏替代当前继续设计。用户本次明确授权修改项目业务Skill，不是更改CLI读取工具或强制complete=true。
+
+已把skill/case-generation版本从2.1.1升为2.1.2，契约仍3。主指令与覆盖反查、依据、粒度、角色参考同步要求：有明确依据且仍可补读/设计/拆分/补断言/比较去重的工作必须继续完成，不作为主动提交UNFINISHED的理由；局部业务决定缺失只隔离依赖它的最小分支，完成其他明确场景。真正资料缺失、读取失败且在本次授权能力内无法恢复等实际阻碍仍可UNFINISHED，不能虚构工具/容量限制。只剩业务问题时保持BUSINESS_QUESTION/false，不再额外泛写设计未完成；不新增条数目标、覆盖证明、输出字段或平台保存拒绝条件，不保证提示词能强制模型始终完成。
+
+contract.md仅同步版本说明和收尾指引、现有枚举描述，JSON和机器验证不变；evaluation增加六组合成判据，包括三种明确拒绝拆分与独立日期范围缺失、可补读资料、真缺附件、执行准备和解决旧UNFINISHED后只剩业务问题。旧examples/legacy-contract/资源清单不变，运行包仍12文件（10参考块）。备份及原SHA保留在outputs/case-generation-completion-before-20261117/。
+
+仅更新根verity-prototype.html中case-generation公共文件快照与2.1.2版本，其他四包逐对象验证未变化；实际目录中原有segmented-output-draft.md本次同步到参考文件树，仍不在运行资源清单，未启用分段输出能力。同步脚本版本更新2.1.2；原型检查固定文件数相应为28，并验证草案usage为参考，不参与正式AI指令。没有改项目外旧原型或反向覆盖主文件。
+
+验证：生产snapshot/model_context读取新版2.1.2/契约3、12文件/10参考块、逐文件原字节哈希及规范化正文核对通过；六组旧配对例子全部通过原contract验证。Skill文件/快照和生成纯契约共31项检查成功，其中3项PostgreSQL未启用跳过，实际28项通过；不是数据库或真实模型质量验证。Skill管理和用例生成根原型检查、diff检查通过。摘要outputs/case-generation-completion-verified-20261117.json，日志outputs/case-generation-completion-tests-20261117.log。
+
+没有重启服务、取消当前94、替换其固定input/Skill/原生历史、改报告或导入候选，没有真实收费评测/重试或远端写入。新任务快照会读取新版；当前原生会话仍保留旧规则，普通续聊不会静默升级旧快照。若用户要在旧会话继续，应由用户明确发送补齐要求，或明确新建采用新版的任务，不自动发送。
+
+
+## 2026-11-17：原生CLI续聊结果转待审阅并复用审核入库
+
+用户问“现在结束对话怎么入库”。实时只读核查1752原生成仍FAILED、原batch无建议；94已由用户结束为CANCELLED、原生最后一轮completed。原生私有历史含两份正常结束生成JSON：11:01的155条和14:12的41条，另有普通解释消息；二者免费delivery/contract预览均全部可保存，0结构问题，complete=false不阻止合法候选保存。本轮未替用户保存或应用真实结果。
+
+已补历史对话内“保存CLI返回结果”入口：读取正常结束原生轮次，明确选择时间/数量，预览原文、有效建议和校验问题数，再由用户点击“保存为待审阅候选（不调用AI）”。保存为独立生成记录，跳到用例建议页，复用原批量审核入库。结束进程仅停止CLI，不自动保存/应用；不自动选最新、不合并155与41、不覆盖旧报告/原生历史/人工处理。疑似生成JSON即使格式破损仍可选并保存为问题候选，普通解释和失败/中断轮次不当正常最终结果。
+
+integrations/native_candidates仅从服务器绑定私有state/sessions读取正常completed的assistant final messages，守住固定目录/符号链接/半行边界，结果ID绑定thread/turn/时间/原文哈希；不导入数据库或业务模块。case_generation/native_results服务沿同项目真实执行发起人权限（与native_terminal.generation一致，兼容他人授权人工重试）及原source.recheck，复用delivery、原contract及私有candidate/delivery存储；保存新run/batch状态为COMPLETED或有根结构问题时FAILED，副本Skill沿原快照不套当前2.1.2。metadata.native_result保存来源run/batch/thread/turn/哈希/作者/时间/请求UUID，无新表/字段/迁移。按结果幂等，重复UUID保存不同结果409，源/新记录及逻辑删除规则保留，未调用AI或用例写入服务。
+
+新增GET /{run_id}/terminal/results、GET /{run_id}/terminal/results/{result_id}、POST /{run_id}/terminal/results/{result_id}/save。客户端只传结果ID、请求UUID及确认，不传报告/输入/路径或权限；GET仅预览。前端nativeResultApi复用公共HTTP并验证ID/日期/计数/权限字段，NativeResultReview复用Form/FormSelect，明确每次一份、问题可见、原件保留；用户确认保存后新记录沿原GenerationWorkspace选中与人工审核流程，不开新CLI弹窗、不再发模型或自动取消原CLI。
+
+验证：新增后端5项全部通过，含3项真实PostgreSQL回滚API/入库用例：正常部分结果独立保存并经原apply实际写入合成用例；重复保存幂等、请求冲突/CSRF/外项目/非执行人拒绝；重复priority一条隔离其他有效项保留、原文完全不变；破损JSON仍以问题候选保存。另纯读取测试覆盖正常完成/解释/失败消息筛选、原重复字段及追加半行ID稳定。无真实收费模型调用。前端238项通过、check/build通过，架构、Ruff/格式及根原型检查通过。日志outputs/cli-result-save-backend-20261117.log和cli-result-save-frontend-20261117.log，原有构建chunk提示保留。
+
+正式组件配合成HTTP/WS浏览器验证原历史区域无dialog：默认未选轮次时保存禁用，主题下拉有两份不同时间/数量结果，明确选择部分结果后预览/保存可用，390px无横向溢出且无console error。浏览器只检验预览，未点击假保存；实际保存到审核入库由真实PostgreSQL回滚测试验证。证据outputs/cli-result-save-qa-20261117/preview.png、mobile.png，临时HTML已移至该目录fixture.html；tab关闭、视口恢复。根总原型同步静态入口/说明，无项目外原型修改。
+
+仅重载本地API加载新路由；Worker4324保持原12:22:55进程，未中断后台CLI；API与5173代理ready均200，OpenAPI已含3个结果处理路径。用户刷新后：历史对话→保存CLI返回结果→选所需轮次→保存为待审阅候选→用例建议审核/批量审核入库。本轮没有代选155/41，没有原始业务数据公开落盘、候选生产写入、远端推送或发布。
+
+## 2026-11-17：纠正为同一CLI对话保存多个候选轮次（现行）
+
+用户明确要求同一对话内多份候选分别保存/入库，不应创建新对话，并在中断后要求继续。前一节独立CaseGenerationRun方案已被本节替代。保存现仅在原run下追加CaseGenerationBatch候选轮次；批次不带新终端绑定，保留原CLI历史和缓存。各轮重新分配平台请求/建议/问题/证据命名空间，业务资料和模型原文不改；按源结果幂等。首次生成已自动捕获同一原文时仅补来源标记，不重复或改写原报告。候选保存轮次不可作为AI批次收费重试，免费修正/重新校验继续可用。
+
+前端保存后留在同一历史对话，已保存轮次明确标记，可“审核本轮候选”；进入原记录结果页按轮次显示建议、问题和原报告。默认最新已保存轮次，可切换到其他轮或全部；切换清空勾选/筛选，人工处理历史完整保留。原入库流程及来源/当前用例版本核查继续复用，没有自动应用或新模型请求。
+
+旧副本归回前强制核对来源输入/绑定/Skill一致、原文哈希、没有人工处理/应用/采纳评估记录；不满足拒绝自动处理。真实1752原记录下已归回两轮：batch1046为155条（旧1852）、batch1047为41条（旧1853），共196个唯一候选标识，原run修订号3。旧1852/1853逻辑归档并记目标轮次，旧input/report/私有原文保留。归并前后项目用例库均0、原记录应用记录0；没有自动入库。计划与回执分别在outputs/native-round-regroup-plan-20261117.json、native-round-regroup-receipt-20261117.json；最终只读核验native-rounds-live-verification-20261117.json确认旧输入/报告哈希未变、两轮数量及唯一标识一致，当前原生会话95保留。归并脚本仅用于这次已完成的修复，受源修订号守卫，勿重复执行。
+
+新增Alembic 20261117_45已审查SQL并落库，仅更改已有batch表/6个字段的中文COMMENT，不新增表、列或依赖。真实库全部batch注释与模型逐项一致，alembic current为45/head、check无新差异。架构与数据库模型注释检查、7文件Ruff/格式、根用例生成原型检查及diff检查通过。
+
+最终验证：后端8项通过，包含真实PostgreSQL回滚测试：同记录保存→原审核入库、两轮隔离且先前应用保留、重复字段局部隔离、破损根JSON可见、请求冲突/权限、首次捕获不重复、未审核旧副本归档及已处理拒绝。前端239项通过，check/build通过，已有大chunk提示保留。日志outputs/native-rounds-backend-20261117.log、native-rounds-frontend-20261117.log、native-rounds-frontend-check-20261117.log、native-rounds-frontend-build-20261117.log。测试使用合成资料，均未发送真实模型请求。
+
+正式React组件结合成HTTP/WS做浏览器验收：单条侧栏记录保留两轮，保存/审核入口在原历史主区域，已保存按钮禁用；审核本轮候选回原记录对应2条，切至另轮仅1条且勾选清空。终端连接数仍1，390px无文档横向溢出，无console error。证据outputs/native-rounds-qa-20261117/history.png、report.png、narrow.png；临时HTML移到该目录fixture.html，临时视口恢复。根verity-prototype.html同步轮次选择与原历史内保存/审核说明，没有项目外原型修改。
+
+只重载API加载本次后端修正，新API10160；8000及5173代理ready均200。Worker4324仍为12:22:53启动进程，用户CLI95未由本次停止或新建。没有付费模型验证、远端推送或发布。用户刷新后在原历史对话选择已保存轮次→审核本轮候选→原审核入库流程；后续新轮次保存同样不会新增对话。
+
+## 2026-11-17：精简用例生成与CLI界面说明
+
+按用户“优化界面、去掉无用说明”要求，删除生成页/历史页顶部、终端上方、轮次选择下方、记录侧栏及固定依据侧栏的重复规则和技术实现说明；保留真实资料、范围、基准状态、引用、计费动作、执行状态与错误。保存区标题改“保存候选结果”，按钮缩短为“保存到当前对话”/“本轮已保存”；已保存时突出主按钮“审核本轮候选”。候选数常驻显示，只有issues>0时提示前往冲突与待澄清，不展示0问题及complete=false技术说明。API聊天输入区仅在有引用时显示引用信息。保存、审核、权限、历史及模型调用逻辑均未修改。
+
+同步根verity-prototype.html和模块说明，原型仍明确为静态演示。前端239项测试、check、build、根用例生成原型与diff检查通过，已有大chunk构建提示保留；本轮无后端或数据库变更。日志outputs/cli-ui-copy-tests-20261117.log、cli-ui-copy-check-20261117.log、cli-ui-copy-build-20261117.log。
+
+正式组件配合成HTTP/WS做浏览器验收：历史主区域删去长说明，已保存结果突出审核按钮；0问题无问题提示，2项问题仍明确显示；点击审核回原记录对应候选。390px展开原始JSON无文档横向溢出；临时视口恢复。证据outputs/cli-ui-copy-qa-20261117/history.jpg、mobile.jpg、issues.jpg，临时HTML移为该目录fixture.html。未操作真实CLI、保存真实候选或发送AI请求，未重启服务、推送或发布。开发页面刷新即可看到精简界面。
+
+## 2026-11-17：全站检查并清理重复界面说明
+
+用户要求继续检查其他界面，去掉无用的可见注释。已检查全部前端页面的段落、长提示和条件文案，调整44个前端文件，覆盖概览、需求/原型资料、用例管理及编辑/导入、五类分析及对话、候选处理、验收指标、项目/账号/AI/GitHub设置、本地代码和Skill管理。首轮删除64段重复说明、缩短127处长文案，后续补清条件提示、CLI事件、运行环境和连接测试说明。删除的是重复规则及实现解释，非代码注释或业务规则；必要的计费/发送范围、删除后果、未保存内容、格式限制、未接入状态及错误提示保留。代码调用、权限、数据结构和审核流程未变。
+
+根verity-prototype.html同步页头、正文、侧栏及导入说明；分析记录删除的嵌入脚本与docs/prototypes/analysis-record-deletion.js同步，保留输入/报告/对话/审计及不可恢复后果。UI_STANDARDS新增统一文案约束，将实现说明放模块文档，指标定义按需展开。同步现有5份前端测试及代码原型文案断言。变更原型检查另发现原先样例已为7条但断言仍为5条，在本轮修改前备份上复现同一失败后，将断言同步为7，未改变样例或业务逻辑。
+
+最终前端239项测试、22项根原型检查、tsc/ESLint/Prettier、生产构建和diff检查均通过；已有chunk体积提示保留。日志outputs/ui-copy-all-tests-20261117.log、ui-copy-all-prototype-checks-20261117.log、ui-copy-all-check-20261117.log、ui-copy-all-build-20261117.log。段落清单、修改清单和源文件备份在outputs/ui-copy-cleanup-20261117/，不包含凭据或原公司资料。
+
+浏览器用正式组件及合成HTTP响应抽查概览、需求资料、原型资料、用例管理、代码分析、变更分析、平台设置、GitHub连接、本地代码、代码分析导入弹窗共10个界面，未发现页面错误或横向溢出；Esc可退出导入弹窗。390px检查设置和需求资料，无文档横向溢出，CLI多轮计费及PDF限制仍明确显示，console error为空。证据outputs/ui-copy-all-qa-20261117/*.jpg，临时HTML移为该目录fixture.html，视口恢复。其他详情与弹窗通过源代码审阅和现有回归检查，未逐一做真实数据视觉验收。没有真实模型调用、业务写入、服务重启、远端推送或发布，开发页面刷新生效。
+
+## 2026-11-18：全部更新提交到GitHub
+
+用户明确授权将当前全部更新提交到GitHub。本地main与origin/main起点一致，整理本轮CLI原生终端/受限权限、标准MCP大文件读取、数据库恢复与调度心跳、同对话多轮候选审核、Skill完成规则及全站文案精简，共147个文件变更。凭据、.env、运行资料、数据库、本地输出和临时验收页面不纳入提交。
+
+提交前验证：相关后端180项全部通过（启用PostgreSQL回滚测试，原生CLI使用本地合成服务），前端239项全部通过，22项根原型检查通过，标准MCP文件服务1项通过；51个变更Python文件Ruff/格式通过，前端check/build通过，diff检查通过。Alembic为20261117_45/head且无新差异，真实批次表/字段中文注释与模型一致。原有构建大chunk提示保留。日志outputs/github-publish-*-20261118.log仅本地保留；没有真实收费模型请求、业务数据修改或服务重启。推送目标为origin/main；远端结果以提交及推送后的实际核验为准。

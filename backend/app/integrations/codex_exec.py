@@ -8,7 +8,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from functools import lru_cache
 from pathlib import Path
 from threading import Event, Thread
@@ -17,7 +16,8 @@ from uuid import uuid4
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.integrations import codex_probe
+from app.integrations import cli_reading, codex_filesystem, codex_probe
+from app.integrations.codex_events import EventJournal
 from app.integrations.response_diagnostics import safe_identifier
 from app.integrations.windows_job import WindowsJob
 from app.security.secrets import credential_cipher
@@ -36,8 +36,9 @@ NATIVE_POLICY = "native-v1"
 class CLIProgress:
     """Project JSONL events into safe counters; never publish model text or tool arguments."""
 
-    def __init__(self, stats, started):
+    def __init__(self, stats, started, event_sink=None):
         self.stats, self.started = stats, started
+        self.event_sink = event_sink
         self.pending = bytearray()
         self.messages = {}
         self.event_count = 0
@@ -84,6 +85,11 @@ class CLIProgress:
             self.event_count += 1
             self.stats["cli_event_count"] = self.event_count
             elapsed = round(monotonic() - self.started, 3)
+            if self.event_sink is not None:
+                try:
+                    self.event_sink(event, elapsed)
+                except (OSError, AppError):
+                    self.stats["error_capture_failed"] = True
             self.stats.setdefault("first_byte_seconds", elapsed)
             self.stats["last_activity_seconds"] = elapsed
             if kind == "thread.started":
@@ -230,8 +236,8 @@ def final_message(events: list[dict], exit_code: int, *, native=False) -> str:
             or (
                 native
                 and e["item"].get("type") == "mcp_tool_call"
-                and e["item"].get("server") == "verity_input"
-                and e["item"].get("tool") in ("read_input", "search_input")
+                and e["item"].get("server") == "filesystem"
+                and e["item"].get("tool") in codex_filesystem.READ_ONLY_TOOLS
             )
         )
         for e in events
@@ -399,17 +405,11 @@ def _execute(
             complete_payload = payload
             (work / "input.json").write_bytes(complete_payload)
             digest = hashlib.sha256(complete_payload).hexdigest()
-            reader = Path(__file__).with_name("codex_files.py")
-            mcp = {
-                "command": sys.executable,
-                "args": [str(reader), str(work)],
-                "required": True,
-                "startup_timeout_sec": 15,
-                "default_tools_approval_mode": "auto",
-            }
+            index = cli_reading.build(work)
+            mcp = codex_filesystem.configuration(work)
             args += [
                 "-c",
-                "mcp_servers.verity_input={"
+                "mcp_servers.filesystem={"
                 + ",".join(
                     key + "=" + ("true" if value is True else json.dumps(value))
                     for key, value in mcp.items()
@@ -418,11 +418,12 @@ def _execute(
             ]
             payload = (
                 "完整固定输入在本次独立任务目录的input.json。"
-                "只能使用verity_input提供的read_input/search_input读取和查找。"
-                "使用next_offset_bytes连续读取；来源之间的关联需结合完整原文判断，"
+                "使用filesystem提供的标准只读工具读取input.json。"
+                "文件以UTF-8保存，由标准工具读取；来源之间的关联需结合完整原文判断，"
                 "不得将未读部分声称已核查。文件保留全部原角色、资料、路径和引用。"
                 f"总字节数={len(complete_payload)}，SHA256={digest}。"
-                "结合固定Skill完成业务分析，仅输出最终契约结果。"
+                + cli_reading.GUIDANCE.format(index=index)
+                + "结合固定Skill完成业务分析，仅输出最终契约结果。"
             ).encode()
         image_arguments = []
         for number, (extension, binary) in enumerate(images, 1):
@@ -462,7 +463,10 @@ def _execute(
     )
     chunks = [bytearray(), bytearray()]
     overflow = Event()
-    progress = CLIProgress(stats, started)
+    journal = EventJournal(
+        attempt, credential_cipher("ai_key_storage_unavailable"), (key, redact_key)
+    )
+    progress = CLIProgress(stats, started, journal.append if not probe else None)
 
     def drain(pipe, target, stdout=False):
         try:

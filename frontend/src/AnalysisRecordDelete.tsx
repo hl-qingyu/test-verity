@@ -128,7 +128,7 @@ export function AnalysisRecordDelete({
                 结果验收统计同步移除。需求分析的关联任务与报告一并处理。
               </p>
               <p className="hint">
-                原始输入、报告、对话及审计保留，已入库用例和历史成果保留。本期没有恢复入口，不释放存储空间。
+                原始输入、报告、对话与审计保留；已入库用例不受影响，暂不支持恢复。
               </p>
               {info.active && (
                 <p className="form-error" role="alert">

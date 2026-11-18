@@ -27,7 +27,6 @@ export function Platform({
       <div className="page-head">
         <div>
           <h1>平台设置</h1>
-          <p>统一配置 AI 服务与 GitHub 访问方式。</p>
         </div>
       </div>
       <div className="settings-layout">
