@@ -1,6 +1,7 @@
 """Record-owned native CLI sessions scheduled by the existing worker."""
 
 import copy
+import logging
 from datetime import UTC, datetime
 from time import monotonic
 
@@ -19,6 +20,8 @@ from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration, configuration_snapshot
 from app.modules.case_generation import service, sources
 from app.modules.documents import service as documents
+
+logger = logging.getLogger(__name__)
 
 
 def run_access(project_id, run_id, actor, db):
@@ -274,7 +277,7 @@ def write(project_id, run_id, turn_id, payload, actor, db):
     return {"accepted": True}
 
 
-def execute(turn_id, factory):
+def execute(turn_id, factory, *, save_completed_turns):
     try:
         with factory() as db:
             turn = db.get(CaseGenerationChatTurn, turn_id)
@@ -291,11 +294,14 @@ def execute(turn_id, factory):
             service.own(project_id, run_id, actor, db)
             sources.recheck(project_id, run.metadata_snapshot, actor, db)
             config, key = analysis_configuration(actor, db, turn.ai_config)
+        spec = context["native_terminal"]
         last = 0.0
+        cursor = 0
+        finished = set()
 
-        def check():
-            nonlocal last
-            if monotonic() - last < 1:
+        def check(force=False):
+            nonlocal last, cursor
+            if not force and monotonic() - last < 1:
                 return
             last = monotonic()
             with factory() as db:
@@ -304,8 +310,32 @@ def execute(turn_id, factory):
                 if row["status"] != "RUNNING":
                     raise AppError(409, "generation_chat_cancelled")
                 analysis_configuration(actor, db, config)
+                try:
+                    events, cursor = codex_terminal.turn_events(spec["identity"], turn_id, cursor)
+                    finished.update(
+                        (event["thread_id"], event["turn_id"])
+                        for event in events
+                        if event["method"] == "turn/completed"
+                        and event.get("status") == "completed"
+                        and event.get("thread_id")
+                        and event.get("turn_id")
+                    )
+                    if finished:
+                        finished.difference_update(
+                            save_completed_turns(
+                                project_id,
+                                run_id,
+                                spec["identity"],
+                                finished,
+                                actor,
+                                db,
+                                execution_id=turn_id,
+                            )
+                        )
+                except (AppError, OSError, ValueError):
+                    logger.warning("Could not save native generation results for chat %s", turn_id)
+                    finished.clear()
 
-        spec = context["native_terminal"]
         ai_client.terminal(
             config["base_url"],
             config["model"],
@@ -320,6 +350,7 @@ def execute(turn_id, factory):
             cols=spec["cols"],
             on_progress=check,
         )
+        check(force=True)
         with factory() as db:
             turn = db.get(CaseGenerationChatTurn, turn_id, with_for_update=True)
             if turn.status == "RUNNING":

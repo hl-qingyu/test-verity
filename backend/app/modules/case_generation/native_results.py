@@ -1,10 +1,11 @@
-"""Human-selected native results stay as independent rounds in their original record."""
+"""Native results stay as independent review rounds in their original record."""
 
 import copy
 import hashlib
 import json
 import re
 from datetime import UTC, datetime
+from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import select
 
@@ -13,6 +14,7 @@ from app.db.models import (
     AnalysisAcceptance,
     CaseGenerationApplication,
     CaseGenerationBatch,
+    CaseGenerationChatTurn,
     CaseGenerationRun,
 )
 from app.integrations import native_candidates
@@ -38,16 +40,20 @@ def own(project_id, run_id, actor, db, lock=False):
     return row
 
 
+def generation_json(text):
+    fence = re.fullmatch(r"\s*```(?:json)?\s*\n([\s\S]*?)\n```\s*", text)
+    raw = fence[1] if fence else text
+    return raw if raw.lstrip().startswith("{") and re.search(r'"cases"\s*:', raw) else None
+
+
 def candidates(project_id, row, actor, db):
     main = native_terminal.generation(project_id, row.id, actor, db)
     if not main:
         raise AppError(404, "generation_native_result_not_found")
     result = []
     for item in native_candidates.completed_messages(main["terminal"]["identity"]):
-        text = item["text"]
-        fence = re.fullmatch(r"\s*```(?:json)?\s*\n([\s\S]*?)\n```\s*", text)
-        raw = fence[1] if fence else text
-        if not raw.lstrip().startswith("{") or not re.search(r'"cases"\s*:', raw):
+        raw = generation_json(item["text"])
+        if raw is None:
             continue
         counts = {"case_count": 0, "note_count": 0, "complete": None}
         try:
@@ -160,7 +166,9 @@ def preview(project_id, run_id, result_id, actor, db):
     }
 
 
-def add_round(source, original_batch, item, payload, actor, db, *, legacy_run_id=None):
+def add_round(
+    source, original_batch, item, request_id, actor, db, *, legacy_run_id=None, automatic=False
+):
     data = native_rounds.review_input(original_batch.input_snapshot, item["id"])
     delivered = delivery.process(data, item["text"])
     report = contract.validate_report(data, delivered.report) if delivered.report else {}
@@ -168,12 +176,14 @@ def add_round(source, original_batch, item, payload, actor, db, *, legacy_run_id
     provenance.update(
         source_run_id=source.id,
         source_batch_id=original_batch.id,
-        save_request_id=str(payload.request_id),
+        save_request_id=str(request_id),
         actor_id=actor.id,
         saved_at=datetime.now(UTC).isoformat(),
         source_input_sha256=contract.digest(original_batch.input_snapshot),
         previous_run_status=source.status,
     )
+    if automatic:
+        provenance["save_mode"] = "AUTO"
     if legacy_run_id is not None:
         provenance["archived_run_id"] = legacy_run_id
     captured = False
@@ -295,7 +305,7 @@ def archive_legacy(project_id, source, old, payload, actor, db):
     if hashlib.sha256(raw.encode()).hexdigest() != origin["sha256"]:
         raise AppError(409, "generation_native_result_migration_requires_review")
     item = {**origin, "text": raw}
-    batch = add_round(source, original, item, payload, actor, db, legacy_run_id=old.id)
+    batch = add_round(source, original, item, payload.request_id, actor, db, legacy_run_id=old.id)
     old.metadata_snapshot = {
         **old.metadata_snapshot,
         "native_result_archive": {
@@ -342,6 +352,58 @@ def save(project_id, run_id, result_id, payload, actor, db):
         archive_legacy(project_id, source, old, payload, actor, db)
     else:
         item, original, _ = selected(project_id, source, result_id, actor, db)
-        add_round(source, original, item, payload, actor, db)
+        add_round(source, original, item, payload.request_id, actor, db)
     db.commit()
     return service.projection(source, actor, db)
+
+
+def save_completed_turns(project_id, run_id, identity, finished, actor, db, *, execution_id):
+    items = [
+        item
+        for item in native_candidates.completed_messages(identity)
+        if (item["thread_id"], item["turn_id"]) in finished
+    ]
+    if not items:
+        return set()
+    source = own(project_id, run_id, actor, db, True)
+    execution_row = db.get(
+        CaseGenerationChatTurn, execution_id, with_for_update=True, populate_existing=True
+    )
+    if (
+        execution_row is None
+        or execution_row.run_id != source.id
+        or execution_row.actor_id != actor.id
+        or execution_row.status != "RUNNING"
+        or execution_row.context.get("native_terminal", {}).get("identity") != identity
+    ):
+        raise AppError(409, "generation_chat_cancelled")
+    main = native_terminal.generation(project_id, run_id, actor, db)
+    if main["terminal"]["identity"] != identity:
+        raise AppError(409, "generation_terminal_bound_to_batch")
+    if source.status in service.ACTIVE:
+        return set()
+    sources.recheck(project_id, source.metadata_snapshot, actor, db)
+    original = db.get(CaseGenerationBatch, main["id"])
+    for item in reversed(items):
+        if item["id"] in source.metadata_snapshot.get("native_results", {}):
+            continue
+        raw = generation_json(item["text"])
+        if raw is None:
+            continue
+        try:
+            json.loads(raw)
+        except (ValueError, RecursionError):
+            continue  # Incomplete JSON remains available for manual recovery.
+        request_id = uuid5(NAMESPACE_URL, f"verity:generation-native-result:{item['id']}")
+        add_round(source, original, item, request_id, actor, db, automatic=True)
+    db.commit()
+    return {(item["thread_id"], item["turn_id"]) for item in items}
+
+
+def execute_chat(turn_id, factory):
+    with factory() as db:
+        turn = db.get(CaseGenerationChatTurn, turn_id)
+        native = bool(turn and "native_terminal" in turn.context)
+    if native:
+        return native_terminal.execute(turn_id, factory, save_completed_turns=save_completed_turns)
+    return execution.execute_chat(turn_id, factory)

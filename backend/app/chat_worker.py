@@ -24,6 +24,7 @@ from app.modules.case_analysis import apply as case_analysis_apply
 from app.modules.case_analysis import execution as case_analysis_execution
 from app.modules.case_generation import apply as generation_apply
 from app.modules.case_generation import execution as generation_execution
+from app.modules.case_generation import native_results as generation_native_results
 from app.modules.change_analysis import execution as change_analysis_execution
 from app.modules.code_analysis import execution as code_analysis_execution
 from app.modules.requirements import chat_execution, risk_analysis_execution
@@ -128,7 +129,7 @@ def _registry():
                 "on_claim": _generation_claim,
             },
         ),
-        (models.CaseGenerationChatTurn, generation_execution.execute_chat, {}),
+        (models.CaseGenerationChatTurn, generation_native_results.execute_chat, {}),
         (models.RequirementChatTurn, chat_execution.execute, {}),
         (models.ChangeAnalysisChatTurn, change_analysis_execution.execute_chat, {}),
         (models.CodeAnalysisChatTurn, code_analysis_execution.execute_chat, {}),

@@ -1589,6 +1589,7 @@ export function GenerationWorkspace({
                 runId={record.id}
                 label={chatFunction}
                 reference={reference}
+                resultRevision={record.serverRevision}
                 onSessionEnd={onSessionEnd}
                 onClose={() => setChat(false)}
                 onReviewResult={(id) => {

@@ -10,9 +10,9 @@ from uuid import uuid4
 
 import test_case_generation
 
-from app.db.models import CaseGenerationBatch, CaseGenerationRun
+from app.db.models import CaseGenerationBatch, CaseGenerationChatTurn, CaseGenerationRun
 from app.integrations import codex_terminal, native_candidates
-from app.modules.case_generation import execution
+from app.modules.case_generation import execution, native_results, native_terminal
 
 
 def history(path, values):
@@ -92,6 +92,75 @@ class NativeResultsDatabaseTests(unittest.TestCase):
         self.directory_patch.stop()
         self.native_dir.cleanup()
         test_case_generation.GenerationDatabaseTests.tearDown(self)
+
+    def test_worker_saves_completed_cli_result_while_terminal_is_open(self):
+        source = self.prepare(legacy=False)
+        raw = '{"cases":[],"notes":[],"complete":false}'
+        self.configure(source, [(raw, None), (raw, None), ("解释", None), ('{"cases":[', None)])
+        with self.factory() as db:
+            batch = db.get(CaseGenerationBatch, source["batches"][0]["id"])
+            identity = batch.ai_config["generation_terminal"]["identity"]
+            chat = CaseGenerationChatTurn(
+                run_id=int(source["id"]),
+                actor_id=batch.actor_id,
+                request_id=str(uuid4()),
+                function_key="",
+                finding_key="",
+                question="续接",
+                status="RUNNING",
+                context={
+                    "native_terminal": {
+                        "generation_bound": True,
+                        "identity": identity,
+                        "resume": True,
+                        "rows": 30,
+                        "cols": 110,
+                    },
+                },
+            )
+            db.add(chat)
+            db.flush()
+            chat_id = chat.id
+            db.commit()
+
+        def terminal(*args, on_progress, **kwargs):
+            on_progress()
+            items = self.client.get(self.api + f"/{source['id']}/terminal/results").json()["items"]
+            saved = [item for item in items if item["saved"]]
+            self.assertEqual(len(saved), 1)
+            self.assertEqual(saved[0]["timestamp"], "2026-11-17T06:01:00Z")
+            url = f"/{source['id']}/terminal/results/{saved[0]['id']}/save"
+            again = self.post(url, {"request_id": str(uuid4()), "confirmed": True})
+            self.assertEqual(len(again.json()["nativeRounds"]), 1)
+
+        events = [
+            {
+                "method": "turn/completed",
+                "status": "completed",
+                "thread_id": "thread-1",
+                "turn_id": f"turn-{i}",
+            }
+            for i in (1, 2, 3)
+        ]
+        with (
+            patch.object(native_terminal, "require_enabled"),
+            patch.object(
+                native_terminal,
+                "analysis_configuration",
+                return_value=(
+                    {"base_url": "https://example.com", "model": "test", "reasoning_effort": "low"},
+                    "fake-key",
+                ),
+            ),
+            patch.object(codex_terminal, "turn_events", side_effect=[(events, 100), ([], 100)]),
+            patch.object(native_terminal.ai_client, "terminal", side_effect=terminal),
+        ):
+            native_results.execute_chat(chat_id, self.factory)
+        with self.factory() as db:
+            self.assertEqual(db.get(CaseGenerationChatTurn, chat_id).status, "COMPLETED")
+            run = db.get(CaseGenerationRun, int(source["id"]))
+            results = list(run.metadata_snapshot["native_results"].values())
+            self.assertEqual([item["save_mode"] for item in results], ["AUTO"])
 
     def test_completed_partial_result_stays_in_original_record_then_uses_existing_apply(self):
         source = self.prepare(legacy=False)

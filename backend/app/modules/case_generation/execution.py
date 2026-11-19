@@ -387,13 +387,6 @@ def candidate(project_id, run_id, batch_id, actor, db):
 
 
 def execute_chat(turn_id, factory):
-    from app.modules.case_generation import native_terminal
-
-    with factory() as db:
-        turn = db.get(CaseGenerationChatTurn, turn_id)
-        native = bool(turn and "native_terminal" in turn.context)
-    if native:
-        return native_terminal.execute(turn_id, factory)
     diagnostics = {"phase": "preparing"}
     try:
         with factory() as db:

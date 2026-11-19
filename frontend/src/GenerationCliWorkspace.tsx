@@ -25,6 +25,7 @@ export function GenerationCliWorkspace({
   open = true,
   label = '整体',
   reference = '',
+  resultRevision,
   onSaveResult,
   onReviewResult,
 }: {
@@ -35,6 +36,7 @@ export function GenerationCliWorkspace({
   open?: boolean;
   label?: string;
   reference?: string;
+  resultRevision?: number;
   onSaveResult?: (id: string, requestId: string) => Promise<boolean>;
   onReviewResult?: (id: string) => void;
 }) {
@@ -357,13 +359,14 @@ export function GenerationCliWorkspace({
               onClick={() => setReviewResult((value) => !value)}
               aria-expanded={reviewResult}
             >
-              {reviewResult ? '收起结果保存' : '保存CLI返回结果'}
+              {reviewResult ? '收起结果' : '查看或手动保存 CLI 结果'}
             </button>
           )}
         </div>
         {reviewResult && onSaveResult && (
           <NativeResultReview
             base={base}
+            resultRevision={resultRevision}
             onSessionEnd={onSessionEnd}
             onSave={onSaveResult}
             onReview={onReviewResult}

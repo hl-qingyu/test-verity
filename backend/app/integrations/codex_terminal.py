@@ -103,30 +103,38 @@ def output(identity, execution, cursor=0):
     return page
 
 
-def turn_state(identity, execution):
-    """The native turn has a separate lifecycle from its still-open terminal."""
+def turn_events(identity, execution, cursor=0):
     path = directory(identity) / "output" / f"{int(execution)}.rpc.enc.jsonl"
-    state = {}
     if not path.is_file():
-        return state
+        return [], cursor
     cipher = credential_cipher("ai_key_storage_unavailable")
+    events = []
     with path.open("rb") as source:
+        source.seek(cursor)
         for line in source:
             if not line.endswith(b"\n"):
                 break
+            cursor += len(line)
             event = json.loads(cipher.decrypt(line.strip()))
-            if event.get("method") not in ("turn/started", "turn/completed"):
-                continue
-            status = event.get("status")
-            if status not in ("running", "completed", "failed", "interrupted"):
-                continue
-            error = event.get("error") or {}
-            message = error.get("message", "") if isinstance(error, dict) else ""
-            state = {
-                "turn_status": status,
-                "turn_error": message if isinstance(message, str) else "",
-            }
-    return state
+            if event.get("method") in ("turn/started", "turn/completed"):
+                events.append(event)
+    return events, cursor
+
+
+def turn_state(identity, execution):
+    """The native turn has a separate lifecycle from its still-open terminal."""
+    events, _ = turn_events(identity, execution)
+    for event in reversed(events):
+        status = event.get("status")
+        if status not in ("running", "completed", "failed", "interrupted"):
+            continue
+        error = event.get("error") or {}
+        message = error.get("message", "") if isinstance(error, dict) else ""
+        return {
+            "turn_status": status,
+            "turn_error": message if isinstance(message, str) else "",
+        }
+    return {}
 
 
 def prepare(identity, base_url, model, effort, instructions, fixed_input, resume):

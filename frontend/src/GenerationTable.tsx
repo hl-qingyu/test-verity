@@ -224,7 +224,7 @@ export function GenerationTable({
                             </td>
                             <td>
                               <div className="cg-table-key">
-                                <span>{s.key}</span>
+                                {!s.nativeResultId && <span>{s.key}</span>}
                                 <span>{d.priority || '未设优先级'}</span>
                                 {h &&
                                   DESIGN_FIELDS.some(

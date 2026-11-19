@@ -7,11 +7,13 @@ import type { NativeResult, NativeResultPreview } from './nativeResultApi';
 
 export function NativeResultReview({
   base,
+  resultRevision,
   onSessionEnd,
   onSave,
   onReview,
 }: {
   base: string;
+  resultRevision?: number;
   onSessionEnd: () => void;
   onSave: (id: string, requestId: string) => Promise<boolean>;
   onReview?: (id: string) => void;
@@ -43,7 +45,7 @@ export function NativeResultReview({
         if (!c.signal.aborted) setBusy(false);
       });
     return () => c.abort();
-  }, [base]);
+  }, [base, resultRevision]);
   useEffect(() => {
     setPreview(null);
     if (!selected) return;
@@ -61,7 +63,7 @@ export function NativeResultReview({
         if (!c.signal.aborted) setBusy(false);
       });
     return () => c.abort();
-  }, [base, selected]);
+  }, [base, selected, resultRevision]);
   async function save() {
     if (busy || saved || !preview?.can_save || preview.id !== selected) return;
     request.current ||= crypto.randomUUID();
@@ -80,7 +82,7 @@ export function NativeResultReview({
   }
   return (
     <section className="evidence mt" aria-label="从CLI结果保存待审阅候选">
-      <h3>保存候选结果</h3>
+      <h3>CLI 候选结果</h3>
       <Form
         onSubmit={(event) => {
           event.preventDefault();
@@ -134,7 +136,7 @@ export function NativeResultReview({
             disabled={busy || saved || !preview?.can_save}
             type="submit"
           >
-            {saved ? '本轮已保存' : '保存到当前对话'}
+            {saved ? '本轮已保存' : '手动保存到当前对话'}
           </button>
           {saved && onReview && (
             <button className="primary" type="button" onClick={() => onReview(selected)}>
