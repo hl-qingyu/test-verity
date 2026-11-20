@@ -140,16 +140,15 @@ class RegistryReader:
         self.take("}")
         self.take(")")
         canonical = "".join(body)
-        append = (
-            f"varfile={param}[0],sections={param}[1];"
-            "window.PROTOTYPE_ANNOTATIONS[file]="
-            "(window.PROTOTYPE_ANNOTATIONS[file]||[]).concat(sections);"
-        )
+        target = "window.PROTOTYPE_ANNOTATIONS[file]"
+        pair = f"varfile={param}[0],sections={param}[1];{target}="
+        append = f"{pair}({target}||[]).concat(sections);"
+        prepend = f"{pair}sections.concat({target}||[]);"
         alias = (
             f"window.PROTOTYPE_ANNOTATIONS[{param}[0]]="
             f"window.PROTOTYPE_ANNOTATIONS[{param}[1]]||[];"
         )
-        if canonical not in {append, alias} or not isinstance(entries, list):
+        if canonical not in {append, prepend, alias} or not isinstance(entries, list):
             reject()
         notes = self.registries.get("PROTOTYPE_ANNOTATIONS")
         if not isinstance(notes, dict):
@@ -158,10 +157,11 @@ class RegistryReader:
             if not isinstance(entry, list) or len(entry) != 2 or not isinstance(entry[0], str):
                 reject()
             file, value = entry
-            if canonical == append:
-                if not isinstance(value, list) or not isinstance(notes.get(file, []), list):
+            if canonical in {append, prepend}:
+                previous = notes.get(file, [])
+                if not isinstance(value, list) or not isinstance(previous, list):
                     reject()
-                notes[file] = notes.get(file, []) + value
+                notes[file] = value + previous if canonical == prepend else previous + value
             else:
                 if not isinstance(value, str):
                     reject()

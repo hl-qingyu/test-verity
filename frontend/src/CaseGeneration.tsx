@@ -72,14 +72,6 @@ import { GenerationChat } from './GenerationChat';
 import { GenerationCliWorkspace } from './GenerationCliWorkspace';
 import { GenerationSingleReview, GenerationApplicationResult } from './GenerationReview';
 
-function CachedCliWorkspace(props: Parameters<typeof GenerationCliWorkspace>[0]) {
-  const [opened, setOpened] = useState(false);
-  useEffect(() => {
-    if (props.open) setOpened(true);
-  }, [props.open]);
-  return opened || props.open ? <GenerationCliWorkspace {...props} /> : null;
-}
-
 export type GenerationPageCache = {
   projectId?: number;
   selectedId?: string;
@@ -1582,7 +1574,7 @@ export function GenerationWorkspace({
           >
             {nav}
             {nativeChat && project && record && (
-              <CachedCliWorkspace
+              <GenerationCliWorkspace
                 key={`${user.id}:${project.id}:${record.id}`}
                 open={chat && !detailLoading}
                 projectId={project.id}

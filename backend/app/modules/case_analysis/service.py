@@ -10,6 +10,7 @@ from app.db.models import (
     CaseAnalysisChatTurn,
     CaseAnalysisRun,
 )
+from app.modules.ai import native_terminal
 from app.modules.ai.service import (
     analysis_configuration,
     configuration_snapshot,
@@ -113,7 +114,7 @@ def view(row, summary=False):
             report=row.report,
             handling={k: v for k, v in row.handling.items() if k != "manual"},
             manual=row.handling.get("manual", []),
-            ai_config=row.ai_config,
+            ai_config=native_terminal.public_snapshot(row.ai_config),
             attempts=row.attempts,
             notice=sources.input_notice(
                 row.input_snapshot,
@@ -127,6 +128,7 @@ def view(row, summary=False):
 def detail(project_id, run_id, actor, db):
     row = own(project_id, run_id, actor, db)
     result = view(row)
+    result["terminal_available"] = native_terminal.available(row.ai_config, row.actor_id, actor.id)
     config = current_metadata(
         actor, db, mode=row.ai_config.get("call_mode") if row.parent_id else None
     )
@@ -304,7 +306,7 @@ def start(project_id, run_id, payload, actor, db):
         preference_version=None if row.parent_id else payload.ai_preference_version,
     )
     row.ai_config, row.actor_id, row.status = (
-        configuration_snapshot(config),
+        native_terminal.bind_snapshot(configuration_snapshot(config)),
         actor.id,
         "QUEUED",
     )

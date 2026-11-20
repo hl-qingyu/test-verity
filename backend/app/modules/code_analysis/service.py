@@ -16,6 +16,7 @@ from app.db.models import (
     SourceDocument,
     UserAccount,
 )
+from app.modules.ai import native_terminal
 from app.modules.ai.service import (
     analysis_configuration,
     configuration_snapshot,
@@ -228,7 +229,8 @@ def view(row, actor, *, detail=False):
         "updated_at": row.updated_at.isoformat(),
         "revision": row.revision,
         "origin": metadata.get("origin", "LEGACY"),
-        "ai": row.ai_config,
+        "ai": native_terminal.public_snapshot(row.ai_config),
+        "terminal_available": native_terminal.available(row.ai_config, row.actor_id, actor.id),
         "can_cancel": row.actor_id == actor.id and row.status in ACTIVE,
         "can_retry": metadata.get("origin") == "AI" and row.status in ("FAILED", "CANCELLED"),
         "findings_count": len(findings),
@@ -296,6 +298,10 @@ def listing(project_id, actor, db, page=1):
     items = []
     for row in rows[:50]:
         item = dict(row)
+        item["terminal_available"] = native_terminal.available(
+            item["ai"], item["actor_id"], actor.id
+        )
+        item["ai"] = native_terminal.public_snapshot(item["ai"])
         item["origin"] = item["origin"] or "LEGACY"
         item["can_cancel"] = item["actor_id"] == actor.id and item["status"] in ACTIVE
         item["can_retry"] = item["origin"] == "AI" and item["status"] in ("FAILED", "CANCELLED")
@@ -342,7 +348,7 @@ def enqueue(project_id, payload, actor, db):
         focus=payload.focus,
         targets=payload.targets,
         input_snapshot={},
-        ai_config=configuration_snapshot(meta),
+        ai_config=native_terminal.bind_snapshot(configuration_snapshot(meta)),
         metadata_snapshot={
             "origin": "AI",
             "selections": raw,
@@ -422,7 +428,7 @@ def retry(project_id, task_id, payload, actor, db):
         focus=previous.focus,
         targets=previous.targets,
         input_snapshot=snapshot,
-        ai_config=configuration_snapshot(meta),
+        ai_config=native_terminal.bind_snapshot(configuration_snapshot(meta)),
         metadata_snapshot=metadata,
         handling={},
     )

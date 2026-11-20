@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.db.models import (
+    AnalysisTerminalResume,
     CaseAnalysisApplication,
     CaseAnalysisChatTurn,
     CaseAnalysisRun,
@@ -192,6 +193,7 @@ def delete_project(project_id, payload, actor, db):
     if project.version != payload.version:
         raise AppError(409, "project_changed")
     roots = (
+        AnalysisTerminalResume,
         RequirementRiskAnalysis,
         CodeAnalysisTask,
         ChangeAnalysisTask,

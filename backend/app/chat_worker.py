@@ -20,6 +20,7 @@ from app.integrations import cli_results
 from app.integrations.call_control import execution_scope
 from app.modules.ai import reservations, scheduling
 from app.modules.ai.recovery import DATABASE_ERRORS
+from app.modules.analysis_terminal import execution as terminal_execution
 from app.modules.case_analysis import apply as case_analysis_apply
 from app.modules.case_analysis import execution as case_analysis_execution
 from app.modules.case_generation import apply as generation_apply
@@ -92,6 +93,8 @@ def _run(engine: Engine, logger: logging.Logger) -> None:
             with factory() as db:
                 case_analysis_execution.recover(db)
             with factory() as db:
+                terminal_execution.recover(db)
+            with factory() as db:
                 skills_execution.recover(db)
             logger.info("analysis_chat_worker_ready")
             _schedule(lock, factory, logger)
@@ -117,6 +120,7 @@ def _registry():
         (models.SkillChatTurn, skills_execution.execute, {}),
         (models.CaseAnalysisRun, case_analysis_execution.execute, {}),
         (models.CaseAnalysisChatTurn, case_analysis_execution.execute_chat, {}),
+        (models.AnalysisTerminalResume, terminal_execution.execute, {}),
         (models.RequirementRiskAnalysis, risk_analysis_execution.execute, {}),
         (models.CodeAnalysisTask, code_analysis_execution.execute, {}),
         (models.ChangeAnalysisTask, change_analysis_execution.execute, {}),

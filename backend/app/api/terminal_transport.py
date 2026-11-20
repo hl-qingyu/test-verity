@@ -89,12 +89,15 @@ async def serve(websocket: WebSocket, authorize, read, write, schema):
             await asyncio.sleep(0.01 if page["has_more"] else 0.08)
 
     receiver, sender = asyncio.create_task(receive()), asyncio.create_task(send())
+    close_code = 1000
     try:
         done, _ = await asyncio.wait((receiver, sender), return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             task.result()
+    except AppError as exc:
+        if exc.status_code in (401, 403, 404):
+            close_code = 1008
     except (
-        AppError,
         ValidationError,
         ValueError,
         WebSocketDisconnect,
@@ -111,7 +114,7 @@ async def serve(websocket: WebSocket, authorize, read, write, schema):
         except asyncio.CancelledError:
             pass
         try:
-            await websocket.close()
+            await websocket.close(code=close_code)
         except (RuntimeError, WebSocketDisconnect, asyncio.CancelledError):
             pass
 

@@ -20,6 +20,21 @@
 .native-cli-workspace[hidden] {
   display: none;
 }
+.analysis-native-history-layout[hidden] {
+  display: none;
+}
+@media (min-width: 721px) {
+  .code-chat-layout.requirement-native-history {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+.native-cli-workspace {
+  min-width: 0;
+}
+.code-analysis-main > .native-cli-workspace {
+  border: 0;
+  box-shadow: none;
+}
 .native-cli-container.is-restoring .xterm {
   visibility: hidden;
 }

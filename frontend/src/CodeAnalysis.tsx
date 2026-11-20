@@ -14,6 +14,7 @@ import { NewCodeAnalysis } from './CodeAnalysisNew';
 import { ImportCodeAnalysis } from './CodeAnalysisImport';
 import { CodeFindingDetail } from './CodeAnalysisDetail';
 import { CodeAnalysisChat } from './CodeAnalysisChat';
+import { AnalysisCliHistory, useHistoryButton } from './AnalysisCliHistory';
 import {
   codeError,
   codeErrors,
@@ -148,6 +149,7 @@ function CodeWorkspace({
     loadedMore = useRef(false),
     retryIds = useRef(new Map<number, string>());
   const base = `/api/projects/${project?.id}/code-analysis`;
+  const historyButton = useHistoryButton(chat);
   useEffect(() => {
     const c = new AbortController();
     controller.current = c;
@@ -272,6 +274,10 @@ function CodeWorkspace({
     setFindingKey('');
     setStarting(false);
     setImporting(false);
+    if (value.terminal_available && ['QUEUED', 'RUNNING'].includes(value.status)) {
+      setChatFinding('');
+      setChat(true);
+    }
     setNotice(value.duplicate ? '相同输入和结果已导入，已打开原记录。' : '');
     setRefresh((v) => v + 1);
   }
@@ -452,7 +458,7 @@ function CodeWorkspace({
               >
                 导入代码分析
               </button>
-              <button className="ghost" onClick={() => setChat(true)}>
+              <button ref={historyButton} className="ghost" onClick={() => setChat(true)}>
                 历史对话
               </button>
             </>
@@ -474,8 +480,25 @@ function CodeWorkspace({
         </p>
       )}
       {loading && <p role="status">正在加载代码分析记录…</p>}
+      {project && record?.terminal_available && (
+        <div className="code-chat-layout analysis-native-history-layout" hidden={!chat}>
+          {chat && records}
+          <AnalysisCliHistory
+            kind="code"
+            projectId={project.id}
+            recordId={record.id}
+            open={chat}
+            cancelUrl={`${base}/${record.id}/cancel`}
+            reference={chatFinding}
+            onClose={() => setChat(false)}
+            onInitialFinished={() => setRefresh((v) => v + 1)}
+            errorMessage={(e) => codeError(e, onSessionEnd)}
+          />
+          {chat && <CodeScope record={record} />}
+        </div>
+      )}
       {chat ? (
-        <>
+        !record?.terminal_available && (
           <div className="code-chat-layout">
             {records}
             {record ? (
@@ -493,7 +516,7 @@ function CodeWorkspace({
             )}
             <CodeScope record={record} />
           </div>
-        </>
+        )
       ) : (
         <>
           {record?.report && (

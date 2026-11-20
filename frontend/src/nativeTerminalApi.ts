@@ -10,6 +10,7 @@ export type NativeSession = {
   turn_error?: string;
   replay_rows?: number;
   replay_cols?: number;
+  resumable?: boolean;
 };
 export function nativeSessionLabel(session: NativeSession | null) {
   if (!session) return '尚未启动';
@@ -27,9 +28,14 @@ export function nativeSessionLabel(session: NativeSession | null) {
       ? `${label} · CLI 等待输入`
       : label;
   }
-  return session.kind === 'chat' && session.status === 'RUNNING'
-    ? '对话进程运行中'
-    : session.status;
+  const statuses: Record<string, string> = {
+    QUEUED: '排队中',
+    RUNNING: session.kind === 'chat' ? '对话进程运行中' : '正在启动 CLI',
+    COMPLETED: '已完成',
+    FAILED: '执行失败',
+    CANCELLED: '已停止',
+  };
+  return statuses[session.status] || session.status;
 }
 export function nativeTurnFailure(session: NativeSession | null) {
   if (session?.turn_status !== 'failed') return '';
@@ -59,6 +65,7 @@ export function sessionResponse(value: unknown): NativeSession | null {
     typeof s.error_code !== 'string' ||
     (s.kind !== undefined && s.kind !== 'chat' && s.kind !== 'generation') ||
     (s.epoch !== undefined && typeof s.epoch !== 'string') ||
+    (s.resumable !== undefined && typeof s.resumable !== 'boolean') ||
     (s.turn_status !== undefined &&
       !['running', 'completed', 'failed', 'interrupted'].includes(String(s.turn_status))) ||
     (s.turn_error !== undefined && typeof s.turn_error !== 'string') ||
@@ -78,6 +85,7 @@ export function sessionResponse(value: unknown): NativeSession | null {
     error_code: s.error_code,
     kind: s.kind as NativeSession['kind'],
     epoch: s.epoch as string | undefined,
+    ...(s.resumable !== undefined ? { resumable: s.resumable as boolean } : {}),
     ...(s.turn_status !== undefined
       ? { turn_status: s.turn_status as NativeSession['turn_status'] }
       : {}),

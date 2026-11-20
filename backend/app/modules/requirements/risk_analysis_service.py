@@ -14,6 +14,7 @@ from app.db.models import (
     SourceDocument,
     UserAccount,
 )
+from app.modules.ai import native_terminal
 from app.modules.ai.service import (
     analysis_configuration,
     configuration_snapshot,
@@ -56,7 +57,10 @@ def view(
         "status": row.status,
         "error_code": row.error_code,
         "report_id": row.report_id,
-        "ai": row.ai_config,
+        "ai": native_terminal.public_snapshot(row.ai_config),
+        "terminal_available": bool(
+            viewer and native_terminal.available(row.ai_config, row.actor_id, viewer.id)
+        ),
         "created_by": created_by,
         "can_cancel": bool(viewer and row.actor_id == viewer.id and row.status in ACTIVE),
         "candidate_available": candidate_available,
@@ -228,7 +232,7 @@ def enqueue(project_id, payload, actor, db):
         focus=payload.focus,
         selections=selections,
         context=frozen_context,
-        ai_config=configuration_snapshot(meta),
+        ai_config=native_terminal.bind_snapshot(configuration_snapshot(meta)),
     )
     db.add(row)
     db.commit()

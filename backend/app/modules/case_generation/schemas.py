@@ -4,6 +4,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.integrations.ai_client import CallMode
+from app.modules.ai.terminal_schemas import TerminalInput as TerminalInput
+from app.modules.ai.terminal_schemas import TerminalStart as TerminalStart
 from app.modules.cases.schemas import DESIGN_FIELDS, CaseDesign
 
 
@@ -155,35 +157,9 @@ class Chat(Request):
     question: str = Field(min_length=1, max_length=10000)
 
 
-class TerminalStart(Request):
-    request_id: UUID
-    resume: bool = True
-    rows: int = Field(default=30, ge=8, le=120)
-    cols: int = Field(default=110, ge=20, le=300)
-
-
 class TerminalResultSave(Request):
     request_id: UUID
     confirmed: Literal[True]
-
-
-class TerminalInput(Request):
-    type: Literal["input", "resize"]
-    data: str | None = Field(default=None, max_length=8192)
-    rows: int | None = Field(default=None, ge=8, le=120)
-    cols: int | None = Field(default=None, ge=20, le=300)
-
-    @model_validator(mode="after")
-    def correct_command(self):
-        if self.type == "input" and (
-            not self.data or self.rows is not None or self.cols is not None
-        ):
-            raise ValueError("invalid terminal input")
-        if self.type == "resize" and (
-            self.rows is None or self.cols is None or self.data is not None
-        ):
-            raise ValueError("invalid terminal dimensions")
-        return self
 
 
 class ChatDraft(Request):

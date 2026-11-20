@@ -16,6 +16,7 @@ from app.db.models import (
     UserAccount,
 )
 from app.integrations import ai_client, codex_terminal
+from app.modules.ai import native_terminal as shared_terminal
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration, configuration_snapshot
 from app.modules.case_generation import service, sources
@@ -82,22 +83,9 @@ def generation(project_id, run_id, actor, db, batch_id=None):
 
 
 def view(row):
-    return (
-        None
-        if row is None
-        else {
-            "id": row["id"],
-            "status": row["status"],
-            "error_code": row["error_code"],
-            "kind": "generation" if "request_id" in row else "chat",
-            "epoch": row.get("request_id", str(row["id"])),
-            "replay_rows": row["terminal"].get("rows", 30),
-            "replay_cols": row["terminal"].get("cols", 110),
-            **codex_terminal.turn_state(
-                row["terminal"]["identity"], row["terminal"].get("execution", row["id"])
-            ),
-        }
-    )
+    if row is None:
+        return None
+    return shared_terminal.session_view(row, kind="generation" if "request_id" in row else "chat")
 
 
 def current(project_id, run_id, actor, db):
@@ -153,17 +141,11 @@ def generation_binding(project_id, run_id, batch_id, actor, db):
     }
 
 
-def bound_output(bound, cursor):
-    return codex_terminal.output(bound["identity"], bound["execution"], cursor)
+bound_output = shared_terminal.bound_output
 
 
 def bound_input(bound, payload):
-    require_enabled(bound["owner_id"])
-    if bound.get("readonly"):
-        raise AppError(409, "generation_terminal_not_started")
-    codex_terminal.put_command(
-        bound["identity"], bound["execution"], payload.model_dump(exclude_none=True)
-    )
+    shared_terminal.write_command(bound, payload, enabled=enabled_for(bound["owner_id"]))
 
 
 def start(project_id, run_id, payload, actor, db):

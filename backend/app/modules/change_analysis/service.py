@@ -12,6 +12,7 @@ from sqlalchemy.orm import load_only
 
 from app.core.errors import AppError
 from app.db.models import ChangeAnalysisTask, UserAccount
+from app.modules.ai import native_terminal
 from app.modules.ai.service import (
     analysis_configuration,
     configuration_snapshot,
@@ -132,7 +133,8 @@ def view(row, actor, *, detail=False):
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
         "origin": metadata.get("origin", "AI"),
-        "ai": row.ai_config,
+        "ai": native_terminal.public_snapshot(row.ai_config),
+        "terminal_available": native_terminal.available(row.ai_config, row.actor_id, actor.id),
         "can_cancel": row.actor_id == actor.id and row.status in (*ACTIVE, "PREPARED"),
         "can_start": False,
         "can_retry": metadata.get("origin") == "AI"
@@ -271,7 +273,9 @@ def listing(project_id, actor, db, page=1, *, page_view=False):
             or v["status"] == "COMPLETED"
             and bool((v["batches"] or {}).get("failed"))
         )
-        v["ai"] = v.pop("ai_config")
+        ai = v.pop("ai_config")
+        v["ai"] = native_terminal.public_snapshot(ai)
+        v["terminal_available"] = native_terminal.available(ai, v["actor_id"], actor.id)
         for k in ("created_at", "updated_at"):
             v[k] = v[k].isoformat()
         result.append(v)
@@ -321,7 +325,7 @@ def enqueue(project_id, payload, actor, db):
         input_snapshot={},
         metadata_snapshot=metadata,
         handling={},
-        ai_config=configuration_snapshot(config),
+        ai_config=native_terminal.bind_snapshot(configuration_snapshot(config)),
     )
     db.add(row)
     db.commit()
@@ -407,7 +411,7 @@ def retry(project_id, task_id, payload, actor, db):
         input_snapshot=snapshot,
         metadata_snapshot=metadata,
         handling={},
-        ai_config=configuration_snapshot(config),
+        ai_config=native_terminal.bind_snapshot(configuration_snapshot(config)),
     )
     db.add(row)
     db.commit()

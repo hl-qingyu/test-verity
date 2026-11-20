@@ -129,6 +129,7 @@ export type RiskDetail = {
   project_id: number;
   title: string;
   revision: number;
+  terminal_task_id?: number | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -171,6 +172,7 @@ export type ManualRisk = {
 };
 export type RiskAnalysisTask = {
   ai?: unknown;
+  terminal_available?: boolean;
   can_delete?: boolean;
   id: number;
   project_id: number;
@@ -479,6 +481,7 @@ export function parseRiskDetail(v: unknown, project: number): RiskDetail {
     project_id: project,
     title: string(o.title),
     revision: number(o.revision),
+    terminal_task_id: o.terminal_task_id == null ? null : number(o.terminal_task_id),
     created_by: string(o.created_by),
     created_at: string(o.created_at),
     updated_at: string(o.updated_at),
@@ -568,54 +571,57 @@ export function parseManualRisk(v: unknown): ManualRisk {
   };
 }
 
+export function parseRiskAnalysisTask(v: unknown): RiskAnalysisTask {
+  const o = obj(v);
+  return {
+    id: number(o.id),
+    project_id: number(o.project_id),
+    request_id: string(o.request_id),
+    ai: o.ai,
+    terminal_available: o.terminal_available === undefined ? false : boolean(o.terminal_available),
+    retry_of: o.retry_of === null ? null : number(o.retry_of),
+    title: string(o.title),
+    focus: string(o.focus),
+    selections: array(o.selections).map((v) => {
+      const s = obj(v);
+      return {
+        document_id: number(s.document_id),
+        version_id: s.version_id === null ? null : number(s.version_id),
+        paths: s.paths === undefined ? [] : array(s.paths).map(string),
+        snapshot: s.snapshot === undefined ? '' : string(s.snapshot),
+        url: s.url === undefined || s.url === null ? null : string(s.url),
+      };
+    }),
+    status: choice(o.status, {
+      QUEUED: '',
+      RUNNING: '',
+      COMPLETED: '',
+      FAILED: '',
+      CANCELLED: '',
+    }),
+    error_code: string(o.error_code),
+    report_id: o.report_id === null ? null : number(o.report_id),
+    created_by: string(o.created_by),
+    can_cancel: boolean(o.can_cancel),
+    can_delete: o.can_delete === undefined ? undefined : boolean(o.can_delete),
+    candidate_available: boolean(o.candidate_available),
+    can_revalidate: boolean(o.can_revalidate),
+    function_risk_corrections: array(o.function_risk_corrections).map((item) => {
+      const correction = obj(item);
+      return {
+        function_key: string(correction.function_key),
+        before: array(correction.before).map(string),
+        after: array(correction.after).map(string),
+      };
+    }),
+    created_at: string(o.created_at),
+    updated_at: string(o.updated_at),
+  };
+}
+
 export async function riskAnalyses(url: string, signal: AbortSignal): Promise<RiskAnalysisTask[]> {
   const root = obj(await apiRequest<unknown>(url, { signal }));
-  return array(root.items).map((v) => {
-    const o = obj(v);
-    return {
-      id: number(o.id),
-      project_id: number(o.project_id),
-      request_id: string(o.request_id),
-      ai: o.ai,
-      retry_of: o.retry_of === null ? null : number(o.retry_of),
-      title: string(o.title),
-      focus: string(o.focus),
-      selections: array(o.selections).map((v) => {
-        const s = obj(v);
-        return {
-          document_id: number(s.document_id),
-          version_id: s.version_id === null ? null : number(s.version_id),
-          paths: s.paths === undefined ? [] : array(s.paths).map(string),
-          snapshot: s.snapshot === undefined ? '' : string(s.snapshot),
-          url: s.url === undefined || s.url === null ? null : string(s.url),
-        };
-      }),
-      status: choice(o.status, {
-        QUEUED: '',
-        RUNNING: '',
-        COMPLETED: '',
-        FAILED: '',
-        CANCELLED: '',
-      }),
-      error_code: string(o.error_code),
-      report_id: o.report_id === null ? null : number(o.report_id),
-      created_by: string(o.created_by),
-      can_cancel: boolean(o.can_cancel),
-      can_delete: o.can_delete === undefined ? undefined : boolean(o.can_delete),
-      candidate_available: boolean(o.candidate_available),
-      can_revalidate: boolean(o.can_revalidate),
-      function_risk_corrections: array(o.function_risk_corrections).map((item) => {
-        const correction = obj(item);
-        return {
-          function_key: string(correction.function_key),
-          before: array(correction.before).map(string),
-          after: array(correction.after).map(string),
-        };
-      }),
-      created_at: string(o.created_at),
-      updated_at: string(o.updated_at),
-    };
-  });
+  return array(root.items).map(parseRiskAnalysisTask);
 }
 
 export async function riskCatalog(url: string, signal: AbortSignal): Promise<RiskCatalog> {

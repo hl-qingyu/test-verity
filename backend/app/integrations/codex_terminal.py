@@ -137,6 +137,21 @@ def turn_state(identity, execution):
     return {}
 
 
+def history_thread(identity, execution):
+    root = directory(identity)
+    if not (root / "input" / "input.json").is_file():
+        return None
+    events, _ = turn_events(identity, execution)
+    thread_id = next(
+        (event.get("thread_id") for event in events if event["method"] == "turn/started"), None
+    )
+    if thread_id and any(
+        path.is_file() for path in (root / "state" / "sessions").rglob(f"*{thread_id}.jsonl")
+    ):
+        return thread_id
+    return None
+
+
 def prepare(identity, base_url, model, effort, instructions, fixed_input, resume):
     root = directory(identity)
     state, work = root / "state", root / "input"
@@ -260,6 +275,7 @@ def run(
     instructions,
     fixed_input,
     resume=False,
+    resume_thread=None,
     rows=30,
     cols=110,
     on_progress=None,
@@ -276,6 +292,8 @@ def run(
     root, state, work, args = prepare(
         identity, base_url, model, effort, instructions, fixed_input, resume
     )
+    if resume and resume_thread:
+        args[-1] = resume_thread
     image_paths, image_urls, image_args = [], [], []
     for number, (extension, binary) in enumerate(images, 1):
         path = work / f"image-{number}.{extension}"
@@ -335,7 +353,7 @@ def run(
             server_args,
             environment,
             str(work),
-            TerminalPolicy(work, overrides, image_paths, image_urls),
+            TerminalPolicy(work, overrides, image_paths, image_urls, thread_id=resume_thread),
             job,
             cipher,
             output_dir / f"{execution}.server.enc.jsonl",
@@ -507,7 +525,7 @@ def analyze(
         capture=TerminalResult(),
         initial_prompt=(
             "请按本次固定 Skill 和契约，从指令中的reading-v1阅读目录开始，完整读取全部固定资料，"
-            "完成用例生成。"
+            "完成本次分析。"
             "图片已按标号顺序附加。只输出本次业务契约要求的最终完整 JSON；"
             "不得省略范围或编造完成。"
         ),

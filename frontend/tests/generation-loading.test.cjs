@@ -316,7 +316,7 @@ test('native generation opens the existing history area and retains its cached t
       await h.settle();
       assert.equal(h.actions.length, 1);
       assert.equal(h.actions[0].route, '/2/start');
-      const cached = h.component('CachedCliWorkspace');
+      const cached = h.component('GenerationCliWorkspace');
       if (mode === 'start-cli') {
         assert.equal(cached.props.runId, '2');
         assert.equal(cached.props.open, true);
@@ -327,11 +327,11 @@ test('native generation opens the existing history area and retains its cached t
         );
         h.button('返回生成报告').props.onClick();
         await h.settle();
-        assert.equal(h.component('CachedCliWorkspace').key, cached.key);
-        assert.equal(h.component('CachedCliWorkspace').props.open, false);
+        assert.equal(h.component('GenerationCliWorkspace').key, cached.key);
+        assert.equal(h.component('GenerationCliWorkspace').props.open, false);
         h.button('历史对话').props.onClick();
         await h.settle();
-        assert.equal(h.component('CachedCliWorkspace').props.open, true);
+        assert.equal(h.component('GenerationCliWorkspace').props.open, true);
         assert.equal(h.actions.length, 1, 'navigation must not create or cancel model tasks');
       } else assert.equal(cached, undefined);
     } finally {
@@ -562,24 +562,24 @@ test('saving a CLI round keeps the original conversation and reviews that round 
     h.render();
     h.button('继续并开始本人AI生成').props.onClick();
     await h.settle();
-    const native = h.component('CachedCliWorkspace');
+    const native = h.component('GenerationCliWorkspace');
     assert.equal(native.props.open, true);
     assert.equal(await native.props.onSaveResult('a'.repeat(64), 'save-request'), true);
     await h.settle();
     assert.equal(h.actions[1].route, '/2/terminal/results/' + 'a'.repeat(64) + '/save');
     assert.deepEqual(h.actions[1].body, { request_id: 'save-request', confirmed: true });
-    assert.equal(h.component('CachedCliWorkspace').key, native.key);
-    assert.equal(h.component('CachedCliWorkspace').props.runId, '2');
-    assert.equal(h.component('CachedCliWorkspace').props.open, true);
+    assert.equal(h.component('GenerationCliWorkspace').key, native.key);
+    assert.equal(h.component('GenerationCliWorkspace').props.runId, '2');
+    assert.equal(h.component('GenerationCliWorkspace').props.open, true);
     const roundFilter = () => h.component('FormSelect', (props) => props.label === '候选轮次');
-    h.component('CachedCliWorkspace').props.onClose();
+    h.component('GenerationCliWorkspace').props.onClose();
     await h.settle();
     assert.equal(roundFilter().props.value, '');
     h.button('历史对话').props.onClick();
     await h.settle();
-    h.component('CachedCliWorkspace').props.onReviewResult('a'.repeat(64));
+    h.component('GenerationCliWorkspace').props.onReviewResult('a'.repeat(64));
     await h.settle();
-    assert.equal(h.component('CachedCliWorkspace').props.open, false);
+    assert.equal(h.component('GenerationCliWorkspace').props.open, false);
     assert.equal(roundFilter().props.value, 'a'.repeat(64));
     assert.ok(h.button('历史对话'));
     assert.equal(h.actions.filter((a) => a.route.endsWith('/start')).length, 1);

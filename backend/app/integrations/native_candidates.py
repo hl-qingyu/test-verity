@@ -7,7 +7,7 @@ from app.core.errors import AppError
 from app.integrations.codex_terminal import directory
 
 
-def completed_messages(identity):
+def completed_messages(identity, *, turns=None):
     root = directory(identity) / "state" / "sessions"
     result = []
     if not root.is_dir() or root.is_symlink():
@@ -49,6 +49,7 @@ def completed_messages(identity):
                         if (
                             thread
                             and turn
+                            and (turns is None or (thread, turn) in turns)
                             and payload.get("turn_id") == turn
                             and not payload.get("error")
                         ):

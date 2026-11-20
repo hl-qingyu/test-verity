@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.core.errors import AppError
 from app.db.models import (
+    AnalysisTerminalResume,
     CaseAnalysisApplication,
     CaseAnalysisChatTurn,
     CaseAnalysisRun,
@@ -121,6 +122,22 @@ def active(rows, db):
         if getattr(row, "status", None) in ACTIVE:
             return True
         module = next(k for k, model in MODELS.items() if isinstance(row, model))
+        terminal_kind = "requirements" if module == "requirement-task" else module
+        if (
+            module in {"requirement-task", "code", "changes", "coverage"}
+            and db.scalar(
+                select(AnalysisTerminalResume.id)
+                .where(
+                    AnalysisTerminalResume.project_id == row.project_id,
+                    AnalysisTerminalResume.record_kind == terminal_kind,
+                    AnalysisTerminalResume.record_id == row.id,
+                    AnalysisTerminalResume.status.in_(ACTIVE),
+                )
+                .limit(1)
+            )
+            is not None
+        ):
+            return True
         for model, foreign_key in CHILDREN.get(module, []):
             if (
                 db.scalar(

@@ -85,6 +85,7 @@ export type ReviewSummary = {
   updated_at: string;
 };
 export type ReviewRecord = ReviewSummary & {
+  terminal_available?: boolean;
   input: {
     type: string;
     request_id: string;
@@ -178,6 +179,8 @@ export function parseReviewFinding(v: unknown): ReviewFinding {
 export function parseReview(v: unknown): ReviewRecord {
   const o = obj(v);
   parseReviewSummary(o);
+  if (o.terminal_available !== undefined && typeof o.terminal_available !== 'boolean')
+    throw Error('case_analysis_response_invalid');
   const input = obj(o.input);
   if (input.type !== 'CASE_REVIEW') throw Error('case_analysis_response_invalid');
   const cases = parseCaseList({

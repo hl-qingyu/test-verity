@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from app.core.errors import AppError
 from app.db.models import CodeAnalysisChatTurn, CodeAnalysisTask, UserAccount
 from app.integrations import ai_client as responses
+from app.modules.ai import native_terminal
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.code_analysis import artifacts, contract, service, sources
@@ -75,6 +76,13 @@ def failed(model, key, exc, factory):
         db.commit()
 
 
+def validate_result(answer, parsed):
+    output = service.parse(contract.Report, service.json_object(answer))
+    output, corrections = contract.normalize_code_evidence(parsed, output)
+    contract.validate_report(parsed, output)
+    return output.model_dump(by_alias=True), corrections
+
+
 def execute(task_id, session_factory):
     try:
         with session_factory() as db:
@@ -96,6 +104,7 @@ def execute(task_id, session_factory):
                 shared_snapshot=metadata.get("shared_snapshot", False),
             )
             config, key = analysis_configuration(actor, db, row.ai_config)
+            terminal_options = native_terminal.analysis_options(row.ai_config)
             base_url, effort, model = (
                 config["base_url"],
                 config["reasoning_effort"],
@@ -163,12 +172,11 @@ def execute(task_id, session_factory):
             analysis_materials.model_content(input_data, binaries),
             on_progress=check,
             call_mode=config.get("call_mode", "RESPONSES_API"),
+            **terminal_options,
         )
         artifacts.save_candidate(task_id, answer)
         check(force=True)
-        output = service.parse(contract.Report, service.json_object(answer))
-        output, corrections = contract.normalize_code_evidence(parsed, output)
-        contract.validate_report(parsed, output)
+        report, corrections = validate_result(answer, parsed)
         with session_factory() as db:
             actor = db.get(UserAccount, actor_id)
             row = service.own(project_id, task_id, actor, db, lock=True)
@@ -182,7 +190,7 @@ def execute(task_id, session_factory):
                 shared_snapshot=metadata.get("shared_snapshot", False),
             )
             analysis_configuration(actor, db, config)
-            row.report = output.model_dump(by_alias=True)
+            row.report = report
             if corrections:
                 row.metadata_snapshot = {
                     **row.metadata_snapshot,

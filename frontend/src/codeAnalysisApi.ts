@@ -308,6 +308,7 @@ export function parseCodeRecord(value: unknown) {
     origin: str(v.origin),
     ai: ai(v.ai),
     can_cancel: bool(v.can_cancel),
+    terminal_available: v.terminal_available === undefined ? false : bool(v.terminal_available),
     can_retry: bool(v.can_retry),
     findings_count: num(v.findings_count),
     outcome: v.outcome ? choice(v.outcome, codeOutcomes) : null,

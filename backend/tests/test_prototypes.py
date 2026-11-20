@@ -357,6 +357,36 @@ window.PROTOTYPE_ANNOTATIONS['detail.html'] = [{title:'详情说明',markdown:ex
             with self.assertRaises(AppError):
                 read_registry(aliases + suffix)
 
+    def test_generic_link_preserves_prepended_annotation_order(self):
+        url = "https://prototype.geekuat.com/p/Test123/"
+        source = """
+window.PROTOTYPE_PAGES = [{title:'订单',file:'order.html'}, {title:'钱包',file:'wallet.html'}];
+window.PROTOTYPE_ANNOTATIONS = {'order.html':[{title:'说明',items:['原批注']}]};
+[
+  ['order.html', [{title:'说明',items:['前置批注']}, {title:'独立说明',markdown:'金额规则'}]],
+  ['wallet.html', [{title:'说明',items:['钱包批注']}]]
+].forEach(function(entry) {
+  var file = entry[0], sections = entry[1];
+  window.PROTOTYPE_ANNOTATIONS[file] = sections.concat(window.PROTOTYPE_ANNOTATIONS[file] || []);
+});
+"""
+        content = {
+            url: b'<script src="assets/annotations.js"></script>',
+            url + "assets/annotations.js": source.encode(),
+            url + "pages/order.html": b"<h1>Order</h1>",
+        }
+        with patch.object(prototype_link, "fetch", side_effect=content.__getitem__) as get:
+            index = prototype_link.catalog(url)
+            self.assertEqual(index["notes"]["wallet.html"]["说明"], ["钱包批注"])
+            result = prototype_link.read_pages(url, ["order.html"], index["snapshot"])
+            self.assertEqual(
+                [s["text"] for s in result["segments"]],
+                ["<h1>Order</h1>", "前置批注\n原批注", "金额规则"],
+            )
+            self.assertNotIn(
+                url + "pages/wallet.html", [call.args[0] for call in get.call_args_list]
+            )
+
     def test_generic_link_catalog_rejects_unsafe_files_and_invalid_notes(self):
         url = "https://prototype.geekuat.com/p/Test123/"
         page = {"title": "页面", "module": "目录", "file": "order.html"}

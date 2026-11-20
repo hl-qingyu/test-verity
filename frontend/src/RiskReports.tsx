@@ -8,8 +8,9 @@ import { PrototypeDirectoryFiles } from './PrototypeDirectoryFiles';
 import { AnalysisRecordDelete } from './AnalysisRecordDelete';
 import { PageJump } from './PageJump';
 import { AcceptancePanel } from './AnalysisAcceptance';
+import { AnalysisCliHistory, useHistoryButton } from './AnalysisCliHistory';
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { Project } from './Projects';
 import type { OverviewTarget } from './OverviewEntry';
 import { apiDownload, apiRequest } from './api/http';
@@ -23,6 +24,7 @@ import { Icon } from './Icon';
 import { OriginalPreview } from './Documents';
 import {
   outcomes,
+  parseRiskAnalysisTask,
   parseRiskInput,
   parseRiskReport,
   readRiskFile,
@@ -149,6 +151,13 @@ function RiskWorkspace({
   overviewTarget?: OverviewTarget | null;
 }) {
   const base = `/api/projects/${project?.id}/requirements/risk-reports`;
+  const [search, setSearch] = useSearchParams();
+  const cliId = Number(search.get('cli'));
+  const cliOpen =
+    search.get('cli_project') === String(project?.id) && Number.isSafeInteger(cliId) && cliId > 0;
+  const lastCli = useRef(0);
+  if (cliOpen) lastCli.current = cliId;
+  const historyButton = useHistoryButton(cliOpen);
   const [items, setItems] = useState<ReportItem[]>([]),
     [page, setPage] = useCachedView(pageCache, 'page', 1),
     [more, setMore] = useState(false),
@@ -196,6 +205,7 @@ function RiskWorkspace({
     ),
     [catalogRisk, setCatalogRisk] = useState<CatalogItem | null>(null),
     [tasks, setTasks] = useState<RiskAnalysisTask[]>([]),
+    [tasksLoaded, setTasksLoaded] = useState(false),
     [catalogLoading, setCatalogLoading] = useState(false);
   const abort = useRef(new AbortController()),
     pending = useRef(false),
@@ -301,6 +311,7 @@ function RiskWorkspace({
         );
         if (!c.signal.aborted) {
           setTasks(value);
+          setTasksLoaded(true);
           if (
             overviewTarget?.recordType === 'task' &&
             !value.some((t) => t.id === overviewTarget.id)
@@ -312,7 +323,10 @@ function RiskWorkspace({
           if (active) timer = setTimeout(loadTasks, 2500);
         }
       } catch (reason) {
-        if (!c.signal.aborted) setError(riskError(reason, onSessionEnd));
+        if (!c.signal.aborted) {
+          setTasksLoaded(true);
+          setError(riskError(reason, onSessionEnd));
+        }
       }
     }
     void loadTasks();
@@ -456,32 +470,42 @@ function RiskWorkspace({
   function openSource(id: string) {
     setSourceKey(id);
   }
-  return (
-    <div className="risk-page requirement-ui">
-      <header className="page-head">
-        <div>
-          <h1>需求分析</h1>
-          <p>汇总各次分析的功能与风险。</p>
-        </div>
-        <div className="row">
-          <button className="primary" onClick={() => setStarting(true)}>
-            新建分析会话
-          </button>
-          {catalog?.reports[0] ? (
-            <Link className="action ghost" to={`/requirements/chat/${catalog.reports[0].id}`}>
-              历史会话
-            </Link>
-          ) : (
-            <button className="ghost" disabled>
-              历史会话
-            </button>
-          )}
-          <button className="ghost" onClick={() => setImporting(true)}>
-            <Icon name="upload" />
-            导入分析结果
-          </button>
-        </div>
-      </header>
+  const cliRecords = tasks.filter((task) => task.terminal_available);
+  const cliRecord = cliRecords.find((task) => task.id === lastCli.current);
+  const latestCli = cliRecords[0];
+  const newestReport = catalog?.reports[0];
+  const latestTextReport = catalog?.reports.find(
+    (report) => !cliRecords.some((task) => task.report_id === report.id),
+  );
+  const newestCli =
+    !newestReport || (latestCli && latestCli.created_at >= newestReport.created_at)
+      ? latestCli
+      : cliRecords.find((task) => task.report_id === newestReport.id);
+  function openCli(task: RiskAnalysisTask) {
+    setSearch(
+      (old) => {
+        const next = new URLSearchParams(old);
+        next.set('cli', String(task.id));
+        next.set('cli_project', String(project?.id));
+        next.delete('function');
+        next.delete('risk');
+        return next;
+      },
+      { replace: cliOpen },
+    );
+  }
+  function closeCli() {
+    setSearch(
+      (old) => {
+        const next = new URLSearchParams(old);
+        for (const name of ['cli', 'cli_project', 'function', 'risk']) next.delete(name);
+        return next;
+      },
+      { replace: true },
+    );
+  }
+  const reportWorkspace = (
+    <>
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -674,11 +698,34 @@ function RiskWorkspace({
                                 资料与结论
                               </button>
                             )}
-                            {record.kind === 'report' && (
-                              <Link className="action link" to={`/requirements/chat/${record.id}`}>
+                            {record.kind === 'task' && record.terminal_available && (
+                              <button className="link" onClick={() => openCli(record)}>
                                 需求分析对话
-                              </Link>
+                              </button>
                             )}
+                            {record.kind === 'report' &&
+                              cliRecords.some((task) => task.report_id === record.id) && (
+                                <button
+                                  className="link"
+                                  onClick={() => {
+                                    const task = cliRecords.find(
+                                      (item) => item.report_id === record.id,
+                                    );
+                                    if (task) openCli(task);
+                                  }}
+                                >
+                                  需求分析对话
+                                </button>
+                              )}
+                            {record.kind === 'report' &&
+                              !cliRecords.some((task) => task.report_id === record.id) && (
+                                <Link
+                                  className="action link"
+                                  to={`/requirements/chat/${record.id}`}
+                                >
+                                  需求分析对话
+                                </Link>
+                              )}
                             {record.kind === 'task' &&
                               ['FAILED', 'CANCELLED'].includes(record.status) && (
                                 <button className="small" onClick={() => setStarting(record)}>
@@ -1263,8 +1310,10 @@ function RiskWorkspace({
           base={base}
           retry={starting === true ? null : starting}
           onClose={() => setStarting(null)}
-          onStarted={() => {
+          onStarted={(task) => {
             setStarting(null);
+            setTasks((old) => [task, ...old.filter((item) => item.id !== task.id)]);
+            if (task.terminal_available) openCli(task);
             setReload((value) => value + 1);
             setNotice('分析请求已保存，后台会继续处理。');
           }}
@@ -1308,6 +1357,107 @@ function RiskWorkspace({
           onSessionEnd={onSessionEnd}
         />
       )}
+    </>
+  );
+  return (
+    <div className="risk-page requirement-ui">
+      <header className="page-head">
+        <div>
+          <h1>{cliOpen ? '分析对话' : '需求分析'}</h1>
+          <p>{cliOpen ? cliRecord?.title : '汇总各次分析的功能与风险。'}</p>
+        </div>
+        {cliOpen ? (
+          <div className="row">
+            <button className="ghost" onClick={closeCli}>
+              返回需求分析
+            </button>
+            {cliRecord?.report_id && (
+              <button
+                onClick={() => {
+                  setCatalogSource(String(cliRecord.report_id));
+                  setCatalogFunction('');
+                  setCatalogPage(1);
+                  closeCli();
+                }}
+              >
+                查看本次报告
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="row">
+            <button className="primary" onClick={() => setStarting(true)}>
+              新建分析会话
+            </button>
+            {newestCli ? (
+              <button ref={historyButton} className="ghost" onClick={() => openCli(newestCli)}>
+                历史会话
+              </button>
+            ) : newestReport ? (
+              <Link className="action ghost" to={`/requirements/chat/${newestReport.id}`}>
+                历史会话
+              </Link>
+            ) : (
+              <button className="ghost" disabled>
+                历史会话
+              </button>
+            )}
+            <button className="ghost" onClick={() => setImporting(true)}>
+              <Icon name="upload" />
+              导入分析结果
+            </button>
+          </div>
+        )}
+      </header>
+      <div
+        className="code-chat-layout requirement-native-history analysis-native-history-layout"
+        hidden={!cliOpen}
+      >
+        {cliOpen && (
+          <aside className="panel code-analysis-records">
+            <div className="panel-head">
+              <h2>历史会话</h2>
+            </div>
+            {cliRecords.map((task) => (
+              <button
+                key={task.id}
+                className={`code-record${cliId === task.id ? ' active' : ''}`}
+                aria-current={cliId === task.id ? 'true' : undefined}
+                onClick={() => openCli(task)}
+              >
+                <strong>{task.title}</strong>
+                <small>
+                  {taskStates[task.status]} · {time(task.created_at)}
+                </small>
+              </button>
+            ))}
+            {latestTextReport && (
+              <Link className="action ghost small" to={`/requirements/chat/${latestTextReport.id}`}>
+                其他历史对话
+              </Link>
+            )}
+          </aside>
+        )}
+        {cliRecord && (
+          <AnalysisCliHistory
+            kind="requirements"
+            projectId={project.id}
+            recordId={cliRecord.id}
+            open={cliOpen}
+            cancelUrl={`/api/projects/${project.id}/requirements/risk-analyses/${cliRecord.id}/cancel`}
+            reference={[search.get('function'), search.get('risk')].filter(Boolean).join(' · ')}
+            onClose={closeCli}
+            onInitialFinished={() => setReload((value) => value + 1)}
+            errorMessage={(e) => riskError(e, onSessionEnd)}
+          />
+        )}
+        {cliOpen && !cliRecord && (
+          <p className="panel panel-pad" role="status">
+            {tasksLoaded ? error || '该 CLI 会话不存在或已无访问权限。' : '正在读取分析记录…'}
+          </p>
+        )}
+      </div>
+      {!cliOpen && reportWorkspace}
     </div>
   );
 }
@@ -2034,7 +2184,7 @@ function StartAnalysis({
   base: string;
   retry: RiskAnalysisTask | null;
   onClose: () => void;
-  onStarted: () => void;
+  onStarted: (task: RiskAnalysisTask) => void;
   onSessionEnd: () => void;
 }) {
   const [options, setOptions] = useState<MaterialOption[]>([]);
@@ -2120,7 +2270,7 @@ function StartAnalysis({
     setBusy(true);
     setError('');
     try {
-      await apiRequest(`/api/projects/${project}/requirements/risk-analyses`, {
+      const raw = await apiRequest(`/api/projects/${project}/requirements/risk-analyses`, {
         method: 'POST',
         body: JSON.stringify({
           request_id: crypto.randomUUID(),
@@ -2133,7 +2283,7 @@ function StartAnalysis({
           ai_preference_version: aiSelection?.preference_version,
         }),
       });
-      onStarted();
+      onStarted(parseRiskAnalysisTask(raw));
     } catch (reason) {
       setError(riskError(reason, onSessionEnd));
     } finally {

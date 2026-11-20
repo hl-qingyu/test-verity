@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.modules.acceptance.router import router as acceptance_router
 from app.modules.accounts.router import router as accounts_router
 from app.modules.ai.router import router as ai_router
+from app.modules.analysis_terminal.router import router as analysis_terminal_router
 from app.modules.auth.router import router as auth_router
 from app.modules.case_analysis.router import router as case_analysis_router
 from app.modules.case_generation.router import router as generation_router
@@ -19,6 +20,7 @@ from app.modules.requirements.router import router as requirements_router
 from app.modules.skills.router import router as skills_router
 
 router = APIRouter()
+router.include_router(analysis_terminal_router)
 router.include_router(acceptance_router)
 router.include_router(overview_router)
 router.include_router(skills_router)

@@ -14,6 +14,7 @@ from app.db.models import (
 )
 from app.integrations import ai_client as responses
 from app.integrations.response_diagnostics import safe_snapshot
+from app.modules.ai import native_terminal
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.case_analysis import contract, service
@@ -84,6 +85,7 @@ def execute_model(key, factory, chat=False):
             service.own(project_id, run_id, actor, db)
             meta, data = copy.deepcopy(run.metadata_snapshot), copy.deepcopy(run.input_snapshot)
             config, secret = analysis_configuration(actor, db, row.ai_config)
+            terminal_options = native_terminal.analysis_options(row.ai_config)
             url, effort = config["base_url"], config["reasoning_effort"]
             attachments = sources.binaries(project_id, meta, actor, db)
             context, question = (copy.deepcopy(row.context), row.question) if chat else ({}, "")
@@ -149,6 +151,7 @@ def execute_model(key, factory, chat=False):
                 on_progress=check,
                 call_mode=config.get("call_mode", "RESPONSES_API"),
                 diagnostics=diagnostics,
+                **terminal_options,
             )
         with factory() as db:
             row = db.get(cls, key, with_for_update=True)

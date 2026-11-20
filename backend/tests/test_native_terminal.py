@@ -354,6 +354,8 @@ class RealNativeTerminalTests(unittest.TestCase):
                         raise AppError(409, "synthetic_terminal_stop")
 
                 requests_before = len(provider.requests)
+                thread = codex_terminal.history_thread(identity, 1)
+                self.assertIsNotNone(thread)
                 with self.assertRaises(AppError):
                     codex_terminal.run(
                         provider.url,
@@ -365,6 +367,7 @@ class RealNativeTerminalTests(unittest.TestCase):
                         instructions="Reply to the user.",
                         fixed_input={"messages": []},
                         resume=True,
+                        resume_thread=thread,
                         on_progress=resume_progress,
                     )
                 resume_chunks.extend(codex_terminal.output(identity, 2, resume_cursor)["chunks"])

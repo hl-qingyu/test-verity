@@ -17,6 +17,7 @@ import { Form } from './Form';
 import { FormSelect } from './FormSelect';
 import { FilePicker } from './FilePicker';
 import { CaseAnalysisNew } from './CaseAnalysisNew';
+import { AnalysisCliHistory, useHistoryButton } from './AnalysisCliHistory';
 import { DESIGN_FIELDS, CASE_COLUMNS, blankDesign } from './caseApi';
 import type { CaseList, Design, CaseRow } from './caseApi';
 import { parseCodeOptions } from './codeAnalysisApi';
@@ -107,6 +108,7 @@ function ReviewWorkspace({
     epoch = useRef(0),
     selection = useRef(selected),
     currentRecord = useRef(record);
+  const historyButton = useHistoryButton(tab === 'chat');
   currentRecord.current = record;
   selection.current = selected;
   useEffect(() => {
@@ -251,6 +253,10 @@ function ReviewWorkspace({
           setSelected(value.id);
           setRecord(value);
           setRows((old) => [value, ...old.filter((r) => r.id !== value.id)]);
+          if (value.terminal_available && path.endsWith('/start')) {
+            setReference('');
+            setTab('chat');
+          }
         }
       }
       return value;
@@ -492,13 +498,14 @@ function ReviewWorkspace({
             {[
               ['findings', '分析问题'],
               ['checks', '用例检查'],
-              ['chat', '对话'],
+              ['chat', record?.terminal_available ? '历史对话' : '对话'],
             ].map(([k, n]) => (
               <button
                 role="tab"
                 aria-selected={tab === k}
                 className={tab === k ? 'active' : ''}
                 key={k}
+                ref={k === 'chat' ? historyButton : undefined}
                 onClick={() => {
                   setTab(k);
                   setPage(1);
@@ -508,11 +515,23 @@ function ReviewWorkspace({
               </button>
             ))}
           </div>
+          {record?.terminal_available && (
+            <AnalysisCliHistory
+              kind="coverage"
+              projectId={project.id}
+              recordId={record.id}
+              open={tab === 'chat'}
+              cancelUrl={`/api/projects/${project.id}/case-analysis/${record.id}/cancel`}
+              reference={reference}
+              onClose={() => setTab('findings')}
+              errorMessage={(e) => reviewError(e, onSessionEnd)}
+            />
+          )}
           {!record ? (
             <div className="panel-pad">
               {selected ? '正在读取固定记录…' : '新建分析后展示结果。'}
             </div>
-          ) : tab === 'chat' ? (
+          ) : tab === 'chat' && record.terminal_available ? null : tab === 'chat' ? (
             <ReviewChat
               record={record}
               functionKey={functionKey}

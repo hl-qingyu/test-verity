@@ -35,6 +35,7 @@ const binding=()=>({skill:{name:'代码分析',version:1},template:{name:'代码
 ${examples}
 const p={issues:clone(ISSUES),tasks:[{id:'A',module:'code',title:'第一条记录',snapshot:{repos:['server @ A'],issues:clone(ISSUES)}},{id:'B',module:'code',title:'第二条记录',snapshot:{repos:['server @ B'],issues:clone(ISSUES)}}]};
 const P=()=>p;
+const S={role:'member',aiCallModeByUser:{member:'RESPONSES_API'}};
 const currentDocs=()=>p.docs||[],requirementAnalysisFilePicker=()=>'<div>固定GitHub文件选择</div>',localSessionLinkPicker=()=>'<div class="ls-link-picker">读取页面</div>',ensureCodePrototypeDemo=()=>{};
 let targetInputs=[],materialInputs=[],materialFileInputs=[];
 let linkReady=false;

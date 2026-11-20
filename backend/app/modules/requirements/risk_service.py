@@ -22,6 +22,7 @@ from app.db.models import (
     SourceDocument,
     UserAccount,
 )
+from app.modules.ai.native_terminal import TERMINAL_KEY
 from app.modules.documents import service as documents
 from app.modules.projects.record_deletion import require_visible, requirement_permissions
 from app.modules.prototypes import directories
@@ -154,6 +155,18 @@ def review_warnings_by_report(project_id, db):
 def detail(project_id, report_id, actor, db, *, duplicate=False):
     row = own(project_id, report_id, actor, db)
     creator = db.get(UserAccount, row.created_by)
+    terminal_task_id = db.scalar(
+        select(RequirementRiskAnalysis.id)
+        .where(
+            RequirementRiskAnalysis.project_id == project_id,
+            RequirementRiskAnalysis.report_id == report_id,
+            RequirementRiskAnalysis.actor_id == actor.id,
+            RequirementRiskAnalysis.deleted_at.is_(None),
+            RequirementRiskAnalysis.ai_config.has_key(TERMINAL_KEY),
+        )
+        .order_by(RequirementRiskAnalysis.id.desc())
+        .limit(1)
+    )
     bindings = copy.deepcopy(row.bindings)
     for binding in bindings:
         source = db.get(SourceDocument, binding["document_id"])
@@ -166,6 +179,7 @@ def detail(project_id, report_id, actor, db, *, duplicate=False):
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
         "revision": row.revision,
+        "terminal_task_id": terminal_task_id,
         "input": row.input,
         "report": row.report,
         "review_warnings": review_warnings_by_report(project_id, db).get(row.id, []),

@@ -16,6 +16,7 @@ import { FormSelect } from './FormSelect';
 import { ChangeAnalysisNew } from './ChangeAnalysisNew';
 import { ChangeImport } from './ChangeImport';
 import { ChangeAnalysisChat } from './ChangeAnalysisChat';
+import { AnalysisCliHistory, useHistoryButton } from './AnalysisCliHistory';
 import { apiDownload } from './api/http';
 import {
   changeDetail,
@@ -378,6 +379,10 @@ function ChangeWorkspace({
       setRows((old) => [next, ...old.filter((r) => r.id !== next.id)]);
       setSelected(next.id);
       setDetail(null);
+      if (action === 'retry' && next.terminal_available) {
+        setReference('');
+        setChat(true);
+      }
       setNotice(
         action === 'retry'
           ? '已创建重试任务，原失败记录保留。'
@@ -419,6 +424,8 @@ function ChangeWorkspace({
     setCauseFilter('');
     setHandlingFilter('');
   }
+  const historyButton = useHistoryButton(chat);
+
   function choose(id: string) {
     setSelected(id);
     setDetail(null);
@@ -451,7 +458,7 @@ function ChangeWorkspace({
     choose(row.id);
     setNewOpen(false);
     setImportOpen(false);
-    setChat(false);
+    setChat(!!row.terminal_available && (row.status === 'QUEUED' || row.status === 'RUNNING'));
     setNotice('记录已保存到当前项目，后台任务和历史可刷新查看。');
   }
   const all = record ? changeItems(record, tab) : [],
@@ -559,6 +566,7 @@ function ChangeWorkspace({
                 导入分析结果
               </button>
               <button
+                ref={historyButton}
                 className="ghost"
                 disabled={!project}
                 onClick={() => {
@@ -773,8 +781,20 @@ function ChangeWorkspace({
           )}
           <div className={chat ? 'code-chat-layout' : 'code-analysis-workspace'}>
             {nav}
+            {record?.terminal_available && (
+              <AnalysisCliHistory
+                kind="changes"
+                projectId={project.id}
+                recordId={record.id}
+                open={chat}
+                cancelUrl={`${base}/${record.id}/cancel`}
+                reference={reference}
+                onClose={() => setChat(false)}
+                errorMessage={(e) => changeError(e, onSessionEnd)}
+              />
+            )}
             {chat ? (
-              record ? (
+              record?.terminal_available ? null : record ? (
                 <ChangeAnalysisChat
                   key={record.id}
                   record={record}

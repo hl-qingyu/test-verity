@@ -135,18 +135,20 @@ function harness({ fitCols } = {}) {
     }, exports);
     return exports;
   }
-  const { GenerationCliWorkspace } = load('GenerationCliWorkspace.tsx');
+  const { NativeCliWorkspace } = load('NativeCliWorkspace.tsx');
   const props = {
-    projectId: 7,
-    runId: '1752',
-    onSessionEnd() {},
+    base: '/generation/1752/terminal',
+    cancelInitial: '/generation/1752/cancel',
+    initialCancelLabel: '取消生成',
+    workspaceTitle: '用例生成历史对话',
+    errorMessage: (error) => error.message,
     onClose() {
       closed++;
     },
   };
   function render() {
     cursor = 0;
-    tree = GenerationCliWorkspace(props);
+    tree = NativeCliWorkspace(props);
     while (effects.length) effects.shift()();
   }
   async function settle() {
@@ -168,7 +170,10 @@ function harness({ fitCols } = {}) {
       session.replay_rows = rows;
     },
     setSessionEnd(value) {
-      props.onSessionEnd = value;
+      props.errorMessage = (error) => {
+        value();
+        return error.message;
+      };
       render();
     },
     setOpen(value) {

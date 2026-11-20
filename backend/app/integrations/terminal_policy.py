@@ -51,11 +51,12 @@ class TerminalPolicy:
     }
     THREAD_METHODS = {"thread/start", "thread/resume", "thread/settings/update", "turn/start"}
 
-    def __init__(self, work, overrides, image_paths=(), image_urls=()):
+    def __init__(self, work, overrides, image_paths=(), image_urls=(), *, thread_id=None):
         self.work = Path(work).resolve()
         self.overrides = overrides
         self.image_paths = {os.path.normcase(str(Path(p).resolve())) for p in image_paths}
         self.image_urls = set(image_urls)
+        self.thread_id = thread_id
         self.config = {}
         for name, value in overrides.items():
             parts = name.split(".")
@@ -86,6 +87,10 @@ class TerminalPolicy:
         if not isinstance(params, dict):
             raise PolicyDenied("params")
         params = copy.deepcopy(params)
+        if self.thread_id is not None and (
+            method == "thread/start" or params.get("threadId") not in (None, self.thread_id)
+        ):
+            raise PolicyDenied("thread_identity")
         cwds = params.get("cwds")
         if cwds is not None and (
             not isinstance(cwds, list) or any(not self.same_path(p) for p in cwds)

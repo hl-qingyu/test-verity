@@ -1304,6 +1304,71 @@ class RequirementChatTurn(Base):
     )
 
 
+class AnalysisTerminalResume(Base):
+    __tablename__ = "analysis_terminal_resume"
+    __table_args__ = (
+        CheckConstraint(
+            "record_kind IN ('requirements','code','changes','coverage')",
+            name="ck_analysis_terminal_resume_kind",
+        ),
+        CheckConstraint(
+            "status IN ('QUEUED','RUNNING','COMPLETED','FAILED','CANCELLED')",
+            name="ck_analysis_terminal_resume_status",
+        ),
+        UniqueConstraint(
+            "project_id",
+            "record_kind",
+            "record_id",
+            "request_id",
+            name="uq_analysis_terminal_resume_request",
+        ),
+        Index(
+            "uq_analysis_terminal_resume_active",
+            "project_id",
+            "record_kind",
+            "record_id",
+            unique=True,
+            postgresql_where=text("status IN ('QUEUED','RUNNING')"),
+        ),
+        {"comment": "分析记录的原生CLI续接进程；同一分析可多次续接，原生模型轮次保存在私有会话"},
+    )
+    id: Mapped[int] = mapped_column(
+        BigInteger, Identity(), primary_key=True, comment="续接进程主键及终端输出执行编号"
+    )
+    project_id: Mapped[int] = mapped_column(ForeignKey("project.id"), comment="所属项目ID")
+    record_kind: Mapped[str] = mapped_column(
+        String(16), comment="记录类型：requirements需求、code代码、changes变更、coverage用例"
+    )
+    record_id: Mapped[int] = mapped_column(
+        BigInteger, comment="对应类型的分析任务ID；需求使用分析任务ID，任务可尚无正式报告"
+    )
+    actor_id: Mapped[int] = mapped_column(
+        ForeignKey("user_account.id"), comment="分析发起人账号ID；使用其固定个人CLI配置"
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(36), comment="客户端续接请求UUID；同项目、类型和记录内幂等"
+    )
+    ai_config: Mapped[dict] = mapped_column(
+        JSONB, comment="固定本人CLI方式、模型、强度及配置版本；不保存密钥"
+    )
+    rows: Mapped[int] = mapped_column(Integer, comment="终端初始行数；范围8至120行")
+    cols: Mapped[int] = mapped_column(Integer, comment="终端初始列数；范围20至300列")
+    status: Mapped[str] = mapped_column(
+        String(16),
+        server_default="QUEUED",
+        comment="QUEUED排队、RUNNING进程运行、COMPLETED正常退出、FAILED失败、CANCELLED停止",
+    )
+    error_code: Mapped[str] = mapped_column(
+        String(100), server_default="", comment="安全失败原因码；空字符串表示无错误"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), comment="提交时间，带时区"
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), comment="状态更新时间，带时区"
+    )
+
+
 class RequirementManualRisk(Base):
     __tablename__ = "requirement_manual_risk"
     __table_args__ = (

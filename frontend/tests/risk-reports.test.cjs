@@ -82,6 +82,21 @@ const detail = {
   manual_risks: [],
   duplicate: false,
 };
+const queuedTask = (project, init) => ({
+  ...JSON.parse(init.body),
+  id: 17,
+  project_id: project,
+  status: 'QUEUED',
+  error_code: '',
+  report_id: null,
+  created_by: '成员',
+  can_cancel: true,
+  candidate_available: false,
+  can_revalidate: false,
+  function_risk_corrections: [],
+  created_at: detail.created_at,
+  updated_at: detail.updated_at,
+});
 
 test('analysis task candidate state and validation path stay visible', async () => {
   const original = global.fetch;
@@ -473,7 +488,12 @@ test('analysis material groups preserve prototype-only selections and fixed vers
       useEffect() {},
     },
     {
-      './api/http': { apiRequest: async (url, init) => requests.push({ url, ...init }) },
+      './api/http': {
+        apiRequest: async (url, init) => {
+          requests.push({ url, ...init });
+          return queuedTask(1, init);
+        },
+      },
     },
   ).StartAnalysis;
   const tree = component({
@@ -564,7 +584,14 @@ test('retry submits only stored selection fields, without report source IDs', as
       useState: (initial) => [index < values.length ? values[index++] : initial, () => {}],
       useEffect() {},
     },
-    { './api/http': { apiRequest: async (url, init) => requests.push({ url, ...init }) } },
+    {
+      './api/http': {
+        apiRequest: async (url, init) => {
+          requests.push({ url, ...init });
+          return queuedTask(5, init);
+        },
+      },
+    },
   ).StartAnalysis;
   const tree = component({
     project: 5,

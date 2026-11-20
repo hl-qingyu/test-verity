@@ -18,6 +18,7 @@ from app.db.models import (
 )
 from app.integrations import ai_client as responses
 from app.integrations import github
+from app.modules.ai import native_terminal
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.documents import service as documents
@@ -218,6 +219,18 @@ def prepare(task, actor, db):
     return input_data, bindings, binaries
 
 
+def validate_result(answer, input_data, project_id):
+    raw, comparison_corrections = risk_schemas.normalize_comparison_text(
+        risk_service.json_object(answer)
+    )
+    output = risk_service.parse(risk_schemas.Report, raw, "report")
+    output, corrections = risk_schemas.normalize_function_risks(output)
+    parsed_input = risk_schemas.AnalysisInput.model_validate(input_data)
+    review_warnings = []
+    risk_schemas.validate_report(output, parsed_input, project_id, review_warnings)
+    return output.model_dump(), corrections, comparison_corrections, review_warnings
+
+
 def execute(task_id, session_factory):
     try:
         with session_factory() as db:
@@ -229,6 +242,7 @@ def execute(task_id, session_factory):
                 raise AppError(403, "risk_analysis_access_lost")
             documents.access(task.project_id, actor, db)
             config, key = analysis_configuration(actor, db, task.ai_config)
+            terminal_options = native_terminal.analysis_options(task.ai_config)
             base_url = config["base_url"]
             effort = config["reasoning_effort"]
             project_id, actor_id = task.project_id, task.actor_id
@@ -279,17 +293,13 @@ def execute(task_id, session_factory):
             analysis_materials.model_content(input_data, binaries),
             on_progress=check,
             call_mode=config.get("call_mode", "RESPONSES_API"),
+            **terminal_options,
         )
         artifacts.save_candidate(task_id, answer)
         check()
-        raw, comparison_corrections = risk_schemas.normalize_comparison_text(
-            risk_service.json_object(answer)
+        output, corrections, comparison_corrections, review_warnings = validate_result(
+            answer, input_data, project_id
         )
-        output = risk_service.parse(risk_schemas.Report, raw, "report")
-        output, corrections = risk_schemas.normalize_function_risks(output)
-        parsed_input = risk_schemas.AnalysisInput.model_validate(input_data)
-        review_warnings = []
-        risk_schemas.validate_report(output, parsed_input, project_id, review_warnings)
         with session_factory() as db:
             actor = db.get(UserAccount, actor_id)
             if actor is None:
@@ -305,7 +315,7 @@ def execute(task_id, session_factory):
                 "input.json",
                 "risk-report.json",
                 input_data,
-                output.model_dump(),
+                output,
                 bindings,
                 actor,
                 db,

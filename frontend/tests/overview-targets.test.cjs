@@ -114,6 +114,11 @@ function harness(file, component, targetType) {
     }).outputText;
     new Function('exports', 'require', source)(exported, (dep) => {
       if (dep === 'react') return react;
+      if (dep === 'react-router-dom')
+        return {
+          ...require(dep),
+          useSearchParams: () => [new URLSearchParams(), () => {}],
+        };
       if (dep.endsWith('.css')) return {};
       if (!dep.startsWith('.')) return require(dep);
       const base = path.resolve(path.dirname(name), dep),

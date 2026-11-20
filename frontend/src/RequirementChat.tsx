@@ -3,7 +3,7 @@ import { PageJump } from './PageJump';
 import { useEffect, useRef, useState } from 'react';
 import { useCachedView } from './pageViewCache';
 import type { PageViewCache } from './pageViewCache';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { CaseDialog } from './CaseDialog';
 import { Form } from './Form';
 import { FormSelect } from './FormSelect';
@@ -276,6 +276,15 @@ function Chat({
     }
   }
   const active = turns.some((row) => row.status === 'RUNNING' || row.status === 'QUEUED');
+  if (detail?.terminal_task_id) {
+    const query = new URLSearchParams({
+      cli: String(detail.terminal_task_id),
+      cli_project: String(project.id),
+    });
+    if (functionKey) query.set('function', functionKey);
+    if (riskKey) query.set('risk', riskKey);
+    return <Navigate to={`/requirements?${query}`} replace />;
+  }
   return (
     <div className="requirement-chat-page requirement-ui">
       <header className="page-head">

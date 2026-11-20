@@ -131,6 +131,7 @@ export type PageChangeRecord = {
   revision?: number;
   error_code?: string;
   can_cancel?: boolean;
+  terminal_available?: boolean;
   can_start?: boolean;
   can_retry?: boolean;
   retry_preparation?: boolean;
