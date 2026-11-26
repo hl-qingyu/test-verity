@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -23,7 +24,7 @@ test('login distinguishes unavailable password crypto from a network failure', a
     },
   };
   function load(file) {
-    const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    const compiled = compileModule(fs.readFileSync(file, 'utf8'), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
@@ -31,12 +32,16 @@ test('login distinguishes unavailable password crypto from a network failure', a
       },
     }).outputText;
     const exported = {};
-    new Function('exports', 'require', compiled)(exported, (name) => {
-      if (name === 'react') return react;
-      if (name === './Form') return { Form };
-      if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'));
-      return require(name);
-    });
+    evaluateModule(
+      compiled,
+      (name) => {
+        if (name === 'react') return react;
+        if (name === './Form') return { Form };
+        if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'));
+        return require(name);
+      },
+      exported,
+    );
     return exported;
   }
   function nodes(node) {

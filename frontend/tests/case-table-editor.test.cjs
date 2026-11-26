@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -34,35 +35,39 @@ function harness(caseIds) {
     if (cache.has(name)) return cache.get(name);
     const exports = {};
     cache.set(name, exports);
-    const code = ts.transpileModule(fs.readFileSync(name, 'utf8'), {
+    const code = compileModule(fs.readFileSync(name, 'utf8'), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         jsx: ts.JsxEmit.ReactJSX,
       },
     }).outputText;
-    new Function('exports', 'require', code)(exports, (dep) => {
-      if (dep === 'react') return react;
-      if (dep === 'react-router-dom') return { useBlocker: () => ({ state: 'unblocked' }) };
-      if (dep === './FormSelect')
-        return {
-          Select: (props) => ({
-            type: 'select',
-            props: { ...props, onChange: (event) => props.onChange(event.target.value) },
-          }),
-        };
-      if (dep === './CaseDialog') return { CaseDialog: 'dialog' };
-      if (dep === './api/http')
-        return {
-          apiRequest: async (url, options) => {
-            requests.push({ url, body: JSON.parse(options.body) });
-            return { revision: 5, next_number: 13, categories: [], updated: 2 };
-          },
-        };
-      if (!dep.startsWith('.')) return require(dep);
-      const file = path.resolve(path.dirname(name), dep);
-      return load(fs.existsSync(file + '.ts') ? file + '.ts' : file + '.tsx');
-    });
+    evaluateModule(
+      code,
+      (dep) => {
+        if (dep === 'react') return react;
+        if (dep === 'react-router-dom') return { useBlocker: () => ({ state: 'unblocked' }) };
+        if (dep === './FormSelect')
+          return {
+            Select: (props) => ({
+              type: 'select',
+              props: { ...props, onChange: (event) => props.onChange(event.target.value) },
+            }),
+          };
+        if (dep === './CaseDialog') return { CaseDialog: 'dialog' };
+        if (dep === './api/http')
+          return {
+            apiRequest: async (url, options) => {
+              requests.push({ url, body: JSON.parse(options.body) });
+              return { revision: 5, next_number: 13, categories: [], updated: 2 };
+            },
+          };
+        if (!dep.startsWith('.')) return require(dep);
+        const file = path.resolve(path.dirname(name), dep);
+        return load(fs.existsSync(file + '.ts') ? file + '.ts' : file + '.tsx');
+      },
+      exports,
+    );
     return exports;
   }
   const api = load(path.resolve(__dirname, '../src/caseApi.ts'));

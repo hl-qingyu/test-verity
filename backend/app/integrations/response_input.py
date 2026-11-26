@@ -102,9 +102,6 @@ def prepare_messages(messages):
         chunks = []
         for start in range(0, len(text), TEXT_PART_CHARACTERS):
             chunk = {**part, "text": text[start : start + TEXT_PART_CHARACTERS]}
-            # A cache boundary still belongs only at the end of the original part.
-            if start + TEXT_PART_CHARACTERS < len(text):
-                chunk.pop("prompt_cache_breakpoint", None)
             chunks.append(chunk)
             text_lengths.append(len(chunk["text"]))
         return chunks

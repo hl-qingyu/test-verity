@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -5,11 +6,14 @@ const path = require('node:path');
 const ts = require('typescript');
 function load(file) {
   const exports = {};
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const code = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  new Function('exports', 'require', code)(exports, (name) =>
-    name.startsWith('.') ? load(path.resolve(path.dirname(file), name + '.ts')) : require(name),
+  evaluateModule(
+    code,
+    (name) =>
+      name.startsWith('.') ? load(path.resolve(path.dirname(file), name + '.ts')) : require(name),
+    exports,
   );
   return exports;
 }

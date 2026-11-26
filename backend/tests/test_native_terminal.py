@@ -32,7 +32,10 @@ class TerminalTransportTests(unittest.TestCase):
                 patch.object(
                     codex_terminal,
                     "Settings",
-                    return_value=SimpleNamespace(ai_cli_work_path=Path(folder)),
+                    return_value=SimpleNamespace(
+                        ai_cli_terminal_work_path=Path(folder) / "interactive",
+                        ai_cli_work_path=Path(folder),
+                    ),
                 ),
                 patch.object(codex_terminal, "credential_cipher", return_value=cipher),
             ):
@@ -83,7 +86,10 @@ class TerminalTransportTests(unittest.TestCase):
                 patch.object(
                     codex_terminal,
                     "Settings",
-                    return_value=SimpleNamespace(ai_cli_work_path=Path(folder)),
+                    return_value=SimpleNamespace(
+                        ai_cli_terminal_work_path=Path(folder) / "interactive",
+                        ai_cli_work_path=Path(folder),
+                    ),
                 ),
                 patch.object(codex_terminal, "credential_cipher", return_value=cipher),
             ):
@@ -125,7 +131,9 @@ class TerminalTransportTests(unittest.TestCase):
                 codex_terminal,
                 "Settings",
                 return_value=SimpleNamespace(
-                    ai_cli_work_path=Path(folder), ai_cli_executable=Path(sys.executable)
+                    ai_cli_terminal_work_path=Path(folder) / "interactive",
+                    ai_cli_work_path=Path(folder),
+                    ai_cli_executable=Path(sys.executable),
                 ),
             ),
             patch.object(codex_terminal.codex_exec, "require_available"),
@@ -176,7 +184,9 @@ class TerminalTransportTests(unittest.TestCase):
             cipher = Fernet(Fernet.generate_key())
             with (
                 patch.object(
-                    codex_terminal, "Settings", return_value=SimpleNamespace(ai_cli_work_path=root)
+                    codex_terminal,
+                    "Settings",
+                    return_value=SimpleNamespace(ai_cli_terminal_work_path=root / "interactive"),
                 ),
                 patch.object(codex_terminal, "credential_cipher", return_value=cipher),
             ):
@@ -250,7 +260,9 @@ class RealNativeTerminalTests(unittest.TestCase):
         ):
             identity = str(uuid4())
             local = SimpleNamespace(
-                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+                ai_cli_terminal_work_path=Path(folder) / "interactive",
+                ai_cli_work_path=Path(folder),
+                ai_cli_executable=settings.ai_cli_executable,
             )
             chunks, denied, forwarded, denial_details = [], [], [], []
             cursor, stage, deadline = 0, 0, monotonic() + 20
@@ -389,7 +401,9 @@ class RealNativeTerminalTests(unittest.TestCase):
         ):
             identity = str(uuid4())
             local = SimpleNamespace(
-                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+                ai_cli_terminal_work_path=Path(folder) / "interactive",
+                ai_cli_work_path=Path(folder),
+                ai_cli_executable=settings.ai_cli_executable,
             )
             chunks = []
             cursor = 0

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from app.core.errors import AppError
+from app.core.json_data import json_object as read_json
 from app.db.models import (
     CodeAnalysisTask,
     DocumentVersion,
@@ -21,13 +22,12 @@ from app.modules.ai.service import (
     analysis_configuration,
     configuration_snapshot,
 )
-from app.modules.code_analysis import artifacts, contract, schemas, sources
+from app.modules.code_analysis import artifacts, contract, report_v3, schemas, sources
 from app.modules.documents import service as documents
 from app.modules.github import service as github_service
 from app.modules.projects import service as projects
 from app.modules.projects.record_deletion import require_visible
 from app.modules.prototypes import directories
-from app.modules.requirements.risk_service import json_object
 
 ACTIVE = ("QUEUED", "RUNNING")
 
@@ -151,6 +151,23 @@ def github_scope(project_id, repository_id, connection_id, branch, actor, db):
         raise AppError(409, "github_connection_changed")
     result["files"] = [f for f in result["files"] if contract.safe_path(f["path"])]
     return {**result, "repository_kind": row.kind, "source_version": row.version}
+
+
+def json_object(value: str):
+    return read_json(value, "code_contract_invalid")
+
+
+def validate_candidate(raw, input_data, *, version=None, normalize=True):
+    contract.require(isinstance(raw, dict))
+    version = raw.get("contract_version") if version is None else version
+    if version == 3:
+        output = parse(contract.CandidateV3, raw)
+        return report_v3.validate(input_data, output, normalize=normalize)
+    output = parse(contract.Report, raw)
+    output, corrections = (
+        contract.normalize_code_evidence(input_data, output) if normalize else (output, [])
+    )
+    return contract.validate_report(input_data, output), corrections
 
 
 def own(project_id, task_id, actor, db, *, lock=False):
@@ -457,15 +474,15 @@ def revalidate_candidate(project_id, task_id, actor, db):
     except (OSError, UnicodeError):
         raise AppError(503, "code_candidate_storage_unavailable") from None
     input_data = parse(contract.AnalysisInput, row.input_snapshot)
-    output = parse(contract.Report, json_object(raw))
-    output, corrections = contract.normalize_code_evidence(input_data, output)
-    contract.validate_report(input_data, output)
+    output, corrections = validate_candidate(
+        json_object(raw), input_data, version=metadata.get("skill", {}).get("contract_version", 2)
+    )
     sources.recheck(
         project_id, metadata, actor, db, shared_snapshot=metadata.get("shared_snapshot", False)
     )
     analysis_configuration(actor, db, row.ai_config)
     now = datetime.now(UTC)
-    row.report = output.model_dump(by_alias=True)
+    row.report = output
     row.status, row.error_code, row.updated_at = "COMPLETED", "", now
     row.revision += 1
     row.metadata_snapshot = {
@@ -497,8 +514,12 @@ async def import_report(project_id, chunks, actor, db):
         ):
             raise AppError(422, "code_import_file_invalid")
     input_data = parse(contract.AnalysisInput, json_object(payload.input_json.lstrip("\ufeff")))
-    output = parse(contract.Report, json_object(payload.report_json.lstrip("\ufeff")))
-    contract.validate_report(input_data, output)
+    raw = json_object(payload.report_json.lstrip("\ufeff"))
+    if isinstance(raw, dict) and raw.get("contract_version") == 3:
+        raw = {
+            key: value for key, value in raw.items() if key not in ("outcome", "platform_coverage")
+        }
+    output, _ = validate_candidate(raw, input_data, normalize=False)
     actor = db.get(UserAccount, actor_id, populate_existing=True)
     documents.access(project_id, actor, db, lock=True)
     mapping = contract.index([b.model_dump() for b in payload.bindings], "source_id")
@@ -542,7 +563,7 @@ async def import_report(project_id, chunks, actor, db):
         elif any(s.image_ref for s in material.segments):
             raise AppError(422, "code_attachment_mismatch")
         bindings.append({**binding, "name": document.name, "kind": document.kind})
-    input_dict, report_dict = input_data.model_dump(), output.model_dump(by_alias=True)
+    input_dict, report_dict = input_data.model_dump(), output
     fingerprint = sources.digest({"input": input_dict, "report": report_dict})
     prior = db.scalar(
         select(CodeAnalysisTask).where(
@@ -586,7 +607,7 @@ def handle_finding(project_id, task_id, payload, actor, db):
         raise AppError(409, "code_handling_changed")
     if (
         row.status != "COMPLETED"
-        or row.report.get("contract_version") != 2
+        or row.report.get("contract_version") not in (2, 3)
         or payload.finding_key not in {f["key"] for f in row.report.get("findings", [])}
     ):
         raise AppError(422, "code_finding_unavailable")

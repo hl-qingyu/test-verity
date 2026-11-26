@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.integrations import cli_reading, codex_exec, codex_filesystem
+from app.integrations import cli_reading, codex_config, codex_exec, input_estimate
 from app.integrations.terminal_gateway import TerminalGateway
 from app.integrations.terminal_policy import TerminalPolicy
 from app.integrations.terminal_result import TerminalResult
@@ -43,11 +43,7 @@ class SecretFilter:
 
 def directory(identity):
     try:
-        settings = Settings()
-        root = getattr(
-            settings, "ai_cli_terminal_work_path", settings.ai_cli_work_path / "interactive"
-        )
-        return root.resolve() / str(UUID(identity))
+        return Settings().ai_cli_terminal_work_path.resolve() / str(UUID(identity))
     except (ValueError, TypeError, AttributeError):
         raise AppError(404, "generation_cli_log_unavailable") from None
 
@@ -152,7 +148,18 @@ def history_thread(identity, execution):
     return None
 
 
-def prepare(identity, base_url, model, effort, instructions, fixed_input, resume):
+def prepare(
+    identity,
+    base_url,
+    model,
+    effort,
+    instructions,
+    fixed_input,
+    resume,
+    *,
+    reading_files=None,
+    reading_guidance="",
+):
     root = directory(identity)
     state, work = root / "state", root / "input"
     state.mkdir(parents=True, exist_ok=True)
@@ -161,7 +168,8 @@ def prepare(identity, base_url, model, effort, instructions, fixed_input, resume
     # The browser cannot choose these paths, executable, provider flags or tool definitions.
     if not resume or not (work / "input.json").is_file():
         (work / "input.json").write_text(
-            json.dumps(fixed_input, ensure_ascii=False), encoding="utf-8"
+            json.dumps(fixed_input if fixed_input is not None else {}, ensure_ascii=False),
+            encoding="utf-8",
         )
         (state / "instructions.txt").write_text(
             instructions + "\n\n本任务固定资料和平台已有对话保存在 input.json。"
@@ -183,11 +191,21 @@ def prepare(identity, base_url, model, effort, instructions, fixed_input, resume
                 encoding="utf-8",
             )
     # A new instruction file adds transport guidance without rewriting the saved Skill/history.
-    index = cli_reading.build(work)
+    if resume:
+        index = cli_reading.resume_index(work)
+    elif reading_files is not None:
+        index = cli_reading.build_files(work, reading_files, reading_guidance)
+    else:
+        index = cli_reading.build(work)
+    reading_note = (
+        cli_reading.structured_guidance(index)
+        if index.endswith("/index.md")
+        else cli_reading.GUIDANCE.format(index=index)
+    )
     guidance = (
         instruction_file.read_text(encoding="utf-8")
         + "\n\n"
-        + cli_reading.GUIDANCE.format(index=index)
+        + reading_note
         + ("\n\n" + cli_reading.RESUME_GUIDANCE if resume else "")
     )
     reading_instructions = state / (
@@ -201,52 +219,6 @@ def prepare(identity, base_url, model, effort, instructions, fixed_input, resume
     ):
         raise AppError(503, "ai_cli_reading_unavailable")
     instruction_file = reading_instructions
-    provider = {
-        "name": "Verity",
-        "base_url": base_url,
-        "env_key": "VERITY_CODEX_KEY",
-        "wire_api": "responses",
-    }
-    permissions = {":root": "deny", ":minimal": "read", str(work): "read"}
-    mcp = codex_filesystem.configuration(work)
-    overrides = {
-        "model_provider": '"verity"',
-        "model_providers.verity": "{"
-        + ",".join(k + "=" + json.dumps(v) for k, v in provider.items())
-        + "}",
-        "approval_policy": '"never"',
-        "web_search": '"disabled"',
-        "features.shell_tool": "false",
-        "features.multi_agent": "false",
-        "features.apply_patch_freeform": "false",
-        "features.view_image": "false",
-        "features.plugins": "false",
-        "features.apps": "false",
-        "features.hooks": "false",
-        "features.shell_snapshot": "false",
-        "plugins": "{}",
-        "project_doc_max_bytes": "0",
-        "project_root_markers": '[".verity-cli-root"]',
-        "projects": "{"
-        + ",".join(
-            json.dumps(path) + '={trust_level="trusted"}'
-            for path in dict.fromkeys(
-                (str(work), str(work).lower(), work.as_posix(), work.as_posix().lower())
-            )
-        )
-        + "}",
-        "default_permissions": '"verity"',
-        "permissions.verity.filesystem": "{"
-        + ",".join(json.dumps(k) + "=" + json.dumps(v) for k, v in permissions.items())
-        + "}",
-        "permissions.verity.network.enabled": "false",
-        "model_instructions_file": json.dumps(str(instruction_file)),
-        "mcp_servers": "{filesystem={"
-        + ",".join(k + "=" + json.dumps(v) for k, v in mcp.items())
-        + "}}",
-    }
-    if effort != "default":
-        overrides["model_reasoning_effort"] = json.dumps(effort)
     args = [
         str(Settings().ai_cli_executable),
         "--no-daemon",
@@ -256,8 +228,7 @@ def prepare(identity, base_url, model, effort, instructions, fixed_input, resume
         "--model",
         model,
     ]
-    for name, value in overrides.items():
-        args += ["-c", name + "=" + value]
+    args += codex_config.build("terminal", work, base_url, effort, instruction_file)
     # A previously saved native session can be resumed; the first open is a blank TUI.
     if resume:
         args += ["resume", "--last"]
@@ -272,8 +243,8 @@ def run(
     *,
     identity,
     execution,
-    instructions,
-    fixed_input,
+    instructions="",
+    fixed_input=None,
     resume=False,
     resume_thread=None,
     rows=30,
@@ -283,6 +254,8 @@ def run(
     images=(),
     capture=None,
     diagnostics=None,
+    reading_files=None,
+    reading_guidance="",
 ):
     codex_exec.require_available()
     if os.name != "nt":
@@ -290,7 +263,15 @@ def run(
     from winpty import PtyProcess
 
     root, state, work, args = prepare(
-        identity, base_url, model, effort, instructions, fixed_input, resume
+        identity,
+        base_url,
+        model,
+        effort,
+        instructions,
+        fixed_input,
+        resume,
+        reading_files=reading_files,
+        reading_guidance=reading_guidance,
     )
     if resume and resume_thread:
         args[-1] = resume_thread
@@ -501,12 +482,14 @@ def analyze(
     instruction_messages=None,
     diagnostics=None,
     on_progress=None,
+    reading_files=None,
+    reading_guidance="",
 ):
-    rules, payload, images = codex_exec.native_input(
-        instructions, [*(instruction_messages or []), {"role": "user", "content": content}]
-    )
+    messages = [*(instruction_messages or []), {"role": "user", "content": content}]
+    rules, payload, images = codex_exec.native_input(instructions, messages)
     stats = diagnostics if diagnostics is not None else {}
     stats.update(
+        input_estimate=input_estimate.estimate(instructions, messages),
         call_mode="CODEX_EXEC",
         client_version=codex_exec.runtime_status()["version"],
         cli_terminal_id=terminal_spec["identity"],
@@ -522,9 +505,11 @@ def analyze(
         instructions=rules,
         fixed_input=json.loads(payload),
         images=images,
+        reading_files=reading_files,
+        reading_guidance=reading_guidance,
         capture=TerminalResult(),
         initial_prompt=(
-            "请按本次固定 Skill 和契约，从指令中的reading-v1阅读目录开始，完整读取全部固定资料，"
+            "请按本次固定 Skill 和契约，从指令中的阅读目录开始，完整读取全部固定资料，"
             "完成本次分析。"
             "图片已按标号顺序附加。只输出本次业务契约要求的最终完整 JSON；"
             "不得省略范围或编造完成。"

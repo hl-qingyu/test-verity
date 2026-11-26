@@ -1,4 +1,4 @@
-"""Embed approved Skill file-viewing prototype into each total HTML in place."""
+"""Update the Skill file snapshots in the main prototype."""
 
 import hashlib
 import json
@@ -9,15 +9,20 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(__file__).resolve().parent
 MODULES = [
-    ("requirement-analysis", "需求分析", "3.0.2", "spark"),
-    ("case-generation", "用例生成", "2.1.2", "list"),
-    ("case-analysis", "用例分析", "1.0.1", "chart"),
-    ("code-review", "代码分析", "2.0.1", "code"),
-    ("change-impact", "变更分析", "1.0.4", "branch"),
+    ("requirement-analysis", "需求分析", "spark"),
+    ("case-generation", "用例生成", "list"),
+    ("case-analysis", "用例分析", "chart"),
+    ("code-review", "代码分析", "code"),
+    ("change-impact", "变更分析", "branch"),
 ]
 data = []
-for key, name, version, icon in MODULES:
+for key, name, icon in MODULES:
     folder = ROOT / "skill" / key
+    primary = (folder / "SKILL.md").read_text(encoding="utf-8")
+    matched = re.search(r'^\s+version:\s*["\']?([0-9]+\.[0-9]+\.[0-9]+)', primary, re.M)
+    if matched is None:
+        matched = re.search(r"^# .*?([0-9]+\.[0-9]+\.[0-9]+)", primary, re.M)
+    version = matched[1] if matched else "未标注"
     manifest = folder / "resources.json"
     current = json.loads(manifest.read_text(encoding="utf-8"))["instructions"] if manifest.exists() else ["SKILL.md", "contract.md"]
     files = []
@@ -34,16 +39,16 @@ for key, name, version, icon in MODULES:
 serialized = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
 block = "// Skill management content snapshot.\nconst SKILL_CONTENT = " + serialized + ";\n" + (SOURCE / "skill-management.js").read_text(encoding="utf-8").rstrip("\n")
 style = '<style id="skill-management-layout">\n' + (SOURCE / "skill-management.css").read_text(encoding="utf-8") + "\n</style>\n"
-for arg in sys.argv[1:]:
+for arg in sys.argv[1:] or [str(ROOT / "verity-prototype.html")]:
     target = Path(arg).resolve()
-    assert target.name in {"verity-prototype.html", "verity-requirement-risk-review.html"}
-    assert target == (ROOT / "verity-prototype.html").resolve() or target == (ROOT / "docs/prototypes/verity-requirement-risk-review.html").resolve()
+    assert target == (ROOT / "verity-prototype.html").resolve()
     original = target.read_bytes().decode("utf-8")
     newline = "\r\n" if "\r\n" in original else "\n"
     html = original.replace("\r\n", "\n")
     kind = "repo" if target.is_relative_to(ROOT) else "external"
     backup = ROOT / f"outputs/prototype-pending/verity-prototype.{kind}-before-skill-ai-chat-20261014.html"
     if not backup.exists():
+        backup.parent.mkdir(parents=True, exist_ok=True)
         backup.write_text(original, encoding="utf-8")
     if "// Skill management content snapshot." in html:
         start = html.index("// Skill management content snapshot.")

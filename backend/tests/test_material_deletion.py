@@ -8,7 +8,7 @@ import test_documents
 from sqlalchemy.orm import Session
 from test_prototypes import PNG
 
-from app.db.models import DocumentVersion, SourceDocument
+from app.db.models import DocumentVersion, RequirementRule, RequirementSource, SourceDocument
 
 
 @unittest.skipUnless(os.environ.get("RUN_AUTH_DB_TESTS") == "1", "requires PostgreSQL opt-in")
@@ -33,7 +33,6 @@ class MaterialDeletionTests(unittest.TestCase):
         )
         self.base = f"/api/projects/{p['id']}/documents"
         self.proto = f"/api/projects/{p['id']}/prototypes"
-        self.req = f"/api/projects/{p['id']}/requirements"
         self.login(self.member_name)
 
     def revision(self):
@@ -80,19 +79,36 @@ class MaterialDeletionTests(unittest.TestCase):
             headers=test_auth.ORIGIN,
         )
         self.assertEqual(r.status_code, 200, r.text)
-        request_id = str(uuid4())
-        payload = {
-            "revision": self.client.get(self.req).json()["revision"],
-            "request_id": request_id,
-            "title": "引用依据",
-            "action": "查看",
-            "expected": "正确",
-            "status": "REVIEW",
-            "sources": [{"document_version_id": version, "role": "DOCUMENT"}],
-        }
-        rule = self.client.post(self.req + "/rules", json=payload, headers=test_auth.ORIGIN)
-        self.assertEqual(rule.status_code, 201, rule.text)
-        rule_id = rule.json()["rule_id"]
+        with Session(self.connection, join_transaction_mode="create_savepoint") as db:
+            rule = RequirementRule(
+                project_id=self.project_id,
+                number=1,
+                request_id=str(uuid4()),
+                title="引用依据",
+                action="查看",
+                expected="正确",
+                status="REVIEW",
+                version=1,
+                updated_by=self.member_id,
+                role="",
+                preconditions="",
+                question="",
+                resolution="",
+            )
+            db.add(rule)
+            db.flush()
+            evidence = RequirementSource(
+                project_id=self.project_id,
+                rule_id=rule.id,
+                document_version_id=version,
+                role="DOCUMENT",
+                location="",
+                excerpt="",
+            )
+            db.add(evidence)
+            db.flush()
+            evidence_id = evidence.id
+            db.commit()
         info = self.delete(self.base, target["id"])
         self.assertEqual(info["requirement_references"], 1)
         self.assertEqual(info["link_references"], 1)
@@ -108,20 +124,6 @@ class MaterialDeletionTests(unittest.TestCase):
         self.assertTrue(
             self.client.get(link_path).json()["links"][0]["binding"]["target"]["deleted"]
         )
-        payload.update(
-            revision=self.client.get(self.req).json()["revision"], title="保留原引用编辑"
-        )
-        self.assertEqual(
-            self.client.patch(
-                f"{self.req}/rules/{rule_id}", json=payload, headers=test_auth.ORIGIN
-            ).status_code,
-            200,
-        )
-        payload.update(
-            revision=self.client.get(self.req).json()["revision"], request_id=str(uuid4())
-        )
-        r = self.client.post(self.req + "/rules", json=payload, headers=test_auth.ORIGIN)
-        self.assertEqual(r.status_code, 409, r.text)
         params = {
             "filename": "新版.txt",
             "document_id": target["id"],
@@ -148,6 +150,7 @@ class MaterialDeletionTests(unittest.TestCase):
             self.assertIsNotNone(db.get(SourceDocument, target["id"]).deleted_at)
             self.assertEqual(db.get(SourceDocument, target["id"]).deleted_by, self.member_id)
             self.assertIsNotNone(db.get(DocumentVersion, version))
+            self.assertEqual(db.get(RequirementSource, evidence_id).document_version_id, version)
 
     def test_prototype_deletion_rejects_wrong_purpose_and_stops_live_checks(self):
         image = self.upload("原型.png", PNG, prototype=True)

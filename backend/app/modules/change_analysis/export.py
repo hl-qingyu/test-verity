@@ -112,7 +112,8 @@ def download(project_id, task_id, format, actor, db):
                         json.dumps(row.handling[item["key"]], ensure_ascii=False, indent=2),
                     ]
                 )
-    for group in ("target_results", "coverage", "evidence", "chains", "limitations"):
+    coverage = "platform_coverage" if row.report["contract_version"] == 3 else "coverage"
+    for group in ("target_results", coverage, "evidence", "chains", "limitations"):
         lines.extend(
             ["", f"## {group}", json.dumps(row.report[group], ensure_ascii=False, indent=2)]
         )

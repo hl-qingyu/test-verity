@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import load_only
 
 from app.core.errors import AppError
+from app.core.json_data import json_object as read_json_object
 from app.db.models import ChangeAnalysisTask, UserAccount
 from app.modules.ai import native_terminal
 from app.modules.ai.service import (
@@ -19,18 +20,17 @@ from app.modules.ai.service import (
 )
 from app.modules.change_analysis import (
     artifacts,
-    batch_execution,
-    batching,
     contract,
     evidence,
+    legacy_batches,
     presentation,
+    report_v3,
     schemas,
     sources,
 )
 from app.modules.code_analysis import sources as code_sources
 from app.modules.documents import service as documents
 from app.modules.projects.record_deletion import require_visible
-from app.modules.requirements.risk_service import json_object as read_json_object
 
 ACTIVE = ("QUEUED", "RUNNING")
 RESULT_GROUPS = (
@@ -45,10 +45,7 @@ RESULT_GROUPS = (
 
 
 def json_object(text):
-    try:
-        return read_json_object(text)
-    except AppError:
-        raise AppError(422, "change_contract_invalid") from None
+    return read_json_object(text, "change_contract_invalid")
 
 
 def parse(model, value):
@@ -70,6 +67,22 @@ async def read_payload(chunks, model):
         if exc.detail == "change_contract_invalid":
             raise AppError(422, "change_request_invalid") from None
         raise
+
+
+def validate_candidate(raw, data, *, version=None, mode="CODEX_EXEC", normalize=True):
+    contract.require(isinstance(raw, dict), "change_contract_invalid")
+    version = version if version is not None else raw.get("contract_version")
+    if version == 3:
+        try:
+            return report_v3.validate(raw, data, mode, normalize=normalize)
+        except ValidationError:
+            raise AppError(422, "change_contract_invalid") from None
+    output = parse(contract.Report, raw)
+    output, corrections = (
+        evidence.normalize_coordinates(data, output) if normalize else (output, [])
+    )
+    contract.validate_report(data, output)
+    return output.model_dump(by_alias=True), corrections
 
 
 def own(project_id, task_id, actor, db, *, lock=False, state_only=False, page_view=False):
@@ -136,7 +149,6 @@ def view(row, actor, *, detail=False):
         "ai": native_terminal.public_snapshot(row.ai_config),
         "terminal_available": native_terminal.available(row.ai_config, row.actor_id, actor.id),
         "can_cancel": row.actor_id == actor.id and row.status in (*ACTIVE, "PREPARED"),
-        "can_start": False,
         "can_retry": metadata.get("origin") == "AI"
         and (
             row.status in {"FAILED", "CANCELLED"}
@@ -179,7 +191,7 @@ def view(row, actor, *, detail=False):
             else {},
             skill={k: v for k, v in metadata.get("skill", {}).items() if k != "instructions"},
             candidate_available=available,
-            batches=batching.summary(plan),
+            batches=legacy_batches.summary(plan),
             evidence_corrections=metadata.get("evidence_corrections") or [],
             can_revalidate=bool(
                 row.actor_id == actor.id
@@ -262,7 +274,6 @@ def listing(project_id, actor, db, page=1, *, page_view=False):
     for r in rows[:50]:
         v = dict(r)
         v["can_cancel"] = v["actor_id"] == actor.id and v["status"] in (*ACTIVE, "PREPARED")
-        v["can_start"] = False
         if not page_view:
             v["retry_preparation"] = v.pop("input_contract_version") != 2
         v["retry_replan"] = v.pop("batch_version") in {1, 2}
@@ -299,12 +310,13 @@ def enqueue(project_id, payload, actor, db):
         return view(previous, actor, detail=True)
     if not payload.title.strip():
         raise AppError(422, "change_title_required")
+    skill = sources.skill_snapshot()
     metadata = {
         "origin": "AI",
         "selections": raw,
         "request_hash": fingerprint,
-        "skill": sources.skill_snapshot(),
-        "execution_mode": "FULL_INPUT",
+        "skill": skill,
+        "execution_mode": "DIFF_FIRST" if skill["contract_version"] == 3 else "FULL_INPUT",
     }
     sources.recheck(project_id, metadata, actor, db)
     config, _ = analysis_configuration(
@@ -342,15 +354,6 @@ def cancel(project_id, task_id, actor, db):
     return view(row, actor, detail=True)
 
 
-def start(project_id, task_id, actor, db):
-    row = own(project_id, task_id, actor, db, lock=True)
-    if row.actor_id != actor.id:
-        raise AppError(403, "change_batch_start_owner_only")
-    if row.metadata_snapshot.get("batch_plan"):
-        raise AppError(422, "change_full_input_required")
-    raise AppError(422, "change_batch_start_invalid")
-
-
 def retry(project_id, task_id, payload, actor, db):
     old = own(project_id, task_id, actor, db, lock=True)
     previous = db.scalar(
@@ -367,7 +370,9 @@ def retry(project_id, task_id, payload, actor, db):
     if not view(old, actor)["can_retry"]:
         raise AppError(422, "change_retry_invalid")
     metadata = copy.deepcopy(old.metadata_snapshot)
-    metadata["execution_mode"] = "FULL_INPUT"
+    metadata["execution_mode"] = (
+        "DIFF_FIRST" if metadata.get("skill", {}).get("contract_version") == 3 else "FULL_INPUT"
+    )
     if metadata.get("batch_plan"):
         metadata["previous_batch_execution"] = {
             "task_id": old.id,
@@ -438,10 +443,10 @@ def revalidate_candidate(project_id, task_id, actor, db):
             db,
             shared_snapshot=row.metadata_snapshot.get("shared_snapshot", False),
         )
-        batch_execution.revalidate(row)
+        legacy_batches.revalidate(row)
         row.metadata_snapshot = {
             **row.metadata_snapshot,
-            "batch_summary": batching.summary(row.metadata_snapshot["batch_plan"]),
+            "batch_summary": legacy_batches.summary(row.metadata_snapshot["batch_plan"]),
             "revalidation": {"actor_id": actor.id, "at": row.updated_at.isoformat()},
         }
         row.revision += 1
@@ -451,10 +456,13 @@ def revalidate_candidate(project_id, task_id, actor, db):
         candidate = artifacts.candidate_path(row.id).read_text(encoding="utf-8")
     except (OSError, UnicodeError):
         raise AppError(503, "change_candidate_storage_unavailable") from None
-    output = parse(contract.Report, json_object(candidate))
     data = parse(contract.AnalysisInput, row.input_snapshot)
-    output, corrections = evidence.normalize_coordinates(data, output)
-    contract.validate_report(data, output)
+    output, corrections = validate_candidate(
+        json_object(candidate),
+        data,
+        version=row.metadata_snapshot.get("skill", {}).get("contract_version", 2),
+        mode=row.ai_config.get("call_mode", "RESPONSES_API"),
+    )
     sources.recheck(
         project_id,
         row.metadata_snapshot,
@@ -464,7 +472,7 @@ def revalidate_candidate(project_id, task_id, actor, db):
     )
     analysis_configuration(actor, db, row.ai_config)
     row.report, row.status, row.error_code, row.updated_at = (
-        output.model_dump(by_alias=True),
+        output,
         "COMPLETED",
         "",
         datetime.now(UTC),
@@ -490,9 +498,11 @@ async def import_report(project_id, chunks, actor, db):
             "change_import_file_invalid",
         )
     data = parse(contract.AnalysisInput, json_object(payload.input_json.lstrip("\ufeff")))
-    output = parse(contract.Report, json_object(payload.report_json.lstrip("\ufeff")))
+    raw = json_object(payload.report_json.lstrip("\ufeff"))
+    if isinstance(raw, dict) and raw.get("contract_version") == 3:
+        raw = {k: v for k, v in raw.items() if k not in ("outcome", "platform_coverage")}
     contract.require(data.project_id == project_id, "change_project_mismatch")
-    contract.validate_report(data, output)
+    output, _ = validate_candidate(raw, data, mode="IMPORT", normalize=False)
     actor = db.get(UserAccount, actor_id, populate_existing=True)
     documents.access(project_id, actor, db, lock=True)
     mapping = {b.snapshot_ref: b for b in payload.bindings}
@@ -604,7 +614,7 @@ async def import_report(project_id, chunks, actor, db):
             any(item["key"] == h.item_key for item in r["report"].get(group, [])),
             "change_history_unavailable",
         )
-    snapshot, report = data.model_dump(), output.model_dump(by_alias=True)
+    snapshot, report = data.model_dump(), output
     fingerprint = sources.digest({"input": snapshot, "report": report, "bindings": bindings})
     prior = db.scalar(
         select(ChangeAnalysisTask).where(

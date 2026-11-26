@@ -48,11 +48,6 @@ def cancel(project_id: int, task_id: int, actor: Actor, db: DB):
     return service.cancel(project_id, task_id, actor, db)
 
 
-@router.post("/{task_id}/start", dependencies=[Depends(check_origin)], status_code=202)
-def start(project_id: int, task_id: int, actor: Actor, db: DB):
-    return service.start(project_id, task_id, actor, db)
-
-
 @router.post("/{task_id}/retry", dependencies=[Depends(check_origin)], status_code=202)
 def retry(project_id: int, task_id: int, payload: schemas.RetryRequest, actor: Actor, db: DB):
     return service.retry(project_id, task_id, payload, actor, db)

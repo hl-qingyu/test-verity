@@ -1,12 +1,10 @@
 import copy
-import hashlib
 import json
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from app.core.errors import AppError
-from app.modules.change_analysis import batching, contract
+from app.modules.change_analysis import contract, legacy_batches
 
 EXAMPLES = Path(__file__).resolve().parents[2] / "skill/change-impact/examples"
 
@@ -35,6 +33,33 @@ def fixture():
         diff[side + "_segment_refs"][0]["unit_id"] = "u2"
     pair["text_diffs"].append(diff)
     return data, report
+
+
+def saved_plan(data):
+    batches = []
+    for pair in data["comparison_pairs"]:
+        for diff in pair["text_diffs"]:
+            mapping = [[pair["pair_id"], diff["mapping_ref"]]]
+            batch = {
+                "id": len(batches) + 1,
+                "primary": mapping,
+                "mappings": mapping,
+                "context_units": {},
+                "case_refs": [case["case_ref"] for case in data["cases"]],
+                "history_refs": [item["history_ref"] for item in data["historical_items"]],
+                "status": "QUEUED",
+                "error_code": "",
+                "report": None,
+                "candidate_task_id": None,
+                "attempts": [],
+            }
+            subset = legacy_batches.input_for(data, batch)
+            batch["input_bytes"] = len(json.dumps(subset, ensure_ascii=False).encode())
+            batch["files"] = [
+                unit["path"] for source in subset["snapshots"] for unit in source["units"]
+            ]
+            batches.append(batch)
+    return {"version": 1, "input_hash": "f" * 64, "batches": batches}
 
 
 def reply(report, batch):
@@ -86,61 +111,43 @@ class ChangeBatchTests(unittest.TestCase):
                 "limitation_refs": [],
             }
         ]
-        with patch.object(batching, "LEGACY_TARGET_BYTES", 1):
-            plan = batching.plan(data, version=1)
+        plan = saved_plan(data)
         plan["batches"][0].update(status="COMPLETED", report=reply(report, plan["batches"][0]))
         plan["batches"][1].update(status="FAILED", error_code="ai_gateway_timeout")
-        merged = batching.aggregate(data, plan)
+        merged = legacy_batches.aggregate(data, plan)
         self.assertEqual(merged["historical_reviews"][0]["result"], "UNVERIFIABLE")
 
     def test_batches_preserve_versions_and_merge_references_without_another_model_call(self):
         data, report = fixture()
         original = copy.deepcopy(data)
-        with patch.object(batching, "LEGACY_TARGET_BYTES", 1):
-            plan = batching.plan(data, version=1)
+        plan = saved_plan(data)
         self.assertEqual(len(plan["batches"]), 2)
         for batch in plan["batches"]:
-            subset = batching.input_for(data, batch)
+            subset = legacy_batches.input_for(data, batch)
             contract.validate_input(contract.AnalysisInput.model_validate(subset))
             self.assertEqual([len(s["units"]) for s in subset["snapshots"]], [1, 1])
             batch.update(status="COMPLETED", report=reply(report, batch))
-        merged = batching.aggregate(data, plan)
+        merged = legacy_batches.aggregate(data, plan)
         self.assertEqual(len(merged["risks"]), 2)
         self.assertEqual(len({r["key"] for r in merged["risks"]}), 2)
         self.assertEqual(len(merged["coverage"]), 4)
         self.assertEqual(merged["outcome"], "PARTIAL")
         self.assertEqual(data, original)
         retried = {**data, "request_id": "manual-retry"}
-        self.assertEqual(batching.fingerprint(data), batching.fingerprint(retried))
-        self.assertEqual(batching.aggregate(retried, plan)["request_id"], "manual-retry")
+        self.assertEqual(legacy_batches.aggregate(retried, plan)["request_id"], "manual-retry")
 
     def test_failed_batch_is_unprocessed_and_does_not_erase_successful_evidence(self):
         data, report = fixture()
-        with patch.object(batching, "LEGACY_TARGET_BYTES", 1):
-            plan = batching.plan(data, version=1)
+        plan = saved_plan(data)
         plan["batches"][0].update(status="COMPLETED", report=reply(report, plan["batches"][0]))
         plan["batches"][1].update(status="FAILED", error_code="ai_gateway_timeout")
-        merged = batching.aggregate(data, plan)
+        merged = legacy_batches.aggregate(data, plan)
         self.assertEqual(len(merged["risks"]), 1)
         missing = [c for c in merged["coverage"] if c["unit_id"] == "u2"]
         self.assertTrue(all(c["status"] == "PARTIAL" for c in missing))
         self.assertTrue(all(c["segment_reviews"][0]["status"] == "UNPROCESSED" for c in missing))
-        self.assertEqual(batching.summary(plan)["failed"], 1)
+        self.assertEqual(legacy_batches.summary(plan)["failed"], 1)
         with self.assertRaises(AppError):
-            batching.validate_result(data, plan["batches"][0], reply(report, plan["batches"][1]))
-
-    def test_static_dependency_candidate_is_carried_without_losing_full_fixed_input(self):
-        data, _ = fixture()
-        data["comparison_pairs"][0]["text_diffs"] = data["comparison_pairs"][0]["text_diffs"][:1]
-        for s in data["snapshots"]:
-            unit = s["units"][0]
-            unit["segments"][0]["text"] += "\n# Second"
-            unit["content_sha256"] = hashlib.sha256(
-                unit["segments"][0]["text"].encode()
-            ).hexdigest()
-        original = copy.deepcopy(data)
-        with patch.object(batching, "LEGACY_TARGET_BYTES", 1):
-            plan = batching.plan(data, version=1)
-        self.assertEqual(plan["batches"][0]["primary"], [["p1", "m1"]])
-        self.assertIn(["p1", "m2"], plan["batches"][0]["mappings"])
-        self.assertEqual(data, original)
+            legacy_batches.validate_result(
+                data, plan["batches"][0], reply(report, plan["batches"][1])
+            )

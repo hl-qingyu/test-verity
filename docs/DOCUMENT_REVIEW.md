@@ -73,6 +73,13 @@ ARCHITECTURE和CODE_STANDARDS已整理为现行规则，原来的累计内容分
 | --- | --- | --- |
 | [LOCAL_READ_ANALYSIS_DESIGN.md](LOCAL_READ_ANALYSIS_DESIGN.md) | 任意授权范围的按需读取未按此稿全面实现；当前CLI仅读取本任务固定输入，不能混为同一能力 | 保留本文件 |
 
+## 已确认待实施方案
+
+| 文档 | 处理及用途 | 当前替代说明 |
+| --- | --- | --- |
+| [REDESIGN_PLAN.md](REDESIGN_PLAN.md) | 2026-11-25 用户确认的重构与重设计任务包；实施前现行行为仍以各模块文档为准 | 保留本文件 |
+| [AI_OPTIMIZATION_PLAN.md](AI_OPTIMIZATION_PLAN.md) | 原 AI 调用优化方案；未实施部分已由重设计方案取代或暂缓 | [REDESIGN_PLAN.md](REDESIGN_PLAN.md) |
+
 ## 会话记录（1份）
 
 | 文档 | 处理及用途 | 当前替代说明 |
@@ -100,7 +107,7 @@ ARCHITECTURE和CODE_STANDARDS已整理为现行规则，原来的累计内容分
 | [CODE_REVIEW_SKILL_DESIGN.md](CODE_REVIEW_SKILL_DESIGN.md) | 规则设计过程，当前以运行包和模块说明为准 | [CODE_ANALYSIS.md](CODE_ANALYSIS.md)、[contract.md](../skill/code-review/contract.md) |
 | [CODEX_DIRECT_DEMO.md](CODEX_DIRECT_DEMO.md) | 旧浏览器直连实验，未用于正式业务；现有演示代码未删除 | [AI_CODEX_CLI_IMPLEMENTATION.md](AI_CODEX_CLI_IMPLEMENTATION.md) |
 | [DATABASE_DESIGN_DRAFT.md](DATABASE_DESIGN_DRAFT.md) | 初始候选表结构，不代表已建表，不能据此建库 | [models.py](../backend/app/db/models.py)、[versions](../backend/migrations/versions) |
-| [FEATURES.md](FEATURES.md) | 多轮状态追加混有过时结论，停止作为功能总表 | [README.md](../README.md)、[README.md](README.md) |
+| [FEATURES.md](FEATURES.md) | 多轮状态追加混有过时结论，停止作为功能总表 | [根目录 README](../README.md) |
 | [LOCAL_ANALYSIS_SESSION_PLAN.md](LOCAL_ANALYSIS_SESSION_PLAN.md) | 早期会话和设备方案已由后端个人AI调用取代 | [REQUIREMENT_CHAT.md](REQUIREMENT_CHAT.md)、[AI_CODEX_CLI_IMPLEMENTATION.md](AI_CODEX_CLI_IMPLEMENTATION.md) |
 | [LOCAL_PROTOTYPE_DIRECTORY_PLAN.md](LOCAL_PROTOTYPE_DIRECTORY_PLAN.md) | 本地原型目录已实施 | [LOCAL_PROTOTYPE_DIRECTORIES.md](LOCAL_PROTOTYPE_DIRECTORIES.md) |
 | [OTHER_ANALYSIS_DESIGN.md](OTHER_ANALYSIS_DESIGN.md) | 四类分析已分别实施，不再使用首期总体草案 | [CODE_ANALYSIS.md](CODE_ANALYSIS.md)、[CHANGE_ANALYSIS.md](CHANGE_ANALYSIS.md)、[CASE_GENERATION.md](CASE_GENERATION.md)、[CASE_ANALYSIS.md](CASE_ANALYSIS.md) |
@@ -121,7 +128,7 @@ ARCHITECTURE和CODE_STANDARDS已整理为现行规则，原来的累计内容分
 | --- | --- |
 | [根目录README](../README.md) | 已按当前代码完整重写，作为功能和运行入口 |
 | [AGENTS](../AGENTS.md) | 长期约束，保留，不追加本次整理过程 |
-| [文档目录](README.md)、[本整理清单](DOCUMENT_REVIEW.md) | 本次新增的导航和分类记录，后续随文档用途变化维护 |
+| [本整理清单](DOCUMENT_REVIEW.md) | 文档导航和分类记录，后续随文档用途变化维护 |
 | [原型业务说明](prototypes/verity-business-rules/README.md)及其规则清单 | 当前原型说明和维护材料，保留 |
 | docs/prototypes中的HTML和检查脚本 | 原型及验证材料，不按旧方案文档删除 |
 | skill下的主说明、契约和引用文件 | 程序实际读取，不能并入历史文档清理 |

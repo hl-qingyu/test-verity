@@ -1,3 +1,4 @@
+const { compileModule, load: loadModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
@@ -38,21 +39,25 @@ function harness(request) {
     if (cache.has(file)) return cache.get(file);
     const exported = {};
     cache.set(file, exported);
-    const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    const code = compileModule(fs.readFileSync(file, 'utf8'), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         jsx: ts.JsxEmit.ReactJSX,
       },
     }).outputText;
-    new Function('exports', 'require', code)(exported, (name) => {
-      if (name === 'react') return react;
-      if (name === './api/http') return { apiRequest: request };
-      if (name === './CaseDialog') return { CaseDialog: 'dialog' };
-      if (name === './Icon') return { Icon: 'svg' };
-      if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'));
-      return require(name);
-    });
+    evaluateModule(
+      code,
+      (name) => {
+        if (name === 'react') return react;
+        if (name === './api/http') return { apiRequest: request };
+        if (name === './CaseDialog') return { CaseDialog: 'dialog' };
+        if (name === './Icon') return { Icon: 'svg' };
+        if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'));
+        return require(name);
+      },
+      exported,
+    );
     return exported;
   }
   const { AnalysisRecordDelete } = load(path.resolve(__dirname, '../src/AnalysisRecordDelete.tsx'));
@@ -121,13 +126,8 @@ const info = {
 };
 
 test('deletion preview rejects wrong record/project identity and malformed permission/version fields', () => {
-  const exported = {};
-  const code = ts.transpileModule(
-    fs.readFileSync(path.resolve(__dirname, '../src/analysisDeletionApi.ts'), 'utf8'),
-    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
-  ).outputText;
-  new Function('exports', code)(exported);
-  assert.deepEqual(exported.parseDeletion(info, 7, 4), info);
+  const { parseDeletion } = loadModule(path.resolve(__dirname, '../src/analysisDeletionApi.ts'));
+  assert.deepEqual(parseDeletion(info, 7, 4), info);
   for (const invalid of [
     null,
     { ...info, id: 8 },
@@ -136,7 +136,7 @@ test('deletion preview rejects wrong record/project identity and malformed permi
     { ...info, can_delete: 1 },
     { ...info, revision: 0 },
   ])
-    assert.throws(() => exported.parseDeletion(invalid, 7, 4), /analysis_delete_response_invalid/);
+    assert.throws(() => parseDeletion(invalid, 7, 4), /analysis_delete_response_invalid/);
 });
 
 test('deletion requires explicit confirmation, blocks duplicates and verifies identity', async () => {

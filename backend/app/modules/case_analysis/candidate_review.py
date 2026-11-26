@@ -3,10 +3,10 @@
 from datetime import UTC, datetime
 
 from app.core.errors import AppError
+from app.core.json_data import json_object
 from app.modules.candidate_results import service as candidates
 from app.modules.case_analysis import contract, service
 from app.modules.case_generation import sources
-from app.modules.requirements.risk_service import json_object
 
 
 def review(project_id, run_id, actor, db, payload=None):
@@ -34,7 +34,9 @@ def review(project_id, run_id, actor, db, payload=None):
             row.metadata_snapshot,
             payload,
             actor.id,
-            lambda raw: contract.validate(row.input_snapshot, json_object(raw)),
+            lambda raw: contract.validate(
+                row.input_snapshot, json_object(raw, "case_analysis_invalid")
+            ),
             previous_error=row.error_code,
         )
         if result is not None:

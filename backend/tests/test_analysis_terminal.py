@@ -123,7 +123,9 @@ class AnalysisTerminalTests(unittest.TestCase):
                 provider = stack.enter_context(FakeProvider(text=raw))
                 tmp = Path(stack.enter_context(tempfile.TemporaryDirectory()))
                 local = SimpleNamespace(
-                    ai_cli_work_path=tmp, ai_cli_executable=settings.ai_cli_executable
+                    ai_cli_terminal_work_path=tmp / "interactive",
+                    ai_cli_work_path=tmp,
+                    ai_cli_executable=settings.ai_cli_executable,
                 )
                 stack.enter_context(patch.object(codex_terminal, "Settings", return_value=local))
                 stack.enter_context(
@@ -190,7 +192,9 @@ class AnalysisTerminalTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch.object(
-                codex_terminal, "Settings", return_value=SimpleNamespace(ai_cli_work_path=Path(tmp))
+                codex_terminal,
+                "Settings",
+                return_value=SimpleNamespace(ai_cli_terminal_work_path=Path(tmp) / "interactive"),
             ),
             patch.object(
                 terminal_service, "analysis_configuration", return_value=(config, "synthetic")

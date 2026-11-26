@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from app.integrations import responses
-from app.modules.change_analysis import comparison, contract
+from app.modules.change_analysis import comparison, contract, model_view
 from app.modules.requirements.analysis_materials import model_content
 from tests.test_response_input import restore
 
@@ -16,6 +16,32 @@ EXAMPLES = Path(__file__).resolve().parents[2] / "skill/change-impact/examples"
 
 
 class ChangeFullInputTests(unittest.TestCase):
+    def test_v3_keeps_large_unchanged_ranges_as_metadata(self):
+        data = json.loads((EXAMPLES / "code-input.json").read_text(encoding="utf-8"))
+        pair = data["comparison_pairs"][0]
+        body = "UNCHANGED_FIXED_CONTENT\n" * 200
+        for number in range(1, 3001):
+            uid = f"same-{number}"
+            for snapshot in data["snapshots"]:
+                unit = copy.deepcopy(snapshot["units"][0])
+                unit.update(unit_id=uid, path=f"same-{number}.py")
+                unit["segments"][0]["text"] = body
+                unit["content_sha256"] = hashlib.sha256(body.encode()).hexdigest()
+                snapshot["units"].append(unit)
+            pair["unit_mappings"].append(
+                {
+                    **pair["unit_mappings"][0],
+                    "mapping_id": uid,
+                    "before_unit_ids": [uid],
+                    "after_unit_ids": [uid],
+                }
+            )
+        projected = model_view.build(data, "RESPONSES_API")
+        self.assertEqual(projected["view"]["omitted_unit_count"], 6000)
+        self.assertNotIn(body[:100], json.dumps(projected, ensure_ascii=False))
+        self.assertEqual(projected["comparison_pairs"][0]["unchanged_mapping_count"], 3000)
+        self.assertIn("@@", projected["comparison_pairs"][0]["text_diffs"][0]["hunks"])
+
     def test_one_http_request_contains_all_fixed_input_and_original_binary(self):
         data = json.loads((EXAMPLES / "code-input.json").read_text(encoding="utf-8"))
         rules = json.loads((EXAMPLES / "requirement-input.json").read_text(encoding="utf-8"))[

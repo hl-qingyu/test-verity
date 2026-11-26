@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
@@ -6,20 +7,17 @@ const { test } = require('node:test'),
   React = require('react'),
   { renderToStaticMarkup } = require('react-dom/server');
 const exportsFor = {};
-new Function(
-  'exports',
-  'require',
-  ts.transpileModule(
-    fs.readFileSync(path.resolve(__dirname, '../src/GenerationEvidence.tsx'), 'utf8'),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX,
-      },
+evaluateModule(
+  compileModule(fs.readFileSync(path.resolve(__dirname, '../src/GenerationEvidence.tsx'), 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
     },
-  ).outputText,
-)(exportsFor, require);
+  }).outputText,
+  require,
+  exportsFor,
+);
 const render = (
   materials,
   evidence,

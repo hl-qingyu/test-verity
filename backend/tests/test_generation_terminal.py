@@ -82,6 +82,21 @@ class GenerationTerminalResultTests(unittest.TestCase):
         self.assertEqual(error.exception.detail, "generation_terminal_turn_failed")
 
 
+def synthetic_png():
+    # Valid synthetic 32x32 PNG. No real material, network model or credential.
+    def chunk(kind, data):
+        return (
+            struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+        )
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 32, 32, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress((b"\x00" + b"\xff\x00\x00" * 32) * 32))
+        + chunk(b"IEND", b"")
+    )
+
+
 @unittest.skipUnless(os.name == "nt", "Windows ConPTY integration")
 class RealGenerationTerminalTests(unittest.TestCase):
     def test_resumed_cli_sends_continue_as_a_second_turn_using_the_same_history(self):
@@ -94,7 +109,7 @@ class RealGenerationTerminalTests(unittest.TestCase):
         ):
             identity = str(uuid4())
             local = SimpleNamespace(
-                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+                ai_cli_terminal_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
             )
             deadline = monotonic() + 25
 
@@ -128,6 +143,7 @@ class RealGenerationTerminalTests(unittest.TestCase):
                             instructions="Synthetic fixed business Skill",
                             fixed_input={"synthetic": "complete fixed input"},
                             resume=resume,
+                            resume_thread=first,
                             initial_prompt="继续分析"
                             if resume
                             else "Read the fixed input and analyze",
@@ -160,7 +176,7 @@ class RealGenerationTerminalTests(unittest.TestCase):
             stats = {}
             deadline = monotonic() + 25
             local = SimpleNamespace(
-                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+                ai_cli_terminal_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
             )
             with patch.object(codex_terminal, "Settings", return_value=local):
 
@@ -211,21 +227,7 @@ class RealGenerationTerminalTests(unittest.TestCase):
         if not settings.ai_cli_executable:
             self.skipTest("Pinned CLI not installed")
 
-        # Valid synthetic 32x32 PNG. No real material, network model or credential.
-        def chunk(kind, data):
-            return (
-                struct.pack(">I", len(data))
-                + kind
-                + data
-                + struct.pack(">I", zlib.crc32(kind + data))
-            )
-
-        binary = (
-            b"\x89PNG\r\n\x1a\n"
-            + chunk(b"IHDR", struct.pack(">IIBBBBB", 32, 32, 8, 2, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress((b"\x00" + b"\xff\x00\x00" * 32) * 32))
-            + chunk(b"IEND", b"")
-        )
+        binary = synthetic_png()
         text = (
             "完整正文🌱" * 2000
             + '<img src="data:image/png;base64,'
@@ -236,7 +238,7 @@ class RealGenerationTerminalTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             identity = str(uuid4())
             local = SimpleNamespace(
-                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+                ai_cli_terminal_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
             )
             with patch.object(codex_terminal, "Settings", return_value=local):
                 _, _, work, _ = codex_terminal.prepare(
@@ -311,6 +313,71 @@ class RealGenerationTerminalTests(unittest.TestCase):
                         (work / "input.json").read_text(encoding="utf-8"),
                         json.dumps(fixed, ensure_ascii=False),
                     )
+
+    def test_structured_reading_files_reach_the_real_cli_through_standard_filesystem(self):
+        png = synthetic_png()
+
+        settings = Settings()
+        if not settings.ai_cli_executable:
+            self.skipTest("CLI unavailable")
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            identity = str(uuid4())
+            local = SimpleNamespace(
+                ai_cli_terminal_work_path=workspace, ai_cli_executable=settings.ai_cli_executable
+            )
+            files = [
+                {"path": "material-0001/segment-0001.txt", "text": "FIRST_STRUCTURED_PAGE"},
+                {"path": "material-0001/segment-0002.txt", "text": "SECOND_STRUCTURED_PAGE"},
+                {"path": "media/test.png", "kind": "png", "media": png},
+            ]
+            with patch.object(codex_terminal, "Settings", return_value=local):
+                from app.integrations import cli_reading
+
+                fixed = {"messages": [{"role": "user", "content": "frozen evidence"}]}
+                _, _, work, _ = codex_terminal.prepare(
+                    identity,
+                    "https://example.com",
+                    "gpt-6.1-sol",
+                    "low",
+                    "fixed",
+                    fixed,
+                    False,
+                    reading_files=files,
+                    reading_guidance="read all sources",
+                )
+                index = cli_reading.resume_index(work)
+                program = (
+                    f"const index={json.dumps(index)};"
+                    "const root=index.slice(0,index.lastIndexOf('/')+1);"
+                    "for(const path of [index,...['catalogue-0001.md',"
+                    "'material-0001/segment-0001.txt','material-0001/segment-0002.txt'].map(p=>root+p)])"
+                    "{const r=await tools.mcp__filesystem__read_text_file({path});text(r);}"
+                    "const r=await tools.mcp__filesystem__read_media_file("
+                    "{path:root+'media/test.png'});"
+                    "for(const c of r.content??[])if(c.type==='image')image(c);"
+                )
+                with FakeProvider(text="structured result", tool_program=program) as provider:
+                    result = codex_terminal.run(
+                        provider.url,
+                        "gpt-6.1-sol",
+                        "FAKE-KEY",
+                        "low",
+                        identity=identity,
+                        execution=1,
+                        instructions="fixed",
+                        fixed_input=fixed,
+                        capture=TerminalResult(),
+                        initial_prompt="Read all indexed sources",
+                        reading_files=files,
+                        reading_guidance="read all sources",
+                    )
+                self.assertEqual(result["answer"], "structured result")
+                self.assertEqual(len(provider.requests), 2)
+                returned = json.dumps(provider.requests[-1][2], ensure_ascii=False)
+                self.assertIn("FIRST_STRUCTURED_PAGE", returned)
+                self.assertIn("SECOND_STRUCTURED_PAGE", returned)
+                self.assertIn(base64.b64encode(png).decode(), returned)
 
     def test_native_tui_uses_upstream_filesystem_for_full_large_input(self):
         text = "标准文件服务完整原文🌱" * 100000 + "END_OF_FULL_INPUT"

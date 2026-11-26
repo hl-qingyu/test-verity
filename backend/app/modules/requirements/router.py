@@ -11,7 +11,6 @@ from app.modules.requirements import (
     chat_service,
     risk_analysis_service,
     risk_service,
-    service,
 )
 from app.modules.requirements.chat_schemas import ChatInput
 from app.modules.requirements.risk_schemas import (
@@ -19,14 +18,6 @@ from app.modules.requirements.risk_schemas import (
     HandlingInput,
     ManualHandlingInput,
     ManualRiskInput,
-)
-from app.modules.requirements.schemas import (
-    Assign,
-    CategoryInput,
-    DeleteCategory,
-    Move,
-    Revision,
-    RuleInput,
 )
 
 router = APIRouter(prefix="/api/projects/{project_id}/requirements", tags=["requirements"])
@@ -193,63 +184,6 @@ def export_risk(
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{kind}.json"'},
     )
-
-
-@router.get("")
-def state(project_id: int, actor: Actor, db: DB):
-    return service.state(project_id, actor, db)
-
-
-@router.get("/classification-history")
-def classification_history(project_id: int, actor: Actor, db: DB):
-    return service.classification_history(project_id, actor, db)
-
-
-@router.post("/categories", dependencies=[Depends(check_origin)], status_code=201)
-def create_category(project_id: int, payload: CategoryInput, actor: Actor, db: DB):
-    return service.save_category(project_id, None, payload, actor, db)
-
-
-@router.patch("/categories/{category_id}", dependencies=[Depends(check_origin)])
-def edit_category(project_id: int, category_id: int, payload: CategoryInput, actor: Actor, db: DB):
-    return service.save_category(project_id, category_id, payload, actor, db)
-
-
-@router.post("/move", dependencies=[Depends(check_origin)])
-def move(project_id: int, payload: Move, actor: Actor, db: DB):
-    return service.move(project_id, payload, actor, db)
-
-
-@router.post("/categories/{category_id}/delete", dependencies=[Depends(check_origin)])
-def delete_category(
-    project_id: int, category_id: int, payload: DeleteCategory, actor: Actor, db: DB
-):
-    return service.delete_category(project_id, category_id, payload, actor, db)
-
-
-@router.post("/assign", dependencies=[Depends(check_origin)])
-def assign(project_id: int, payload: Assign, actor: Actor, db: DB):
-    return service.assign(project_id, payload, actor, db)
-
-
-@router.post("/undo/{event_id}", dependencies=[Depends(check_origin)])
-def undo(project_id: int, event_id: int, payload: Revision, actor: Actor, db: DB):
-    return service.undo(project_id, event_id, payload.revision, actor, db)
-
-
-@router.get("/rules/{rule_id}")
-def detail(project_id: int, rule_id: int, actor: Actor, db: DB):
-    return service.detail(project_id, rule_id, actor, db)
-
-
-@router.post("/rules", dependencies=[Depends(check_origin)], status_code=201)
-def create_rule(project_id: int, payload: RuleInput, actor: Actor, db: DB):
-    return service.save_rule(project_id, None, payload, actor, db)
-
-
-@router.patch("/rules/{rule_id}", dependencies=[Depends(check_origin)])
-def edit_rule(project_id: int, rule_id: int, payload: RuleInput, actor: Actor, db: DB):
-    return service.save_rule(project_id, rule_id, payload, actor, db)
 
 
 @router.get("/risk-reports/{report_id}/deletion")

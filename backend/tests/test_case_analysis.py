@@ -3,14 +3,17 @@ import hashlib
 import json
 import os
 import unittest
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 
 import test_case_generation
+from worker_fixtures import claim as claim_for_execution
 
 from app.core.errors import AppError
-from app.db.models import CaseAnalysisRun, UserAccount
+from app.db import models as worker_models
+from app.db.models import CaseAnalysisApplication, CaseAnalysisRun, ProjectMember, UserAccount
 from app.modules.case_analysis import apply, contract, execution, schemas, service
 from app.modules.cases import service as cases
 from app.modules.cases.schemas import CaseValues
@@ -110,6 +113,75 @@ class ReviewDatabaseTests(unittest.TestCase):
             p.stop()
         test_case_generation.GenerationDatabaseTests.tearDown(self)
 
+    def test_project_access_loss_stops_application_and_preserves_completed_items(self):
+        for completed in (0, 1):
+            with self.subTest(completed=completed):
+                with self.factory() as db:
+                    actor = db.get(UserAccount, self.member_id)
+                    row = service.prepare(
+                        self.project,
+                        schemas.Prepare(
+                            request_id=uuid4(),
+                            title="撤权测试",
+                            mode="QUALITY",
+                            case_ids=[self.case_id],
+                        ),
+                        actor,
+                        db,
+                    )
+                    run = db.get(CaseAnalysisRun, row["id"])
+                    design = {f: row["input"]["cases"][0][f] for f in cases.DESIGN_FIELDS}
+                    run.handling = {
+                        key: {"draft": {**design, "title": f"撤权测试 {key}"}, "draft_revision": 1}
+                        for key in ("F1", "F2")
+                    }
+                    submitted = apply.submit(
+                        self.project,
+                        run.id,
+                        schemas.Application(
+                            request_id=uuid4(),
+                            confirmed=True,
+                            items=[
+                                {"key": "F1", "draft_revision": 1},
+                                {"key": "F2", "draft_revision": 1},
+                            ],
+                        ),
+                        actor,
+                        db,
+                    )
+                    app_id = submitted["applications"][0]["id"]
+                    self.assertEqual(execution.claim_application(db), app_id)
+
+                calls = 0
+
+                @contextmanager
+                def factory():
+                    nonlocal calls
+                    calls += 1
+                    self.assertLessEqual(calls, completed + 2, "application did not stop")
+                    if calls == completed + 1:
+                        with self.factory() as db:
+                            member = db.get(ProjectMember, (self.project, self.member_id))
+                            db.delete(member)
+                            db.commit()
+                    with self.factory() as db:
+                        yield db
+
+                apply.execute(app_id, factory)
+                self.assertEqual(calls, completed + 2)
+                with self.factory() as db:
+                    app = db.get(CaseAnalysisApplication, app_id)
+                    self.assertEqual((app.status, app.error_code), ("FAILED", "project_not_found"))
+                    self.assertEqual(
+                        [item["status"] for item in app.items],
+                        ["SUCCESS"] * completed + ["PENDING"] * (2 - completed),
+                    )
+                    if completed:
+                        run = db.get(CaseAnalysisRun, row["id"])
+                        self.assertEqual(app.items[0]["mapping"], run.handling["F1"]["applied"])
+                    db.add(ProjectMember(project_id=self.project, user_id=self.member_id))
+                    db.commit()
+
     def test_prepare_preserves_large_text_and_attachment_size_without_starting_ai(self):
         content = "rule\n" * (contract.LIMIT // 5 + 1)
         original = service.sources.read_material
@@ -167,7 +239,7 @@ class ReviewDatabaseTests(unittest.TestCase):
                 self.project, row["id"], schemas.Confirm(revision=1, confirmed=True), actor, db
             )
             self.assertEqual(started["status"], "QUEUED")
-            key = execution.claim(db)
+            key = claim_for_execution(db, worker_models.CaseAnalysisRun)
         with patch.object(
             execution.responses, "analyze", return_value=json.dumps(report(self.case_id))
         ):
@@ -247,7 +319,7 @@ class ReviewDatabaseTests(unittest.TestCase):
             service.start(
                 self.project, row["id"], schemas.Confirm(revision=1, confirmed=True), actor, db
             )
-            key = execution.claim(db)
+            key = claim_for_execution(db, worker_models.CaseAnalysisRun)
         with patch.object(execution.responses, "analyze", return_value=json.dumps(report(999999))):
             execution.execute(key, self.factory)
         with self.factory() as db:
@@ -294,7 +366,7 @@ class ReviewDatabaseTests(unittest.TestCase):
                 actor,
                 db,
             )
-            turn = execution.claim_chat(db)
+            turn = claim_for_execution(db, worker_models.CaseAnalysisChatTurn)
             self.assertEqual(queued["chat"][0]["status"], "QUEUED")
         with patch.object(
             execution.responses, "converse", return_value="合成回复：需要业务确认有效期"

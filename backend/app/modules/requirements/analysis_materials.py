@@ -169,3 +169,64 @@ def model_content(
                 }
             )
     return result
+
+
+READING_GUIDANCE = "先读 index.md，再按清单读完全部任务和资料文件。按照固定来源和片段标识引用原文。"
+
+
+def reading_files(materials: list, attachments: list) -> list[dict]:
+    files = []
+    for position, material in enumerate(materials, 1):
+        directory = f"material-{position:04d}"
+        source = material.get("snapshot_ref") or material["source_id"]
+        files.append(
+            {
+                "path": f"{directory}/source.json",
+                "description": source,
+                "text": json.dumps(
+                    {k: v for k, v in material.items() if k != "segments"}, ensure_ascii=False
+                ),
+            }
+        )
+        for number, segment in enumerate(material["segments"], 1):
+            metadata = json.dumps(
+                {
+                    "source_id": material.get("source_id", source),
+                    "snapshot_ref": source,
+                    **{k: v for k, v in segment.items() if k != "text"},
+                },
+                ensure_ascii=False,
+            )
+            files.append(
+                {
+                    "path": f"{directory}/segment-{number:04d}.txt",
+                    "description": f"{source} · {segment['location']}",
+                    "text": f"{metadata}\n{segment['text']}",
+                }
+            )
+    for number, (path, extension, source, _) in enumerate(attachments, 1):
+        kind = "jpeg" if extension in ("jpg", "jpeg") else extension
+        if kind in {"png", "jpeg", "gif", "webp"}:
+            files.append(
+                {
+                    "path": f"media/image-{number:04d}.{kind}",
+                    "description": f"固定图片引用 {source}",
+                    "kind": kind,
+                    "media": path.read_bytes(),
+                }
+            )
+    return files
+
+
+def structured_reading_options(call_mode, data, attachments, *, files=()):
+    if call_mode != "CODEX_EXEC":
+        return {}
+    context = {k: v for k, v in data.items() if k != "materials"}
+    return {
+        "reading_guidance": READING_GUIDANCE,
+        "reading_files": [
+            {"path": "task.json", "text": json.dumps(context, ensure_ascii=False)},
+            *reading_files(data["materials"], attachments),
+            *files,
+        ],
+    }

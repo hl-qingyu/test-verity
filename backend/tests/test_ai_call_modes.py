@@ -1,7 +1,6 @@
 """Real PostgreSQL rollback checks; every model/process response is simulated."""
 
 import hashlib
-import json
 import os
 import socket
 import subprocess
@@ -34,20 +33,6 @@ from app.modules.ai import reservations, scheduling, service
 
 
 class CLIProtocolTests(unittest.TestCase):
-    def test_full_text_and_roles_preserved_and_attachments_rejected(self):
-        text = "完整输入原文\n" * 200000
-        messages = [
-            {"role": "developer", "content": "固定Skill"},
-            {"role": "user", "content": [{"type": "input_text", "text": text}]},
-        ]
-        self.assertEqual(
-            json.loads(codex_exec.text_input("规则", messages)),
-            {"instructions": "规则", "messages": messages},
-        )
-        with self.assertRaises(AppError) as caught:
-            codex_exec.text_input("规则", [{"role": "user", "content": [{"type": "input_file"}]}])
-        self.assertEqual(caught.exception.detail, "ai_cli_attachment_unsupported")
-
     def test_exit_zero_requires_one_final_nonempty_message_and_completed_turn(self):
         answer = {"type": "item.completed", "item": {"type": "agent_message", "text": "{}"}}
         done = {"type": "turn.completed"}
@@ -490,6 +475,10 @@ class CallModeDatabaseTests(AIDatabaseTests):
                 )
             self.assertEqual(caught.exception.detail, "ai_call_already_attempted")
 
+    @patch.dict(
+        os.environ,
+        {"AI_MAX_CONCURRENT": "2", "AI_MAX_PER_USER": "1", "AI_MAX_PER_CREDENTIAL": "1"},
+    )
     def test_global_user_credential_budgets_and_api_test_busy(self):
         self.login(self.member_name)
         with Session(self.connection, join_transaction_mode="create_savepoint") as db:

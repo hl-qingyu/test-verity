@@ -195,6 +195,7 @@ class CLIRecoveryTests(unittest.TestCase):
 
         with FakeProvider("gated", '{"complete":true}') as provider:
             local = SimpleNamespace(
+                ai_cli_terminal_work_path=Path(self.folder.name) / "interactive",
                 ai_cli_work_path=Path(self.folder.name),
                 ai_cli_executable=settings.ai_cli_executable,
             )

@@ -1,26 +1,21 @@
+const { load } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const path = require('node:path');
-const ts = require('typescript');
 
 function harness(response) {
-  const source = fs.readFileSync(path.resolve(__dirname, '../src/cliEventsApi.ts'), 'utf8');
-  const code = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS },
-  }).outputText;
-  const exports = {},
-    requests = [];
-  new Function('require', 'exports', code)((name) => {
-    assert.equal(name, './api/http');
-    return {
-      apiRequest: async (...args) => {
-        requests.push(args);
-        return response;
+  const requests = [];
+  return {
+    ...load(path.resolve(__dirname, '../src/cliEventsApi.ts'), {
+      './api/http': {
+        apiRequest: async (...args) => {
+          requests.push(args);
+          return response;
+        },
       },
-    };
-  }, exports);
-  return { ...exports, requests };
+    }),
+    requests,
+  };
 }
 const sample = () => ({
   items: [

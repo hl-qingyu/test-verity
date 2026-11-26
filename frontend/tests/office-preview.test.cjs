@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -7,7 +8,7 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 
 function load(file) {
-  const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const compiled = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
@@ -15,15 +16,19 @@ function load(file) {
     },
   }).outputText;
   const exported = {};
-  new Function('exports', 'require', compiled)(exported, (name) =>
-    name.startsWith('.')
-      ? load(
-          path.resolve(
-            path.dirname(file),
-            name + (fs.existsSync(path.resolve(path.dirname(file), name + '.ts')) ? '.ts' : '.tsx'),
-          ),
-        )
-      : require(name),
+  evaluateModule(
+    compiled,
+    (name) =>
+      name.startsWith('.')
+        ? load(
+            path.resolve(
+              path.dirname(file),
+              name +
+                (fs.existsSync(path.resolve(path.dirname(file), name + '.ts')) ? '.ts' : '.tsx'),
+            ),
+          )
+        : require(name),
+    exported,
   );
   return exported;
 }

@@ -1,13 +1,19 @@
 import io
 import json
+import os
 import unittest
 from time import monotonic
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
 
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
 from app.core.errors import AppError
+from app.integrations.input_estimate import estimate
 from app.integrations.response_diagnostics import error_metadata, safe_identifier, safe_snapshot
-from app.integrations.responses import analyze, converse, read_stream
+from app.integrations.responses import analyze, converse, read_stream, usage_metrics
+from app.main import app
 
 
 def event(kind, **data):
@@ -25,6 +31,114 @@ class StreamingResponseTests(unittest.TestCase):
         capture = patch("app.integrations.responses.response_errors.capture")
         capture.start()
         self.addCleanup(capture.stop)
+
+    def test_completed_response_records_bounded_usage_and_text_estimate(self):
+        usage = dict(
+            input_tokens=15, cached_tokens=10, output_tokens=8, reasoning_tokens=6, total_tokens=23
+        )
+        completed = {
+            "status": "completed",
+            "output": [{"content": [{"type": "output_text", "text": "ok"}]}],
+            "usage": {
+                "input_tokens": 15,
+                "output_tokens": 8,
+                "total_tokens": 23,
+                "input_tokens_details": {"cached_tokens": 10, "unsafe": "private"},
+                "output_tokens_details": {"reasoning_tokens": 6},
+            },
+        }
+        response = io.BytesIO(event("response.completed", response=completed))
+        response.headers = {"Content-Type": "text/event-stream"}
+        opener = MagicMock()
+        opener.open.return_value = response
+        stats = {}
+        with (
+            patch("app.integrations.responses.build_opener", return_value=opener),
+            self.assertLogs("app.integrations.responses", level="INFO") as logs,
+        ):
+            analyze(
+                "https://example.invalid", "m", "fake", "default", "固定", [], diagnostics=stats
+            )
+        self.assertEqual(safe_snapshot(stats)["usage"], usage)
+        self.assertEqual(
+            safe_snapshot(stats)["input_estimate"],
+            {"characters": 2, "bytes": 6, "approx_tokens": 2, "images": 0},
+        )
+        for key, value in usage.items():
+            self.assertIn(f"{key}={value}", logs.output[-1])
+
+    def test_usage_and_estimates_filter_untrusted_values(self):
+        for invalid in (None, [], "secret"):
+            self.assertEqual(usage_metrics(invalid), {})
+        self.assertEqual(
+            usage_metrics(
+                {
+                    "input_tokens": -1,
+                    "output_tokens": "2",
+                    "total_tokens": 10**12,
+                    "input_tokens_details": True,
+                    "output_tokens_details": {"reasoning_tokens": False},
+                }
+            ),
+            {},
+        )
+        safe = safe_snapshot(
+            {
+                "usage": {"total_tokens": 17, "secret": 1, "cached_tokens": True},
+                "input_estimate": {"images": 0, "bytes": "private", "characters": -2},
+            }
+        )
+        self.assertEqual(safe["usage"], {"total_tokens": 17})
+        self.assertEqual(safe["input_estimate"], {"images": 0})
+        self.assertEqual(estimate("", []), dict(characters=0, bytes=0, approx_tokens=0, images=0))
+        self.assertEqual(
+            estimate(
+                "english!",
+                [
+                    {"content": "中文"},
+                    {"content": [{"type": "input_image", "image_url": "data:secret"}]},
+                ],
+            ),
+            dict(characters=10, bytes=14, approx_tokens=4, images=1),
+        )
+
+    def test_analysis_output_limit_is_scoped_to_configured_profiles(self):
+        for config, profile, expected in (
+            ("{}", "case_generation", 32_000),
+            ('{"case_generation":64000}', "case_generation", 64_000),
+            ('{"case_generation":64000}', "code_analysis", 32_000),
+            ('{"case_generation":64000}', None, 32_000),
+        ):
+            with (
+                self.subTest(config=config, profile=profile),
+                patch.dict(os.environ, {"AI_ANALYSIS_MAX_OUTPUT_TOKENS": config}),
+                patch("app.integrations.responses.send_response", return_value="ok") as send,
+            ):
+                analyze(
+                    "https://example.invalid",
+                    "m",
+                    "fake",
+                    "default",
+                    "",
+                    [],
+                    output_profile=profile,
+                )
+                self.assertEqual(send.call_args.args[2]["max_output_tokens"], expected)
+
+    def test_invalid_analysis_output_limit_fails_api_startup(self):
+        for invalid in (
+            '{"other":5000}',
+            '{"code_analysis":1023}',
+            '{"case_generation":200001}',
+            '{"case_generation":"64000"}',
+        ):
+            with (
+                self.subTest(invalid=invalid),
+                patch.dict(os.environ, {"AI_ANALYSIS_MAX_OUTPUT_TOKENS": invalid}),
+                self.assertRaises(ValidationError),
+                TestClient(app),
+            ):
+                self.fail("invalid configuration was accepted")
 
     def test_large_text_uses_one_http_request_with_all_ordered_parts_and_no_timeout(self):
         raw = json.dumps({"text": "你好😀" * 700000}, ensure_ascii=False)

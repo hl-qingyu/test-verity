@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { parseCallMetadata } from './aiConfiguration';
 import { apiErrorMessage, apiRequest } from './api/http';
 import { aiErrors } from './aiErrors';
@@ -49,11 +50,9 @@ export const chatFailure = (code: string) =>
   errors[code] || '本轮处理失败，请刷新核对或联系管理员。';
 export const chatError = (reason: unknown, end: () => void) => apiErrorMessage(reason, end, errors);
 
-function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new Error('invalid_chat_response');
-  return value as Record<string, unknown>;
-}
+const guards = createGuards('invalid_chat_response');
+const record = guards.obj;
+
 export function parseChatTurn(value: unknown, reportId: number): ChatTurn {
   const v = record(value),
     ai = record(v.ai);

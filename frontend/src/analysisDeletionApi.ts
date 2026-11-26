@@ -1,3 +1,5 @@
+import { createGuards } from './api/guards';
+
 export type DeletionInfo = {
   id: number;
   project_id: number;
@@ -18,15 +20,11 @@ export const deletionErrors: Record<string, string> = {
 
 export function parseDeletion(value: unknown, id: number, projectId: number): DeletionInfo {
   const o = value as DeletionInfo | null;
-  if (
-    !o ||
-    o.id !== id ||
-    o.project_id !== projectId ||
-    typeof o.title !== 'string' ||
-    typeof o.can_delete !== 'boolean' ||
-    typeof o.active !== 'boolean' ||
-    !(o.revision === null || (Number.isSafeInteger(o.revision) && o.revision > 0))
-  )
-    throw Error('analysis_delete_response_invalid');
+  const { invalid, str, bool, int } = createGuards('analysis_delete_response_invalid');
+  if (!o || o.id !== id || o.project_id !== projectId) return invalid();
+  str(o.title);
+  bool(o.can_delete);
+  bool(o.active);
+  if (o.revision !== null) int(o.revision);
   return o;
 }

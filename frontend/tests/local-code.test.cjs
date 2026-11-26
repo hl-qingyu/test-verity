@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,17 +7,20 @@ const ts = require('typescript');
 
 function load(name) {
   const file = path.resolve(__dirname, '../src', name);
-  const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const compiled = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const exported = {};
-  new Function('exports', 'require', compiled)(exported, (dependency) =>
-    load(
-      path.relative(
-        path.resolve(__dirname, '../src'),
-        path.resolve(path.dirname(file), dependency + '.ts'),
+  evaluateModule(
+    compiled,
+    (dependency) =>
+      load(
+        path.relative(
+          path.resolve(__dirname, '../src'),
+          path.resolve(path.dirname(file), dependency + '.ts'),
+        ),
       ),
-    ),
+    exported,
   );
   return exported;
 }
@@ -43,7 +47,7 @@ test('actual file tree renders nested and empty directories once without self-re
     source.indexOf('function FileTree('),
     source.indexOf('function LocalHistory('),
   );
-  const compiled = ts.transpileModule(treeSource, {
+  const compiled = compileModule(treeSource, {
     compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const Tree = new Function('React', 'inScope', compiled + ';return FileTree;')(

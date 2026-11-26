@@ -1,5 +1,9 @@
 # 本地运行日志
 
+## 现行规则
+
+日志保留请求路径模板、状态、时长和安全诊断。配置值、凭据和原文保持私有，故障定位使用受控字段与加密错误记录。
+
 2026-10-15变更读取诊断写入当前log/chat-worker.log（API调用共享GitHub客户端时写log/api.log）：github_read_failed只记固定operation、1起始attempt、安全code与retry布尔值；change_source_read记source_id/side/tree或blob阶段及总数、完成/复用数量，正文读取耗尽重试时change_source_read_failed带所选清单内1起始index；change_execution_failed增加安全错误码。可据固定任务选择定位失败位置，不记录文件路径/名称、GitHub响应或异常消息、Token和代码正文。历史155日志未记录的位置/已读数不补造；读取重试不涉及AI或Git写入。
 
 2026-09-15更新：需求分析已改为本地JSON风险报告导入，旧analysis_worker程序已移除并停止。当前导入、人工处理和请求事件写log/api.log，log/analysis-worker.log仅保留历史，不再启动旧Worker。目录轮转与敏感内容规则不变。

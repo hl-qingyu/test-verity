@@ -1,3 +1,4 @@
+import { usePolling } from './usePolling';
 import { AnalysisCandidateReview } from './AnalysisCandidateReview';
 import { useCachedView } from './pageViewCache';
 import type { PageViewCache } from './pageViewCache';
@@ -156,18 +157,17 @@ function CodeWorkspace({
     return () => c.abort();
   }, []);
   useEffect(() => {
-    if (!project) {
-      setLoading(false);
-      return;
-    }
-    const c = new AbortController();
-    let polling = false;
-    async function load() {
-      if (polling) return;
-      polling = true;
+    if (!project) setLoading(false);
+  }, [project]);
+  usePolling({
+    enabled: !!project,
+    active: rows.some((row) => ['QUEUED', 'RUNNING'].includes(row.status)),
+    interval: 4000,
+    refreshKey: base + ':' + refresh,
+    load: async (signal) => {
       try {
-        const result = await codeList(base, c.signal);
-        if (!c.signal.aborted) {
+        const result = await codeList(base, signal);
+        if (!signal.aborted) {
           setRows((old) =>
             [...new Map([...old, ...result.items].map((item) => [item.id, item])).values()].sort(
               (a, b) => b.id - a.id,
@@ -179,26 +179,19 @@ function CodeWorkspace({
         }
       } catch (reason) {
         if (
-          !c.signal.aborted &&
+          !signal.aborted &&
           reason instanceof Error &&
           ['not_authenticated', 'project_not_found'].includes(reason.message)
         ) {
           setRows([]);
           setRecord(null);
         }
-        if (!c.signal.aborted) setError(codeError(reason, onSessionEnd));
+        if (!signal.aborted) setError(codeError(reason, onSessionEnd));
       } finally {
-        polling = false;
-        if (!c.signal.aborted) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
-    }
-    void load();
-    const timer = setInterval(() => void load(), 4000);
-    return () => {
-      clearInterval(timer);
-      c.abort();
-    };
-  }, [base, project, onSessionEnd, refresh, setSelected]);
+    },
+  });
   useEffect(() => {
     if (!project) return;
     const c = new AbortController();
@@ -215,18 +208,19 @@ function CodeWorkspace({
     (row) => row.id === selected && (row.status === 'QUEUED' || row.status === 'RUNNING'),
   );
   useEffect(() => {
-    if (!selected) return;
-    const c = new AbortController();
-    let fetching = false;
-    setDetailLoading(true);
-    async function load() {
-      if (fetching) return;
-      fetching = true;
+    if (selected) setDetailLoading(true);
+  }, [base, selected, refresh]);
+  usePolling({
+    enabled: !!project && !!selected,
+    active: selectedActive,
+    interval: 2500,
+    refreshKey: base + ':' + selected + ':' + refresh + ':' + selectedActive,
+    load: async (signal) => {
       try {
         const value = await codeRequest(`${base}/${selected}`, parseCodeDetail, {
-          signal: c.signal,
+          signal: signal,
         });
-        if (!c.signal.aborted) {
+        if (!signal.aborted) {
           setRecord(value);
           setRows((old) =>
             [value, ...old.filter((row) => row.id !== value.id)].sort((a, b) => b.id - a.id),
@@ -234,26 +228,19 @@ function CodeWorkspace({
         }
       } catch (reason) {
         if (
-          !c.signal.aborted &&
+          !signal.aborted &&
           reason instanceof Error &&
           ['not_authenticated', 'project_not_found'].includes(reason.message)
         ) {
           setRows([]);
           setRecord(null);
         }
-        if (!c.signal.aborted) setError(codeError(reason, onSessionEnd));
+        if (!signal.aborted) setError(codeError(reason, onSessionEnd));
       } finally {
-        fetching = false;
-        if (!c.signal.aborted) setDetailLoading(false);
+        if (!signal.aborted) setDetailLoading(false);
       }
-    }
-    void load();
-    const timer = selectedActive ? setInterval(() => void load(), 2500) : undefined;
-    return () => {
-      if (timer) clearInterval(timer);
-      c.abort();
-    };
-  }, [base, selected, selectedActive, onSessionEnd, refresh]);
+    },
+  });
   function choose(id: number) {
     setSelected(id);
     setRecord(null);

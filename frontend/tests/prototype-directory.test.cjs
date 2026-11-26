@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -5,7 +6,7 @@ const path = require('node:path');
 const ts = require('typescript');
 const React = require('react');
 function load(file, overrides = {}) {
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const code = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
@@ -13,13 +14,17 @@ function load(file, overrides = {}) {
     },
   }).outputText;
   const exports = {};
-  new Function('exports', 'require', code)(exports, (name) => {
-    if (overrides[name]) return overrides[name];
-    if (name.endsWith('.css')) return {};
-    if (!name.startsWith('.')) return require(name);
-    const base = path.resolve(path.dirname(file), name);
-    return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), overrides);
-  });
+  evaluateModule(
+    code,
+    (name) => {
+      if (overrides[name]) return overrides[name];
+      if (name.endsWith('.css')) return {};
+      if (!name.startsWith('.')) return require(name);
+      const base = path.resolve(path.dirname(file), name);
+      return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), overrides);
+    },
+    exports,
+  );
   return exports;
 }
 const src = (name) => path.resolve(__dirname, '../src', name);

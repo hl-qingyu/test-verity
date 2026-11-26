@@ -1,3 +1,4 @@
+import { isRecord } from './api/guards';
 import { apiErrorMessage, apiRequest } from './api/http';
 
 export const CASE_COLUMNS = [
@@ -113,7 +114,7 @@ export type CaseSearch = {
 export type CaseEditScope = CaseSearch & { case_ids?: number[] };
 export const blankDesign = (): Design =>
   Object.fromEntries(DESIGN_FIELDS.map((f) => [f, ''])) as Design;
-const obj = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === 'object';
+const obj = (x: unknown): x is Record<string, unknown> => isRecord(x, true);
 const integer = (x: unknown): x is number =>
   typeof x === 'number' && Number.isSafeInteger(x) && x >= 0;
 const fail = () => {

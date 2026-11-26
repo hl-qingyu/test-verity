@@ -9,8 +9,10 @@ import test_auth
 import test_risk_reports
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from worker_fixtures import claim as claim_for_execution
 
 from app.core.errors import AppError
+from app.db import models as worker_models
 from app.db.models import AIConnection, RequirementChatTurn, RequirementRiskReport, UserAccount
 from app.modules.requirements import chat_execution, chat_service
 from app.modules.requirements.chat_schemas import ChatInput
@@ -95,7 +97,9 @@ class ChatDatabaseTests(unittest.TestCase):
             with self.factory() as db:
                 original = db.get(RequirementRiskReport, self.report_id)
                 fixed = copy.deepcopy((original.input, original.report, original.handling))
-                self.assertEqual(chat_execution.claim(db), first["id"])
+                self.assertEqual(
+                    claim_for_execution(db, worker_models.RequirementChatTurn), first["id"]
+                )
 
             def answer(base, model, key, effort, instructions, messages, **kwargs):
                 self.assertEqual(key, "TEST-SECRET")
@@ -117,7 +121,9 @@ class ChatDatabaseTests(unittest.TestCase):
             with self.factory() as db:
                 row = db.get(RequirementChatTurn, second["id"])
                 self.assertIn("青竹42", row.context["messages"][1]["content"])
-                self.assertEqual(chat_execution.claim(db), second["id"])
+                self.assertEqual(
+                    claim_for_execution(db, worker_models.RequirementChatTurn), second["id"]
+                )
             with patch("app.integrations.responses.converse", return_value="青竹42"):
                 chat_execution.execute(second["id"], self.factory)
             with self.factory() as db:
@@ -153,10 +159,10 @@ class ChatDatabaseTests(unittest.TestCase):
                 "CANCELLED",
             )
             with self.factory() as db:
-                self.assertIsNone(chat_execution.claim(db))
+                self.assertIsNone(claim_for_execution(db, worker_models.RequirementChatTurn))
             second = self.post(last=first["id"]).json()
             with self.factory() as db:
-                chat_execution.claim(db)
+                claim_for_execution(db, worker_models.RequirementChatTurn)
             with patch(
                 "app.integrations.responses.converse", side_effect=AppError(502, "ai_stream_failed")
             ):
@@ -166,7 +172,7 @@ class ChatDatabaseTests(unittest.TestCase):
             )
             third = self.post(last=second["id"]).json()
             with self.factory() as db:
-                chat_execution.claim(db)
+                claim_for_execution(db, worker_models.RequirementChatTurn)
                 chat_execution.recover(db)
                 self.assertEqual(
                     db.get(RequirementChatTurn, third["id"]).error_code, "chat_worker_interrupted"
@@ -188,7 +194,7 @@ class ChatDatabaseTests(unittest.TestCase):
         ):
             row = self.post().json()
             with self.factory() as db:
-                chat_execution.claim(db)
+                claim_for_execution(db, worker_models.RequirementChatTurn)
                 actor = db.get(UserAccount, self.member_id)
                 actor.status = "DISABLED"
                 db.commit()
@@ -201,7 +207,7 @@ class ChatDatabaseTests(unittest.TestCase):
                 db.commit()
             next_row = self.post(last=row["id"]).json()
             with self.factory() as db:
-                chat_execution.claim(db)
+                claim_for_execution(db, worker_models.RequirementChatTurn)
 
             def cancelled(*args, **kwargs):
                 with self.factory() as db:

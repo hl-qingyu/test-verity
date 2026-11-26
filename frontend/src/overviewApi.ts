@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { apiErrorMessage, apiRequest } from './api/http';
 
 export const overviewModules = {
@@ -62,11 +63,9 @@ export const overviewStates: Record<string, string> = {
   FAILED: '失败',
   CANCELLED: '已取消',
 };
-function obj(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw Error('overview_response_invalid');
-  return value as Record<string, unknown>;
-}
+const guards = createGuards('overview_response_invalid');
+const obj = guards.obj;
+
 function count(value: unknown, nullable = false) {
   if (nullable && value === null) return;
   if (!Number.isSafeInteger(value) || Number(value) < 0) throw Error('overview_response_invalid');

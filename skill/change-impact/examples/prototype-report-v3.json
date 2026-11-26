@@ -1,0 +1,119 @@
+{
+  "contract_version": 3,
+  "analysis_type": "CHANGE_IMPACT",
+  "request_id": "synthetic-prototype_change",
+  "project_id": 1,
+  "revision": 1,
+  "mode": "PROTOTYPE_CHANGE",
+  "summary": {
+    "conclusion": "固定HTML的取消按钮文本改为取消订单，属于TEXT_ONLY。未取得脚本和运行行为，不能确认允许取消的订单状态或成功结果。",
+    "priority_risk_refs": [],
+    "inheritance_note": ""
+  },
+  "target_results": [
+    {
+      "target": "BUSINESS_IMPACT",
+      "status": "PARTIAL",
+      "scope": "仅本次提供范围",
+      "checks": [
+        {
+          "subject": "按钮文案变化",
+          "assessment": "CONSISTENT",
+          "evidence_refs": [
+            "E1",
+            "E2"
+          ],
+          "risk_refs": [],
+          "note": "只核对HTML文案；交互/业务结果未知。"
+        }
+      ],
+      "risk_refs": [],
+      "limitation_refs": [
+        "L1",
+        "L2"
+      ]
+    }
+  ],
+  "changes": [
+    {
+      "key": "C1",
+      "pair_ref": "p1",
+      "mapping_refs": [
+        "m1"
+      ],
+      "diff_refs": [
+        "d1"
+      ],
+      "title": "取消按钮文字明确对象",
+      "function": "订单",
+      "kind": "TEXT_ONLY",
+      "evidence_state": "STATIC_SUPPORTED",
+      "before": "按钮文本为取消。",
+      "after": "按钮文本为取消订单。",
+      "business_effect": "只有所提供HTML文案变化证据，不推出取消权限或后台业务变化。",
+      "evidence_refs": [
+        "E1",
+        "E2"
+      ],
+      "questions": [],
+      "limitation_refs": []
+    }
+  ],
+  "function_impacts": [],
+  "code_impacts": [],
+  "case_impacts": [],
+  "risks": [],
+  "historical_reviews": [],
+  "regression_scope": [],
+  "evidence": [
+    {
+      "key": "E1",
+      "side": "BEFORE",
+      "pair_ref": "p1",
+      "snapshot_ref": "page-old",
+      "unit_id": "u1",
+      "segment_id": "s1",
+      "kind": "TEXT",
+      "start_line": null,
+      "end_line": null,
+      "excerpt": "<button id=\"cancel\">取消</button>\n<script src=\"actions.js\"></script>",
+      "observation": ""
+    },
+    {
+      "key": "E2",
+      "side": "AFTER",
+      "pair_ref": "p1",
+      "snapshot_ref": "page-new",
+      "unit_id": "u1",
+      "segment_id": "s1",
+      "kind": "TEXT",
+      "start_line": null,
+      "end_line": null,
+      "excerpt": "<button id=\"cancel\">取消订单</button>\n<script src=\"actions.js\"></script>",
+      "observation": ""
+    }
+  ],
+  "chains": [],
+  "limitations": [
+    {
+      "key": "L1",
+      "code": "MISSING_DEPENDENCY",
+      "description": "actions.js未提供，无法核对点击条件/动作/结果。",
+      "affects": [
+        "BUSINESS_IMPACT",
+        "page-old",
+        "page-new"
+      ],
+      "needed": "提供相应固定脚本及明确交互说明；不要执行页面补造证据。"
+    },
+    {
+      "key": "L2",
+      "code": "VISUAL_NOT_PROVIDED",
+      "description": "未提供实际视觉附件/依赖样式，不声称已看到运行页面。",
+      "affects": [
+        "BUSINESS_IMPACT"
+      ],
+      "needed": "需要视觉核对时明确提供同版本截图或相关静态资源。"
+    }
+  ]
+}

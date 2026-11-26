@@ -12,8 +12,11 @@ from uuid import uuid4
 import test_auth
 import test_code_analysis
 from sqlalchemy import select, text
+from test_change_batches import saved_plan
+from worker_fixtures import claim as claim_for_execution
 
 from app.core.errors import AppError
+from app.db import models as worker_models
 from app.db.models import (
     AIConnection,
     ChangeAnalysisChatTurn,
@@ -27,12 +30,11 @@ from app.db.models import (
 )
 from app.modules.change_analysis import (
     artifacts,
-    batch_execution,
-    batching,
     chat,
     contract,
     evidence,
     execution,
+    legacy_batches,
     schemas,
     service,
     sources,
@@ -409,7 +411,7 @@ class ChangeContractTests(unittest.TestCase):
         with self.assertRaises(AppError):
             artifacts.save_blob(1, 1, first_sha, b"wrong hash")
         other_sha = sources.github.blob_sha(b"other")
-        with patch.object(artifacts.os, "replace", side_effect=OSError("private storage error")):
+        with patch.object(os, "replace", side_effect=OSError("private storage error")):
             with self.assertRaises(AppError) as caught:
                 artifacts.save_blob(1, 1, other_sha, b"other")
         self.assertEqual(caught.exception.detail, "change_source_storage_unavailable")
@@ -674,7 +676,7 @@ class ChangeDatabaseTests(unittest.TestCase):
     def setUp(self):
         test_code_analysis.CodeAnalysisDatabaseTests.setUp(self)
         self.api = f"/api/projects/{self.project}/change-analysis"
-        for module in (service, execution, chat, batch_execution):
+        for module in (service, execution, chat):
             p = patch.object(module, "analysis_configuration", side_effect=self.configuration)
             p.start()
             self.addCleanup(p.stop)
@@ -684,6 +686,12 @@ class ChangeDatabaseTests(unittest.TestCase):
         p.start()
         self.addCleanup(p.stop)
         self.input, self.report = sample("code")
+        self.change_skill = sources.skill_snapshot()
+        legacy_skill = patch.object(
+            sources, "skill_snapshot", return_value={**self.change_skill, "contract_version": 2}
+        )
+        legacy_skill.start()
+        self.addCleanup(legacy_skill.stop)
 
     def payload(self):
         sides = []
@@ -821,130 +829,60 @@ class ChangeDatabaseTests(unittest.TestCase):
         remote.assert_called_once()
         opener.open.assert_called_once()
 
-    def prepare_historical_batches(self, created, *, integration=False, authorize=True):
-        with self.factory() as db:
-            row = db.get(ChangeAnalysisTask, created["id"])
-            row.metadata_snapshot = {
-                **row.metadata_snapshot,
-                "execution_mode": "BATCHED_V2" if integration else "BATCHED_V1",
-            }
-            db.commit()
-
-        def planned(data, *, version):
-            with patch.object(batching, "LEGACY_TARGET_BYTES", 1):
-                plan = batching.legacy_plan(data)
-            if not integration:
-                return plan
-            for batch in plan["batches"]:
-                batch.update(
-                    plan_version=2,
-                    kind="ANALYSIS",
-                    depends_on=[],
-                    callable=True,
-                    blocked_targets=[],
-                    limitations=[],
-                )
-            review = copy.deepcopy(plan["batches"][0])
-            review.update(
-                id=3,
-                kind="INTEGRATION",
-                depends_on=[1, 2],
-                mappings=[k for b in plan["batches"] for k in b["mappings"]],
-                primary=[k for b in plan["batches"] for k in b["primary"]],
-            )
-            review["input_bytes"] = batching.size(batching.input_for(data, review))
-            plan["batches"].append(review)
-            plan["version"] = 2
-            return plan
-
-        with patch.object(batching, "plan", side_effect=planned):
-            ready, remote = self.run_task(created["id"])
-        remote.assert_not_called()
-        self.assertEqual(ready["status"], "PREPARED")
-        self.assertFalse(ready["can_start"])
-        if integration:
-            self.assertEqual(ready["batches"]["review_batches"], 1)
-        if authorize:
-            # Seed an already-authorized historical task; current start must not create new batches.
-            with self.factory() as db:
-                row = db.get(ChangeAnalysisTask, created["id"])
-                row.metadata_snapshot = {**row.metadata_snapshot, "batch_authorized": True}
-                row.status = "QUEUED"
-                db.commit()
-        return ready
-
-    def test_historical_association_review_waits_and_retry_analyzes_complete_input_once(self):
+    def prepare_historical_batches(self, created, status="PREPARED"):
         from app.modules.change_analysis import comparison
 
-        created = self.post("", self.batch_payload()).json()
-        self.prepare_historical_batches(created, integration=True)
-        calls = 0
-
-        def first_attempt(*args, **kwargs):
-            nonlocal calls
-            calls += 1
-            if calls == 2:
-                raise AppError(504, "ai_gateway_timeout")
-            return self.answer(*args, **kwargs)
-
-        partial, remote = self.run_task(created["id"], first_attempt)
-        self.assertEqual(remote.call_count, 2)
-        self.assertEqual(partial["batches"]["batches"][2]["status"], "QUEUED")
-        self.assertEqual(
-            partial["batches"]["batches"][2]["error_code"], "change_batch_dependencies_pending"
-        )
-        self.assertEqual(partial["outcome"], "PARTIAL")
-        self.assertEqual(len(partial["report"]["risks"]), 1)
-        retry = self.post(f"/{created['id']}/retry", {"request_id": str(uuid4())}).json()
-        self.assertFalse(retry.get("batches"))
-        self.assertFalse(retry["handling"])
-
         def complete(*args, **kwargs):
-            data = json.loads(args[5][0]["text"])
-            self.assertEqual(len(args[5]), 1)
-            self.assertTrue(all(len(s["units"]) == 2 for s in data["snapshots"]))
-            result = comparison.unchanged_report(data)
-            return json.dumps(result, ensure_ascii=False)
+            return json.dumps(comparison.unchanged_report(json.loads(args[5][0]["text"])))
 
-        done, remote = self.run_task(retry["id"], complete)
-        remote.assert_called_once()
-        self.assertEqual(done["status"], "COMPLETED", done.get("error_code"))
-        self.assertFalse(done.get("batches"))
-        self.assertEqual(done["report"]["risks"], [])
-        old = self.client.get(f"{self.api}/{created['id']}").json()
-        self.assertEqual(old["report"], partial["report"])
-        historical = self.post("", self.batch_payload()).json()
-        self.prepare_historical_batches(historical, integration=True)
-        count = 0
-
-        def review_complete(*args, **kwargs):
-            nonlocal count
-            count += 1
-            if count == 1:
-                return self.answer(*args, **kwargs)
-            subset = json.loads(args[5][0]["text"])
-            result = comparison.unchanged_report(subset)
-            if count == 3:
-                self.assertEqual(len(args[5]), 2)
-                previous = json.loads(args[5][1]["text"])["prior_batch_reports"]
-                self.assertEqual([x["batch_id"] for x in previous], [1, 2])
-                return json.dumps({"report": result, "reconciliations": []}, ensure_ascii=False)
-            return json.dumps(result, ensure_ascii=False)
-
-        compatible, remote = self.run_task(historical["id"], review_complete)
-        self.assertEqual(remote.call_count, 3)
-        self.assertEqual(compatible["status"], "COMPLETED", compatible.get("error_code"))
-        self.assertEqual(compatible["batches"]["completed"], 3)
-        self.assertEqual(len(compatible["report"]["risks"]), 1)
+        saved, transport = self.run_task(created["id"], complete)
+        transport.assert_called_once()
+        self.assertEqual(saved["status"], "COMPLETED")
+        with self.factory() as db:
+            row = db.get(ChangeAnalysisTask, created["id"])
+            plan = saved_plan(row.input_snapshot)
+            if status == "COMPLETED":
+                first, second = plan["batches"]
+                subset = legacy_batches.input_for(row.input_snapshot, first)
+                first.update(
+                    status="COMPLETED",
+                    report=json.loads(
+                        self.answer(None, None, None, None, None, [{"text": json.dumps(subset)}])
+                    ),
+                )
+                second.update(status="FAILED", error_code="ai_gateway_timeout")
+                legacy_batches.finish(row, row.input_snapshot, plan)
+            elif status == "FAILED":
+                for batch in plan["batches"]:
+                    batch.update(
+                        status="FAILED",
+                        error_code="change_contract_invalid",
+                        candidate_task_id=row.id,
+                        attempts=[{"status": "FAILED", "error_code": "change_contract_invalid"}],
+                    )
+                    subset = legacy_batches.input_for(row.input_snapshot, batch)
+                    artifacts.save_batch_candidate(
+                        row.id, batch["id"], json.dumps(comparison.unchanged_report(subset))
+                    )
+                row.report = {}
+            else:
+                row.report = {}
+            row.metadata_snapshot = {
+                **row.metadata_snapshot,
+                "execution_mode": "BATCHED_V1",
+                "batch_plan": plan,
+                "batch_summary": legacy_batches.summary(plan),
+            }
+            row.status = status
+            db.commit()
+        return self.client.get(f"{self.api}/{created['id']}").json()
 
     def test_historical_prepared_plan_retry_uses_full_input_and_preserves_original_plan(self):
         created = self.post("", self.batch_payload()).json()
-        ready = self.prepare_historical_batches(created, authorize=False)
-        self.assertFalse(ready["can_start"])
+        ready = self.prepare_historical_batches(created)
         self.assertTrue(ready["can_retry"])
         rejected = self.post(f"/{created['id']}/start", {})
-        self.assertEqual(rejected.status_code, 422)
-        self.assertEqual(rejected.json()["detail"], "change_full_input_required")
+        self.assertEqual(rejected.status_code, 404)
         old = self.client.get(f"{self.api}/{created['id']}").json()
         with self.factory() as db:
             original = db.get(ChangeAnalysisTask, created["id"])
@@ -966,10 +904,8 @@ class ChangeDatabaseTests(unittest.TestCase):
                 comparison.unchanged_report(json.loads(args[5][0]["text"])), ensure_ascii=False
             )
 
-        with patch.object(batching, "plan") as no_planning:
-            new, remote = self.run_task(retry["id"], complete)
+        new, remote = self.run_task(retry["id"], complete)
         remote.assert_called_once()
-        no_planning.assert_not_called()
         self.assertEqual(new["status"], "COMPLETED")
         self.assertFalse(new.get("batches"))
         self.assertEqual(
@@ -1006,11 +942,9 @@ class ChangeDatabaseTests(unittest.TestCase):
             data = json.loads(args[5][0]["text"])
             return json.dumps(comparison.unchanged_report(data), ensure_ascii=False)
 
-        with patch.object(batching, "plan") as no_planning:
-            done, remote = self.run_task(created.json()["id"], complete)
+        done, remote = self.run_task(created.json()["id"], complete)
         self.assertEqual(done["status"], "COMPLETED", done.get("error_code"))
         remote.assert_called_once()
-        no_planning.assert_not_called()
         self.assertEqual(len(done["input"]["snapshots"]), 3)
         for snapshot in done["input"]["snapshots"]:
             self.assertEqual([u["path"] for u in snapshot["units"]], paths)
@@ -1065,9 +999,7 @@ class ChangeDatabaseTests(unittest.TestCase):
             )
             raise AppError(422, "ai_model_input_rejected")
 
-        with patch.object(batching, "plan") as no_planning:
-            done, remote = self.run_task(created.json()["id"], model_rejects)
-        no_planning.assert_not_called()
+        done, remote = self.run_task(created.json()["id"], model_rejects)
         self.assertEqual(done["status"], "FAILED")
         self.assertEqual(done["error_code"], "ai_model_input_rejected")
         self.assertTrue(done["input"])
@@ -1101,26 +1033,7 @@ class ChangeDatabaseTests(unittest.TestCase):
 
         payload = self.batch_payload()
         created = self.post("", payload).json()
-        ready = self.prepare_historical_batches(created, authorize=False)
-        self.assertEqual(ready["batches"]["total"], 2)
-        self.login()
-        self.assertEqual(self.post(f"/{created['id']}/start", {}).status_code, 403)
-        self.login(self.member_name)
-        self.assertEqual(self.post(f"/{created['id']}/start", {}).status_code, 422)
-        with self.factory() as db:
-            row = db.get(ChangeAnalysisTask, created["id"])
-            row.metadata_snapshot = {**row.metadata_snapshot, "batch_authorized": True}
-            db.commit()
-        calls = []
-
-        def one_fails(*args, **kwargs):
-            calls.append(args)
-            if len(calls) == 2:
-                raise AppError(504, "ai_gateway_timeout")
-            return self.answer(*args, **kwargs)
-
-        done, remote = self.run_task(created["id"], one_fails)
-        self.assertEqual(remote.call_count, 2)
+        done = self.prepare_historical_batches(created, status="COMPLETED")
         self.assertEqual(done["status"], "COMPLETED", done.get("error_code"))
         self.assertEqual(done["outcome"], "PARTIAL")
         self.assertEqual(done["batches"]["completed"], 1)
@@ -1172,54 +1085,9 @@ class ChangeDatabaseTests(unittest.TestCase):
         self.assertEqual(old["handling"], handled.json()["handling"])
         self.assertEqual(old["batches"]["failed"], 1)
 
-    def test_historical_batch_cancellation_and_free_revalidation_preserve_saved_attempts(self):
-        from sqlalchemy import inspect
-
-        from app.modules.change_analysis import comparison
-
-        created = self.post("", self.batch_payload()).json()
-        self.prepare_historical_batches(created)
-        with self.factory() as db:
-            row = service.own(
-                self.project,
-                created["id"],
-                db.get(UserAccount, self.member_id),
-                db,
-                state_only=True,
-            )
-            self.assertTrue(
-                {"input_snapshot", "metadata_snapshot", "report"} <= inspect(row).unloaded
-            )
-        calls = 0
-
-        def cancel_second(*args, **kwargs):
-            nonlocal calls
-            calls += 1
-            if calls == 2:
-                self.post(f"/{created['id']}/cancel", {})
-            return json.dumps(
-                comparison.unchanged_report(json.loads(args[5][0]["text"])), ensure_ascii=False
-            )
-
-        cancelled, remote = self.run_task(created["id"], cancel_second)
-        self.assertEqual(remote.call_count, 2)
-        self.assertEqual(cancelled["status"], "CANCELLED")
-        self.assertEqual(cancelled["batches"]["completed"], 1)
-        self.assertEqual(cancelled["report"], {})
-
+    def test_historical_batch_free_revalidation_does_not_call_model(self):
         second = self.post("", self.batch_payload()).json()
-        self.prepare_historical_batches(second)
-
-        def valid(*args, **kwargs):
-            return json.dumps(
-                comparison.unchanged_report(json.loads(args[5][0]["text"])), ensure_ascii=False
-            )
-
-        with patch.object(
-            batch_execution, "candidate", side_effect=AppError(422, "change_contract_invalid")
-        ):
-            failed, remote = self.run_task(second["id"], valid)
-        self.assertEqual(remote.call_count, 2)
+        failed = self.prepare_historical_batches(second, status="FAILED")
         self.assertEqual(failed["status"], "FAILED")
         self.assertTrue(failed["can_revalidate"])
         with patch("app.integrations.responses.analyze") as no_ai:
@@ -1236,16 +1104,15 @@ class ChangeDatabaseTests(unittest.TestCase):
                     for b in plan["batches"]
                 )
             )
+
+    def test_worker_refuses_legacy_batch_even_if_queued(self):
         third = self.post("", self.batch_payload()).json()
-        self.prepare_historical_batches(third)
-
-        def rejected(*args, **kwargs):
-            raise AppError(502, "ai_auth_failed")
-
-        blocked, remote = self.run_task(third["id"], rejected)
-        remote.assert_called_once()
+        self.prepare_historical_batches(third, status="QUEUED")
+        blocked, remote = self.run_task(third["id"])
+        remote.assert_not_called()
         self.assertEqual(blocked["status"], "FAILED")
-        self.assertEqual([b["status"] for b in blocked["batches"]["batches"]], ["FAILED", "QUEUED"])
+        self.assertEqual(blocked["error_code"], "change_full_input_required")
+        self.assertEqual([b["status"] for b in blocked["batches"]["batches"]], ["QUEUED", "QUEUED"])
 
     def test_queue_worker_handling_chat_export_and_actual_comments(self):
         payload = self.payload()
@@ -1786,29 +1653,74 @@ class ChangeDatabaseTests(unittest.TestCase):
         created = self.post("", payload).json()
 
         def analyze(*args, **kwargs):
+            kwargs["diagnostics"].update(
+                usage={"input_tokens": 12}, input_estimate={"characters": 10}, unsafe="private"
+            )
+            self.assertEqual(kwargs["output_profile"], "change_analysis")
             data = json.loads(args[5][0]["text"])
             self.assertEqual(data["comparison_pairs"][0]["text_diffs"], [])
             result = comparison.unchanged_report(data)
             result["summary"]["conclusion"] = "合成模型已检查全部固定内容，未发现变化。"
             return json.dumps(result, ensure_ascii=False)
 
-        with patch.object(batching, "plan") as no_planning:
-            done, remote = self.run_task(created["id"], analyze)
+        done, remote = self.run_task(created["id"], analyze)
         remote.assert_called_once()
-        no_planning.assert_not_called()
         self.assertEqual(done["status"], "COMPLETED", done)
         self.assertEqual(done["report"]["outcome"], "BLOCKED")
         self.assertEqual(done["report"]["risks"], [])
         with self.factory() as db:
             saved = db.get(ChangeAnalysisTask, created["id"])
             self.assertNotIn("no_ai", saved.metadata_snapshot)
+            diagnostics = saved.metadata_snapshot["ai_diagnostics"]
+            self.assertEqual(diagnostics["usage"], {"input_tokens": 12})
+            self.assertEqual(diagnostics["input_estimate"], {"characters": 10})
+            self.assertNotIn("unsafe", diagnostics)
         created = self.post("", self.payload()).json()
         with self.factory() as db:
-            self.assertEqual(execution.claim(db), created["id"])
+            self.assertEqual(
+                claim_for_execution(db, worker_models.ChangeAnalysisTask), created["id"]
+            )
             execution.recover(db)
             self.assertEqual(
                 db.get(ChangeAnalysisTask, created["id"], populate_existing=True).status, "FAILED"
             )
+
+    def test_v3_saves_full_root_and_computes_coverage_without_model_ledger(self):
+        with patch.object(sources, "skill_snapshot", return_value=self.change_skill):
+            created = self.post("", self.batch_payload()).json()
+
+        def answer(*args, **kwargs):
+            model_input = json.loads(args[5][0]["text"])
+            self.assertEqual(model_input["view"]["kind"], "DIFF_FIRST")
+            self.assertIn("@@", model_input["comparison_pairs"][0]["text_diffs"][0]["hunks"])
+            result = json.loads(self.answer(*args, **kwargs))
+            result.update(contract_version=3)
+            result.pop("outcome")
+            result.pop("coverage")
+            e = next(entry for entry in result["evidence"] if entry["kind"] == "TEXT")
+            e.update(segment_id=None, start_line=None, end_line=None)
+            return json.dumps(result, ensure_ascii=False)
+
+        result, remote = self.run_task(created["id"], answer)
+        remote.assert_called_once()
+        self.assertEqual(result["status"], "COMPLETED", result.get("error_code"))
+        self.assertEqual(result["input"]["contract_version"], 2)
+        self.assertEqual(result["report"]["contract_version"], 3)
+        self.assertIn("platform_coverage", result["report"])
+        self.assertNotIn("coverage", result["report"])
+        self.assertEqual(result["evidence_corrections"][0]["kind"], "EXACT_V3_COORDINATES")
+
+    def test_v3_skips_the_model_when_fixed_versions_are_identical(self):
+        payload = self.payload()
+        pair = payload["pairs"][0]
+        pair["after_local"]["files"] = copy.deepcopy(pair["before_local"]["files"])
+        with patch.object(sources, "skill_snapshot", return_value=self.change_skill):
+            created = self.post("", payload).json()
+        result, remote = self.run_task(created["id"])
+        remote.assert_not_called()
+        self.assertEqual(result["status"], "COMPLETED", result.get("error_code"))
+        self.assertEqual(result["report"]["outcome"], "BLOCKED")
+        self.assertEqual(result["report"]["platform_coverage"]["pairs"][0]["unchanged"], 1)
 
     def test_requirement_versions_are_actual_fixed_content_and_import_binding_is_checked(self):
         data, report = sample("requirement")

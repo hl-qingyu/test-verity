@@ -7,13 +7,14 @@ from app.db.models import AnalysisTerminalResume
 from app.integrations import codex_terminal, native_candidates
 from app.modules.analysis_terminal import service
 from app.modules.case_analysis import contract as case_contract
+from app.modules.case_generation import native_results as generation_results
 from app.modules.change_analysis import contract as change_contract
 from app.modules.change_analysis import execution as change_execution
 from app.modules.change_analysis import service as changes
 from app.modules.code_analysis import contract as code_contract
 from app.modules.code_analysis import execution as code_execution
 from app.modules.code_analysis import service as code
-from app.modules.requirements import risk_analysis_execution, risk_service
+from app.modules.requirements import risk_analysis_execution, risk_analysis_service, risk_service
 
 REPORT_SECTIONS = {
     "requirements": {"functions": "功能", "risks": "风险"},
@@ -63,6 +64,8 @@ def candidates(project_id, kind, row, db):
 
 
 def listing(project_id, kind, record_id, actor, db):
+    if kind == "generation":
+        return generation_results.listing(project_id, record_id, actor, db)
     row = service.own(project_id, kind, record_id, actor, db)
     return {
         "items": [
@@ -72,24 +75,30 @@ def listing(project_id, kind, record_id, actor, db):
     }
 
 
-def validated(kind, raw, data, project_id):
+def validated(kind, raw, data, project_id, version=None):
     if kind == "requirements":
         report, _, _, warnings = risk_analysis_execution.validate_result(raw, data, project_id)
         return report, len(warnings)
     if kind == "code":
         parsed = code.parse(code_contract.AnalysisInput, data)
-        return code_execution.validate_result(raw, parsed)[0], 0
+        return code_execution.validate_result(raw, parsed, version=version)[0], 0
     if kind == "changes":
         parsed = changes.parse(change_contract.AnalysisInput, data)
-        return change_execution.validate_result(raw, parsed)[0], 0
+        return change_execution.validate_result(raw, parsed, version=version)[0], 0
     return case_contract.validate(data, risk_service.json_object(raw)), 0
 
 
 def preview(project_id, kind, record_id, result_id, actor, db):
+    if kind == "generation":
+        return generation_results.preview(project_id, record_id, result_id, actor, db)
     if not re.fullmatch(r"[0-9a-f]{64}", result_id):
         raise AppError(404, "analysis_terminal_candidate_not_found")
     row = service.own(project_id, kind, record_id, actor, db, full=True)
-    data = row.context["input"] if kind == "requirements" else row.input_snapshot
+    data = (
+        risk_analysis_service.candidate_input(row.context)
+        if kind == "requirements"
+        else row.input_snapshot
+    )
     selected = next(
         (
             (item, raw)
@@ -103,7 +112,12 @@ def preview(project_id, kind, record_id, result_id, actor, db):
     item, raw = selected
     result = {"id": item["id"], "raw": item["text"]}
     try:
-        report, warnings = validated(kind, raw, data, project_id)
+        version = (
+            row.metadata_snapshot.get("skill", {}).get("contract_version", 2)
+            if kind in ("code", "changes")
+            else None
+        )
+        report, warnings = validated(kind, raw, data, project_id, version)
     except AppError as exc:
         return {**result, "error_code": exc.detail, "counts": {}, "warnings": 0}
     return {

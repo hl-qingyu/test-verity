@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -9,24 +10,28 @@ const { renderToStaticMarkup } = require('react-dom/server');
 function load(file, overrides = {}) {
   const name = path.resolve(__dirname, '../src', file),
     exports = {};
-  const code = ts.transpileModule(fs.readFileSync(name, 'utf8'), {
+  const code = compileModule(fs.readFileSync(name, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
       jsx: ts.JsxEmit.ReactJSX,
     },
   }).outputText;
-  new Function('exports', 'require', code)(exports, (dep) => {
-    if (Object.hasOwn(overrides, dep)) return overrides[dep];
-    if (dep.endsWith('.css')) return {};
-    if (dep.startsWith('.'))
-      return load(
-        path.relative(path.resolve(__dirname, '../src'), path.resolve(path.dirname(name), dep)) +
-          '.ts',
-        overrides,
-      );
-    return require(dep);
-  });
+  evaluateModule(
+    code,
+    (dep) => {
+      if (Object.hasOwn(overrides, dep)) return overrides[dep];
+      if (dep.endsWith('.css')) return {};
+      if (dep.startsWith('.'))
+        return load(
+          path.relative(path.resolve(__dirname, '../src'), path.resolve(path.dirname(name), dep)) +
+            '.ts',
+          overrides,
+        );
+      return require(dep);
+    },
+    exports,
+  );
   return exports;
 }
 function fixture(project = 7, filter = 'all') {

@@ -1,14 +1,12 @@
 """Resume a private native history through the existing AI worker and budget."""
 
 from datetime import UTC, datetime
-from time import monotonic
 
 from sqlalchemy import update
 
 from app.core.errors import AppError
 from app.db.models import AnalysisTerminalResume, UserAccount
-from app.integrations import ai_client
-from app.modules.ai import native_terminal
+from app.modules.ai import native_terminal, task_lifecycle
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.analysis_terminal import service
@@ -32,15 +30,7 @@ def recheck_sources(kind, row, project_id, actor, db):
 
 
 def recover(db):
-    db.execute(
-        update(AnalysisTerminalResume)
-        .where(AnalysisTerminalResume.status == "RUNNING")
-        .values(
-            status="FAILED",
-            error_code="analysis_terminal_interrupted",
-            updated_at=datetime.now(UTC),
-        )
-    )
+    task_lifecycle.mark_interrupted(db, (AnalysisTerminalResume,), "analysis_terminal_interrupted")
     db.commit()
 
 
@@ -61,13 +51,8 @@ def execute(resume_id, factory):
             if not resume_thread:
                 raise AppError(409, "analysis_terminal_history_unavailable")
 
-        last_check = 0.0
-
-        def check(force=False):
-            nonlocal last_check
-            if not force and monotonic() - last_check < 1:
-                return
-            last_check = monotonic()
+        @task_lifecycle.throttled(seconds=1)
+        def check():
             with factory() as db:
                 actor = db.get(UserAccount, owner_id)
                 service.own(project_id, kind, record_id, actor, db)
@@ -79,22 +64,18 @@ def execute(resume_id, factory):
                 analysis_configuration(actor, db, config)
 
         check()
-        ai_client.terminal(
-            config["base_url"],
-            config["model"],
+        native_terminal.resume_session(
+            config,
             key,
-            config["reasoning_effort"],
-            identity=identity,
-            execution=resume_id,
-            instructions="",
-            fixed_input={},
-            resume=True,
-            resume_thread=resume_thread,
-            rows=rows,
-            cols=cols,
-            on_progress=check,
+            {
+                "identity": identity,
+                "execution": resume_id,
+                "thread_id": resume_thread,
+                "rows": rows,
+                "cols": cols,
+            },
+            check,
         )
-        check(force=True)
         status, error_code = "COMPLETED", ""
     except Exception as exc:
         propagate_database_outage(exc)

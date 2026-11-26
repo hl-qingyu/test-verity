@@ -194,6 +194,7 @@ class CandidateResultsTests(unittest.TestCase):
                     status="FAILED",
                     error_code="risk_json_invalid",
                     metadata_snapshot={"origin": "AI"},
+                    ai_config={},
                     input_snapshot=data,
                     report={},
                     revision=1,

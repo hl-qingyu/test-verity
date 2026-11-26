@@ -90,7 +90,9 @@ class TerminalSocketTests(unittest.TestCase):
         ):
             identity = str(uuid4())
             spec = SimpleNamespace(
-                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+                ai_cli_terminal_work_path=Path(folder) / "interactive",
+                ai_cli_work_path=Path(folder),
+                ai_cli_executable=settings.ai_cli_executable,
             )
             bound = {"session": {"id": 7, "status": "RUNNING", "error_code": ""}}
             captured, done, writes = {}, Event(), []

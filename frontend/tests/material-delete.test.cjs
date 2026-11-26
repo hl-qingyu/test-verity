@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -25,39 +26,43 @@ test('single-material delete loads impact and only writes after explicit confirm
   };
   function load(file) {
     const exports = {};
-    const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    const code = compileModule(fs.readFileSync(file, 'utf8'), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         jsx: ts.JsxEmit.ReactJSX,
       },
     }).outputText;
-    new Function('exports', 'require', code)(exports, (name) => {
-      if (name === 'react')
-        return {
-          useState(initial) {
-            const n = index++;
-            if (!(n in states)) states[n] = initial;
-            return [states[n], (v) => (states[n] = typeof v === 'function' ? v(states[n]) : v)];
-          },
-          useRef(initial) {
-            return (refs[refIndex++] ||= { current: initial });
-          },
-          useEffect(effect) {
-            if (!effects.length) effects.push(effect);
-          },
-        };
-      if (name === './CaseDialog') return { CaseDialog: 'dialog' };
-      if (name === './api/http')
-        return {
-          apiRequest: async (url, options) => {
-            requests.push({ url, options });
-            return options.method === 'POST' ? { id: 7, revision: 13 } : info;
-          },
-        };
-      if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'));
-      return require(name);
-    });
+    evaluateModule(
+      code,
+      (name) => {
+        if (name === 'react')
+          return {
+            useState(initial) {
+              const n = index++;
+              if (!(n in states)) states[n] = initial;
+              return [states[n], (v) => (states[n] = typeof v === 'function' ? v(states[n]) : v)];
+            },
+            useRef(initial) {
+              return (refs[refIndex++] ||= { current: initial });
+            },
+            useEffect(effect) {
+              if (!effects.length) effects.push(effect);
+            },
+          };
+        if (name === './CaseDialog') return { CaseDialog: 'dialog' };
+        if (name === './api/http')
+          return {
+            apiRequest: async (url, options) => {
+              requests.push({ url, options });
+              return options.method === 'POST' ? { id: 7, revision: 13 } : info;
+            },
+          };
+        if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'));
+        return require(name);
+      },
+      exports,
+    );
     return exports;
   }
   const { MaterialDeleteDialog } = load(path.resolve(__dirname, '../src/MaterialDeleteDialog.tsx'));

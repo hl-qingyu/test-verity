@@ -205,6 +205,7 @@ def apply_one(app, item, actor, db):
 
 def execute(app_id, factory):
     while True:
+        index = None
         try:
             with factory() as db:
                 app = db.get(CaseAnalysisApplication, app_id)
@@ -236,16 +237,21 @@ def execute(app_id, factory):
                 db.commit()
         except Exception as exc:
             code = exc.detail if isinstance(exc, AppError) else "case_analysis_application_failed"
+            item_failed = (
+                index is not None
+                and isinstance(exc, AppError)
+                and exc.status_code not in (401, 403)
+            )
             with factory() as db:
                 app = db.get(CaseAnalysisApplication, app_id, with_for_update=True)
                 if not app or app.status != "RUNNING":
                     return
-                if isinstance(exc, AppError) and exc.status_code not in (401, 403):
+                if item_failed:
                     data = copy.deepcopy(app.items)
                     data[index].update(status="FAILED", error_code=code)
                     app.items = data
                 else:
                     app.status, app.error_code = "FAILED", code
                 db.commit()
-            if app.status == "FAILED":
+            if not item_failed:
                 return

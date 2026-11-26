@@ -12,12 +12,15 @@ import test_auth
 import test_risk_reports
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from worker_fixtures import claim as claim_for_execution
 
+from app.db import models as worker_models
 from app.db.models import (
     AIConnection,
     RequirementChatTurn,
     RequirementManualRisk,
     RequirementRiskAnalysis,
+    RequirementRiskReport,
     SourceDocument,
     UserAccount,
 )
@@ -131,6 +134,10 @@ class RequirementAnalysisWorkflowTests(unittest.TestCase):
             report["risks"][0]["evidence"][0]["excerpt"] = "fabricated"
         if unknown_function:
             report["risks"][0]["function_keys"] = ["F999"]
+        if context["contract_version"] == 4:
+            report["contract_version"] = 4
+            report.pop("outcome")
+            report.pop("coverage")
         return json.dumps(report, ensure_ascii=False)
 
     def queue_risk(self):
@@ -151,20 +158,28 @@ class RequirementAnalysisWorkflowTests(unittest.TestCase):
             )
         self.assertEqual(queued.status_code, 202, queued.text)
         with self.factory() as db:
-            self.assertEqual(risk_analysis_execution.claim(db), queued.json()["id"])
+            self.assertEqual(
+                claim_for_execution(db, worker_models.RequirementRiskAnalysis), queued.json()["id"]
+            )
         return queued.json()["id"]
 
     def test_worker_keeps_raw_candidate_and_normalizes_reverse_index(self):
         task_id = self.queue_risk()
+
+        def answer(*args, **kwargs):
+            kwargs["diagnostics"].update(
+                usage={"input_tokens": 12}, input_estimate={"characters": 10}, unsafe="private"
+            )
+            self.assertEqual(kwargs["output_profile"], "requirement_analysis")
+            return self.model_answer(args[5], missing_reverse=True, comparison_list=True)
+
         with (
             patch.object(
                 risk_analysis_execution, "analysis_configuration", side_effect=self.configuration
             ),
             patch(
                 "app.integrations.responses.analyze",
-                side_effect=lambda *args, **kwargs: self.model_answer(
-                    args[5], missing_reverse=True, comparison_list=True
-                ),
+                side_effect=answer,
             ) as upstream,
         ):
             risk_analysis_execution.execute(task_id, self.factory)
@@ -176,6 +191,10 @@ class RequirementAnalysisWorkflowTests(unittest.TestCase):
         with self.factory() as db:
             stored = db.get(RequirementRiskAnalysis, task_id)
             self.assertEqual(len(stored.context["comparison_text_corrections"]), 2)
+            diagnostics = stored.context["ai_diagnostics"]
+            self.assertEqual(diagnostics["usage"], {"input_tokens": 12})
+            self.assertEqual(diagnostics["input_estimate"], {"characters": 10})
+            self.assertNotIn("unsafe", diagnostics)
         raw = json.loads(artifacts.candidate_path(task_id).read_text(encoding="utf-8"))
         self.assertEqual(raw["functions"][0]["risk_keys"], [])
         self.assertEqual(
@@ -318,6 +337,41 @@ class RequirementAnalysisWorkflowTests(unittest.TestCase):
             self.base + f"/risk-analyses/{task_id}/revalidate", headers=test_auth.ORIGIN
         )
         self.assertEqual(again.json()["report_id"], response.json()["report_id"])
+
+    def test_v4_candidate_captured_by_v3_service_can_be_revalidated_without_ai(self):
+        task_id = self.queue_risk()
+        with self.factory() as db:
+            task = db.get(RequirementRiskAnalysis, task_id)
+            actor = db.get(UserAccount, task.actor_id)
+            fixed, bindings, _ = risk_analysis_execution.prepare(task, actor, db)
+            skill = {**task.context["skill"], "contract_version": 3}
+            task.context = {"input": fixed, "bindings": bindings, "skill": skill}
+            task.status = "FAILED"
+            task.error_code = "risk_report_invalid|report.contract_version|literal_error"
+            db.commit()
+
+        v4_input = {**fixed, "contract_version": 4}
+        answer = self.model_answer([{"text": json.dumps(v4_input)}])
+        artifacts.save_candidate(task_id, answer)
+        with patch("app.integrations.responses.analyze") as upstream:
+            response = self.client.post(
+                self.base + f"/risk-analyses/{task_id}/revalidate", headers=test_auth.ORIGIN
+            )
+            upstream.assert_not_called()
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "COMPLETED")
+        with self.factory() as db:
+            task = db.get(RequirementRiskAnalysis, task_id)
+            report = db.get(RequirementRiskReport, task.report_id)
+            self.assertEqual(task.context["input"], fixed)
+            self.assertEqual(task.context["skill"], skill)
+            self.assertEqual(task.context["revalidation"]["contract_version"], 4)
+            self.assertEqual(report.input, v4_input)
+            first_segment = report.report["coverage"][0]["segments"][0]
+            self.assertEqual(first_segment["disposition"], "REFERENCED")
+        self.assertEqual(artifacts.candidate_path(task_id).read_text(encoding="utf-8"), answer)
+        legacy = {"input": fixed, "skill": {**skill, "version": "3.0.0"}}
+        self.assertIs(risk_analysis_service.candidate_input(legacy), fixed)
 
     def test_upstream_failure_has_no_candidate_or_report(self):
         task_id = self.queue_risk()
@@ -475,7 +529,7 @@ class RequirementAnalysisWorkflowTests(unittest.TestCase):
 
         first = queue()
         with self.factory() as db:
-            self.assertEqual(risk_analysis_execution.claim(db), first)
+            self.assertEqual(claim_for_execution(db, worker_models.RequirementRiskAnalysis), first)
         with (
             patch.object(
                 risk_analysis_execution, "analysis_configuration", side_effect=self.configuration
@@ -513,7 +567,7 @@ class RequirementAnalysisWorkflowTests(unittest.TestCase):
             self.assertEqual(
                 task.context["input"]["materials"], original.context["input"]["materials"]
             )
-            self.assertEqual(risk_analysis_execution.claim(db), third)
+            self.assertEqual(claim_for_execution(db, worker_models.RequirementRiskAnalysis), third)
 
         sent = []
 
@@ -542,7 +596,7 @@ class RequirementAnalysisWorkflowTests(unittest.TestCase):
         with self.factory() as db:
             db.get(SourceDocument, source_id).deleted_at = datetime.now(UTC)
             db.commit()
-            self.assertEqual(risk_analysis_execution.claim(db), fourth)
+            self.assertEqual(claim_for_execution(db, worker_models.RequirementRiskAnalysis), fourth)
         with (
             patch.object(
                 risk_analysis_execution, "analysis_configuration", side_effect=self.configuration
@@ -580,84 +634,15 @@ class RequirementAnalysisWorkflowTests(unittest.TestCase):
         task_id = queued.json()["id"]
         with self.factory() as db:
             fixed_skill = copy.deepcopy(db.get(RequirementRiskAnalysis, task_id).context["skill"])
-            self.assertEqual(risk_analysis_execution.claim(db), task_id)
+            self.assertEqual(
+                claim_for_execution(db, worker_models.RequirementRiskAnalysis), task_id
+            )
 
         def answer(base, model, key, effort, instructions, content, **kwargs):
             self.assertEqual(instructions, fixed_skill["instructions"])
             context = json.loads(content[0]["text"])
-            material = context["materials"][0]
-            segment = material["segments"][0]
-            evidence = {
-                "source_id": material["source_id"],
-                "segment_id": segment["segment_id"],
-                "location": segment["location"],
-                "excerpt": segment["text"][:10],
-                "observation": "该片段包含订单取消规则。",
-            }
-            return json.dumps(
-                {
-                    "contract_version": 3,
-                    "request_id": context["request_id"],
-                    "outcome": "COMPLETE",
-                    "summary": {
-                        "assessment": "NEEDS_CLARIFICATION",
-                        "conclusion": "取消条件仍需确认。",
-                        "priority_risk_keys": ["R1"],
-                    },
-                    "functions": [
-                        {
-                            "key": "F1",
-                            "module": "订单",
-                            "name": "取消订单",
-                            "scope": "检查取消规则",
-                            "evidence": [evidence],
-                            "risk_keys": ["R1"],
-                        }
-                    ],
-                    "risks": [
-                        {
-                            "key": "R1",
-                            "function_keys": ["F1"],
-                            "title": "取消条件不明确",
-                            "type": "RULE_GAP",
-                            "severity": "MEDIUM",
-                            "severity_reason": "影响状态判断。",
-                            "basis": "EXPLICIT",
-                            "description": "取消条件仍需补充。",
-                            "evidence": [evidence],
-                            "checked_scope": [],
-                            "impact": "可能造成实现与验收不一致。",
-                            "questions": ["哪些状态允许取消？"],
-                            "improvement": {
-                                "proposal": "补充状态清单。",
-                                "rationale": "便于实现和验收。",
-                                "tradeoffs": "需产品确认。",
-                                "requires_confirmation": True,
-                            },
-                            "source_comparison": None,
-                        }
-                    ],
-                    "optional_suggestions": [],
-                    "coverage": [
-                        {
-                            "source_id": material["source_id"],
-                            "segments": [
-                                {
-                                    "segment_id": item["segment_id"],
-                                    "disposition": "REVIEWED",
-                                    "function_keys": ["F1"],
-                                    "risk_keys": ["R1"],
-                                    "reason": "已检查取消规则。",
-                                }
-                                for item in material["segments"]
-                            ],
-                            "limitation": "",
-                        }
-                    ],
-                    "limitations": [],
-                },
-                ensure_ascii=False,
-            )
+            self.assertEqual(context["contract_version"], 4)
+            return self.model_answer(content)
 
         with (
             patch.object(

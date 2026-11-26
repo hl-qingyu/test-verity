@@ -24,7 +24,7 @@ def candidate(project_id, task_id, actor, db):
 
 def download(project_id, task_id, format, actor, db):
     row = service.own(project_id, task_id, actor, db)
-    if row.status != "COMPLETED" or row.report.get("contract_version") != 2:
+    if row.status != "COMPLETED" or row.report.get("contract_version") not in (2, 3):
         raise AppError(422, "code_report_not_ready")
     if format in ("input", "report"):
         value = row.input_snapshot if format == "input" else row.report

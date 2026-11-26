@@ -16,12 +16,13 @@ from app.core.errors import AppError
 
 ROOT = Path(__file__).resolve().parents[4] / "skill"
 BACKUPS = Path(__file__).resolve().parents[3] / "storage" / "skill-backups"
+REQUIREMENT_CONTRACT_HEADING = "# 需求风险报告调用契约（v{}）"
 REGISTRY = {
-    "requirement-analysis": ("需求分析", 3, "spark"),
+    "requirement-analysis": ("需求分析", 4, "spark"),
     "case-generation": ("用例生成", 3, "list"),
     "case-analysis": ("用例分析", 1, "chart"),
-    "code-review": ("代码分析", 2, "code"),
-    "change-impact": ("变更分析", 2, "branch"),
+    "code-review": ("代码分析", 3, "code"),
+    "change-impact": ("变更分析", 3, "branch"),
 }
 LIMIT = 200000
 _VIEW_CACHE = {}
@@ -244,6 +245,11 @@ def instruction_paths(entries):
 def snapshot(key):
     package = bundle(key)
     by_path = {f["path"]: f for f in package["files"]}
+    contract_version = REGISTRY[key][1]
+    if key == "requirement-analysis" and not by_path["contract.md"]["text"].startswith(
+        REQUIREMENT_CONTRACT_HEADING.format(contract_version) + "\n"
+    ):
+        raise AppError(409, "risk_analysis_contract_mismatch")
     selected = [by_path[name] for name in instruction_paths(package["files"])]
     manifest = by_path.get("resources.json")
     text = "\n\n".join(
@@ -251,7 +257,7 @@ def snapshot(key):
     )
     result = {
         "version": package["version"],
-        "contract_version": REGISTRY[key][1],
+        "contract_version": contract_version,
         "sha256": digest(text),
         "instructions": text,
     }

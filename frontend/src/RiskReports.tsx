@@ -1,3 +1,4 @@
+import { usePolling } from './usePolling';
 import { AnalysisCandidateReview } from './AnalysisCandidateReview';
 import { useCachedView } from './pageViewCache';
 import type { PageViewCache } from './pageViewCache';
@@ -26,7 +27,7 @@ import {
   outcomes,
   parseRiskAnalysisTask,
   parseRiskInput,
-  parseRiskReport,
+  parseRiskImportReport,
   readRiskFile,
   riskAnalyses,
   riskCatalog,
@@ -46,7 +47,6 @@ import type {
   ReportItem,
   Risk,
   RiskDetail,
-  RiskReport,
   RiskState,
   SourceBinding,
   CatalogItem,
@@ -299,17 +299,18 @@ function RiskWorkspace({
     reload,
     onSessionEnd,
   ]);
-  useEffect(() => {
-    if (!project) return;
-    const c = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function loadTasks() {
+  usePolling({
+    enabled: !!project,
+    active: tasks.some((item) => ['QUEUED', 'RUNNING'].includes(item.status)),
+    interval: 2500,
+    refreshKey: (project?.id || '') + ':' + reload + ':' + (overviewTarget?.id || ''),
+    load: async (signal) => {
       try {
         const value = await riskAnalyses(
           `/api/projects/${project!.id}/requirements/risk-analyses`,
-          c.signal,
+          signal,
         );
-        if (!c.signal.aborted) {
+        if (!signal.aborted) {
           setTasks(value);
           setTasksLoaded(true);
           if (
@@ -320,21 +321,15 @@ function RiskWorkspace({
           const active = value.some((item) => ['QUEUED', 'RUNNING'].includes(item.status));
           if (hadActiveTasks.current && !active) setReload((current) => current + 1);
           hadActiveTasks.current = active;
-          if (active) timer = setTimeout(loadTasks, 2500);
         }
       } catch (reason) {
-        if (!c.signal.aborted) {
+        if (!signal.aborted) {
           setTasksLoaded(true);
           setError(riskError(reason, onSessionEnd));
         }
       }
-    }
-    void loadTasks();
-    return () => {
-      c.abort();
-      clearTimeout(timer);
-    };
-  }, [project, reload, onSessionEnd, overviewTarget]);
+    },
+  });
   async function exportJSON(kind: 'input' | 'report') {
     if (!detail || pending.current) return;
     pending.current = true;
@@ -1547,34 +1542,7 @@ function FullReport({
           </p>
         </div>
       ))}
-      <h3>覆盖情况</h3>
-      {r.coverage.map((c) => (
-        <details className="evidence" key={c.source_id}>
-          <summary>
-            {detail.input.materials.find((m) => m.source_id === c.source_id)?.name || c.source_id} ·{' '}
-            {c.segments.length} 个片段
-          </summary>
-          {c.segments.map((s) => (
-            <p key={s.segment_id}>
-              <strong>
-                {s.segment_id} ·{' '}
-                {s.disposition === 'REVIEWED'
-                  ? '已审查'
-                  : s.disposition === 'NOT_RELEVANT'
-                    ? '范围外'
-                    : '未处理'}
-              </strong>
-              <br />
-              {s.reason}
-              <br />
-              <span className="hint">
-                功能：{s.function_keys.join('、') || '无'} · 风险：{s.risk_keys.join('、') || '无'}
-              </span>
-            </p>
-          ))}
-          {c.limitation && <p>{c.limitation}</p>}
-        </details>
-      ))}
+      <RiskCoverage detail={detail} />
       <h3>分析边界</h3>
       {r.limitations.map((l, i) => (
         <div className="evidence" key={i}>
@@ -1584,6 +1552,61 @@ function FullReport({
       ))}
       {!r.limitations.length && <p>未单列限制，仅代表本次所选范围。</p>}
     </section>
+  );
+}
+
+function RiskCoverage({ detail }: { detail: RiskDetail }) {
+  const { report } = detail;
+  const v4 = report.contract_version === 4;
+  const materials = new Map(detail.input.materials.map((m) => [m.source_id, m]));
+  const functions = new Map(report.functions.map((f) => [f.key, f.name]));
+  return (
+    <>
+      <h3 className={v4 ? 'mt' : undefined}>覆盖情况</h3>
+      {v4 && <p className="hint">按证据引用统计。资料读取状态见固定资料。</p>}
+      {report.coverage.map((source) => {
+        const material = materials.get(source.source_id);
+        const locations = new Map(material?.segments.map((s) => [s.segment_id, s.location]));
+        return (
+          <details className="evidence" key={source.source_id}>
+            <summary>
+              {material?.name || source.source_id} · {source.segments.length} 个片段
+            </summary>
+            {source.segments.map((s) => (
+              <p key={s.segment_id}>
+                <strong>
+                  {(v4 && locations.get(s.segment_id)) || s.segment_id} ·{' '}
+                  {s.disposition === 'REFERENCED'
+                    ? '被引用'
+                    : s.disposition === 'UNREFERENCED'
+                      ? '未被引用'
+                      : s.disposition === 'REVIEWED'
+                        ? '已审查'
+                        : s.disposition === 'NOT_RELEVANT'
+                          ? '范围外'
+                          : '未处理'}
+                </strong>
+                <br />
+                {'reason' in s && (
+                  <>
+                    {s.reason}
+                    <br />
+                  </>
+                )}
+                <span className="hint">
+                  功能：
+                  {s.function_keys
+                    .map((key) => (v4 ? functions.get(key) || key : key))
+                    .join('、') || '无'}{' '}
+                  · 风险：{s.risk_keys.join('、') || '无'}
+                </span>
+              </p>
+            ))}
+            {source.limitation && <p>{source.limitation}</p>}
+          </details>
+        );
+      })}
+    </>
   );
 }
 
@@ -1689,6 +1712,7 @@ function ScopeDialog({ detail, onClose }: { detail: RiskDetail; onClose: () => v
       <p>{detail.report.summary.conclusion}</p>
       <h3 className="mt">本次关注点</h3>
       <p>{detail.input.focus || '未设置额外关注点'}</p>
+      {detail.report.contract_version === 4 && <RiskCoverage detail={detail} />}
       <h3 className="mt">分析边界</h3>
       {detail.report.limitations.length ? (
         <ul>
@@ -1919,7 +1943,9 @@ export function ImportReport({
   onSessionEnd: () => void;
 }) {
   const [input, setInput] = useState<(Loaded & { parsed: Input }) | null>(null),
-    [report, setReport] = useState<(Loaded & { parsed: RiskReport }) | null>(null),
+    [report, setReport] = useState<
+      (Loaded & { parsed: ReturnType<typeof parseRiskImportReport> }) | null
+    >(null),
     [options, setOptions] = useState<MaterialOption[]>([]),
     [bindings, setBindings] = useState<SourceBinding[]>([]),
     [title, setTitle] = useState(''),
@@ -1963,7 +1989,7 @@ export function ImportReport({
       if (controller.current.signal.aborted || generation !== generations.current[kind]) return;
       if (kind === 'input') setInput({ ...loaded, parsed: parseRiskInput(loaded.data) });
       else {
-        setReport({ ...loaded, parsed: parseRiskReport(loaded.data) });
+        setReport({ ...loaded, parsed: parseRiskImportReport(loaded.data) });
         setTitle((old) => old || file.name.replace(/\.json$/i, ''));
       }
     } catch (e) {
@@ -1974,7 +2000,15 @@ export function ImportReport({
         setReading((old) => ({ ...old, [kind]: false }));
     }
   }
-  const matched = !!input && !!report && input.parsed.request_id === report.parsed.request_id;
+  const pairingError =
+    input && report
+      ? input.parsed.contract_version !== report.parsed.contract_version
+        ? '两份文件的契约版本不一致。'
+        : input.parsed.request_id !== report.parsed.request_id
+          ? '两份文件的调用标识不一致，请选择同一次分析的输入与结果。'
+          : ''
+      : '';
+  const matched = !!input && !!report && !pairingError;
   return (
     <CaseDialog
       title="导入本地分析结果"
@@ -1988,8 +2022,8 @@ export function ImportReport({
         onSubmit={async (e) => {
           e.preventDefault();
           if (pending.current || !input || !report) return;
-          if (!matched) {
-            setError('两份文件的 request_id 不一致，请选择同一次分析的输入与结果。');
+          if (pairingError) {
+            setError(pairingError);
             return;
           }
           if (
@@ -2067,7 +2101,7 @@ export function ImportReport({
               <p>{report.parsed.summary.conclusion}</p>
             </div>
           )}
-          {input && report && !matched && <p className="form-error">两份文件的调用标识不一致。</p>}
+          {pairingError && <p className="form-error">{pairingError}</p>}
           {input && (
             <section>
               <h3>关联系统已有资料</h3>
@@ -2738,52 +2772,4 @@ function CatalogRiskDialog({
       </Form>
     </CaseDialog>
   );
-}
-
-export function reportMarkdown(d: RiskDetail): string {
-  const r = d.report;
-  let text = `# ${d.title}\n\n导入：${d.created_by} · ${d.created_at}\n状态：${outcomes[r.outcome]}\n\n> 文字证据与导入输入核对，原件由导入者关联；报告不表示测试通过。\n\n## 总体结论\n\n${r.summary.conclusion}\n\n## 功能清单\n\n`;
-  for (const f of r.functions)
-    text += `### ${f.module} / ${f.name}\n\n${f.scope}\n关联风险：${f.risk_keys.join('、') || '无'}\n\n`;
-  const evidence = (values: Evidence[]) =>
-    values
-      .map(
-        (e) =>
-          `- ${d.input.materials.find((m) => m.source_id === e.source_id)?.name || e.source_id} / ${e.location}\n  原文：${e.excerpt}\n  观察：${e.observation}`,
-      )
-      .join('\n');
-  text += '## 风险与处理\n\n';
-  for (const risk of r.risks) {
-    const h = d.handling.find((h) => h.risk_key === risk.key);
-    text += `### ${risk.key} ${risk.title}\n\n等级：${riskLevels[risk.severity]} · ${risk.severity_reason}\n\n${risk.description}\n\n影响：${risk.impact}\n\n待确认：${risk.questions.join('；')}\n\n建议：${risk.improvement.proposal}\n理由：${risk.improvement.rationale}\n取舍：${risk.improvement.tradeoffs}\n\n${evidence(risk.evidence)}\n\n处理：${riskStates[h?.status || 'PENDING']}\n人工结论：${h?.note || '尚未填写'}\n\n`;
-    if (risk.source_comparison)
-      text +=
-        '来源对比：\n' +
-        risk.source_comparison.sides
-          .map((s) => s.statement + '\n' + evidence(s.evidence))
-          .join('\n') +
-        `\n已知：${risk.source_comparison.known_facts}\n未知：${risk.source_comparison.unknowns}\n\n`;
-    for (const a of h?.history || [])
-      text += `处理记录：${a.actor} ${a.time} ${riskStates[a.from]} → ${riskStates[a.to]}：${a.note}\n`;
-  }
-  text +=
-    '\n## 可选优化（不计风险）\n\n' +
-    r.optional_suggestions
-      .map((s) => `### ${s.title}\n${s.proposal}\n理由：${s.rationale}\n取舍：${s.tradeoffs}`)
-      .join('\n\n');
-  text +=
-    '\n\n## 覆盖与边界\n\n' +
-    r.coverage
-      .map(
-        (c) =>
-          `${c.source_id}：${c.limitation}\n` +
-          c.segments
-            .map(
-              (s) =>
-                `${s.segment_id} / ${s.disposition}：${s.reason}；功能 ${s.function_keys.join('、')}；风险 ${s.risk_keys.join('、')}`,
-            )
-            .join('\n'),
-      )
-      .join('\n\n');
-  return text + '\n\n' + r.limitations.map((l) => `${l.detail}\n影响：${l.effect}`).join('\n\n');
 }

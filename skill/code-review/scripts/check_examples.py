@@ -388,6 +388,12 @@ def main():
             for name in ("input", "output")
         ]
         validate_pair(data, report)
+        candidate = json.loads(
+            (ROOT / "examples" / f"{prefix}output-v3.json").read_text(encoding="utf-8")
+        )
+        expected = {key: value for key, value in report.items() if key not in ("outcome", "coverage")}
+        expected["contract_version"] = 3
+        require(candidate == expected, "v3 example must use the candidate schema")
         pairs.append((data, report))
     data, report = pairs[0]
     bad = copy.deepcopy(data)
@@ -465,7 +471,7 @@ def main():
                     "broken local Markdown link",
                 )
     print(
-        "PASS: 2 synthetic pairs and negative checks; no AI, network, database, or code execution"
+        "PASS: 2 synthetic v2/v3 pairs and negative checks"
     )
 
 

@@ -17,7 +17,13 @@ from uuid import uuid4
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.integrations import cli_reading, codex_filesystem, codex_probe
+from app.integrations import (
+    cli_reading,
+    codex_config,
+    codex_filesystem,
+    codex_probe,
+    input_estimate,
+)
 from app.integrations.codex_events import EventJournal
 from app.integrations.response_diagnostics import safe_identifier
 from app.integrations.windows_job import WindowsJob
@@ -170,24 +176,6 @@ def require_probe_available() -> None:
         raise AppError(503, status["reason"] or "ai_cli_unverified")
 
 
-def text_input(instructions: str, messages: list[dict]) -> bytes:
-    """Preserve complete roles/text; reject attachments instead of silently extracting text."""
-    for message in messages:
-        content = message.get("content")
-        if isinstance(content, str):
-            continue
-        if not isinstance(content, list) or any(
-            not isinstance(part, dict)
-            or part.get("type") != "input_text"
-            or not isinstance(part.get("text"), str)
-            for part in content
-        ):
-            raise AppError(422, "ai_cli_attachment_unsupported")
-    return json.dumps(
-        {"instructions": instructions, "messages": messages}, ensure_ascii=False
-    ).encode("utf-8")
-
-
 def final_message(events: list[dict], exit_code: int, *, native=False) -> str:
     """A completed turn and a nonempty final agent message are both required."""
     if exit_code or any(e.get("type") == "turn.failed" for e in events):
@@ -292,6 +280,8 @@ def _execute(
     redact_key="",
     instructions=None,
     images=(),
+    reading_files=None,
+    reading_guidance="",
 ):
     """Internal fixed runner; public entry points must pass runtime acceptance first."""
     executable = Settings().ai_cli_executable
@@ -304,15 +294,6 @@ def _execute(
     work.mkdir()
     original_input_bytes = len(payload)
     try:
-        # This config contains no credentials; env_key names a single child-only variable.
-        config = {
-            "name": "Verity controlled provider",
-            "base_url": base_url,
-            "env_key": "VERITY_CODEX_KEY",
-            "wire_api": "responses",
-        }
-        if probe:
-            config.update(request_max_retries=0, stream_max_retries=0)
         args = [
             str(executable),
             "exec",
@@ -324,73 +305,36 @@ def _execute(
             "--skip-git-repo-check",
             "--color",
             "never",
-            "--sandbox",
-            "read-only",
             "--cd",
             str(work),
             "--model",
             model,
-            "-c",
-            'model_provider="verity"',
-            "-c",
-            "model_providers.verity="
-            + "{"
-            + ",".join(k + "=" + json.dumps(v) for k, v in config.items())
-            + "}",
-            "-c",
-            'approval_policy="never"',
-            "-c",
-            'web_search="disabled"',
-            "-c",
-            "features.shell_tool=false",
-            "-c",
-            "features.multi_agent=false",
-            "-c",
-            "features.apply_patch_freeform=false",
-            "-c",
-            "features.view_image=false",
-            "-c",
-            "mcp_servers={}",
-            "-c",
-            "plugins={}",
-            "-c",
-            "project_doc_max_bytes=0",
         ]
-        if effort != "default":
-            args += ["-c", "model_reasoning_effort=" + json.dumps(effort)]
-        if not probe:
-            sandbox = args.index("--sandbox")
-            del args[sandbox : sandbox + 2]
-            permissions = {":root": "deny", ":minimal": "read", str(work): "read"}
-            args += [
-                "-c",
-                'default_permissions="verity"',
-                "-c",
-                "permissions.verity.filesystem={"
-                + ",".join(
-                    json.dumps(path) + "=" + json.dumps(access)
-                    for path, access in permissions.items()
-                )
-                + "}",
-                "-c",
-                "permissions.verity.network.enabled=false",
-            ]
+        instruction_file = None
         if probe or instructions is not None:
             instruction_file = state / "instructions.txt"
             instruction_file.write_text(
                 codex_probe.INSTRUCTIONS if probe else instructions, encoding="utf-8"
             )
-            args += [
-                "-c",
-                "model_instructions_file=" + json.dumps(str(instruction_file)),
-            ]
         if probe:
-            args += ["-c", "model_post_turn_compact_threshold_percent=0"]
-        if not probe and instructions is not None and len(payload.decode("utf-8")) > STDIN_LIMIT:
+            args += ["--sandbox", "read-only"]
+        args += codex_config.build(
+            "probe" if probe else "exec", work, base_url, effort, instruction_file
+        )
+        if (
+            not probe
+            and instructions is not None
+            and (reading_files is not None or len(payload.decode("utf-8")) > STDIN_LIMIT)
+        ):
             complete_payload = payload
             (work / "input.json").write_bytes(complete_payload)
             digest = hashlib.sha256(complete_payload).hexdigest()
-            index = cli_reading.build(work)
+            if reading_files is None:
+                index = cli_reading.build(work)
+                guidance = cli_reading.GUIDANCE.format(index=index)
+            else:
+                index = cli_reading.build_files(work, reading_files, reading_guidance)
+                guidance = cli_reading.structured_guidance(index)
             mcp = codex_filesystem.configuration(work)
             args += [
                 "-c",
@@ -407,7 +351,7 @@ def _execute(
                 "文件以UTF-8保存，由标准工具读取；来源之间的关联需结合完整原文判断，"
                 "不得将未读部分声称已核查。文件保留全部原角色、资料、路径和引用。"
                 f"总字节数={len(complete_payload)}，SHA256={digest}。"
-                + cli_reading.GUIDANCE.format(index=index)
+                + guidance
                 + "结合固定Skill完成业务分析，仅输出最终契约结果。"
             ).encode()
         image_arguments = []
@@ -575,10 +519,13 @@ def _execute(
 
 
 def analyze(base_url, model, key, effort, instructions, content, **kwargs):
-    instructions, payload, images = native_input(
-        instructions,
-        [*(kwargs.pop("instruction_messages", None) or []), {"role": "user", "content": content}],
-    )
+    messages = [
+        *(kwargs.pop("instruction_messages", None) or []),
+        {"role": "user", "content": content},
+    ]
+    instructions, payload, images = native_input(instructions, messages)
+    if kwargs.get("diagnostics") is not None:
+        kwargs["diagnostics"]["input_estimate"] = input_estimate.estimate(instructions, messages)
     require_available()
     return _execute(
         base_url, model, key, effort, payload, instructions=instructions, images=images, **kwargs

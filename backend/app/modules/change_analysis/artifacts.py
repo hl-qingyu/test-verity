@@ -1,12 +1,11 @@
 """Private atomic AI candidates and project-scoped, verified Git blob storage."""
 
-import os
 import re
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.core.files import atomic_write
 from app.integrations.github import blob_sha
 
 
@@ -18,27 +17,8 @@ def candidate_path(task_id: int) -> Path:
     return result_directory() / f"change-analysis-{task_id}-ai-candidate.txt"
 
 
-def _save(target: Path, content: bytes, error_code: str) -> Path:
-    directory = target.parent
-    temporary = None
-    try:
-        directory.mkdir(parents=True, exist_ok=True)
-        with NamedTemporaryFile(dir=directory, prefix=f".{target.name}.", delete=False) as output:
-            temporary = Path(output.name)
-            output.write(content)
-        os.replace(temporary, target)
-        return target
-    except OSError:
-        if temporary is not None:
-            try:
-                temporary.unlink(missing_ok=True)
-            except OSError:
-                pass
-        raise AppError(503, error_code) from None
-
-
 def save_candidate(task_id: int, content: str) -> Path:
-    return _save(
+    return atomic_write(
         candidate_path(task_id), content.encode("utf-8"), "change_candidate_storage_unavailable"
     )
 
@@ -50,7 +30,7 @@ def batch_candidate_path(task_id: int, batch_id: int) -> Path:
 
 
 def save_batch_candidate(task_id: int, batch_id: int, content: str) -> Path:
-    return _save(
+    return atomic_write(
         batch_candidate_path(task_id, batch_id),
         content.encode("utf-8"),
         "change_candidate_storage_unavailable",
@@ -77,4 +57,6 @@ def load_blob(project_id: int, repository_id: int, sha: str) -> bytes | None:
 def save_blob(project_id: int, repository_id: int, sha: str, content: bytes) -> None:
     if blob_sha(content) != sha:
         raise AppError(502, "github_invalid_response")
-    _save(_blob_path(project_id, repository_id, sha), content, "change_source_storage_unavailable")
+    atomic_write(
+        _blob_path(project_id, repository_id, sha), content, "change_source_storage_unavailable"
+    )

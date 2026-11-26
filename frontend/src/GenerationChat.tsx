@@ -1,3 +1,4 @@
+import { usePolling } from './usePolling';
 import { useEffect, useRef, useState } from 'react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { apiRequest } from './api/http';
@@ -88,22 +89,30 @@ export function GenerationChat({
     alive = useRef(true),
     requestId = useRef('');
   const base = `${generationBase(projectId)}/${runId}/chat`;
+  const [reload, setReload] = useState(0);
+  const active = turns.some((t) => ['QUEUED', 'RUNNING'].includes(t.status));
   useEffect(() => {
     alive.current = true;
     const c = new AbortController();
     controller.current = c;
-    let loading = false;
-    async function read() {
-      if (loading || c.signal.aborted) return;
-      loading = true;
+    return () => {
+      alive.current = false;
+      c.abort();
+    };
+  }, [base, functionKey]);
+  usePolling({
+    active,
+    interval: 2500,
+    refreshKey: base + ':' + functionKey + ':' + reload,
+    load: async (signal) => {
       try {
         const result = parse(
           await apiRequest<unknown>(`${base}?function_key=${encodeURIComponent(functionKey)}`, {
-            signal: c.signal,
+            signal: signal,
           }),
           functionKey,
         );
-        if (!c.signal.aborted) {
+        if (!signal.aborted) {
           setTurns((old) =>
             [...old.filter((t) => !result.items.some((n) => n.id === t.id)), ...result.items].sort(
               (a, b) => a.id - b.id,
@@ -112,19 +121,10 @@ export function GenerationChat({
           setHasMore(result.hasMore);
         }
       } catch (e) {
-        if (!c.signal.aborted) setError(generationError(e, onSessionEnd));
-      } finally {
-        loading = false;
+        if (!signal.aborted) setError(generationError(e, onSessionEnd));
       }
-    }
-    void read();
-    const timer = window.setInterval(() => void read(), 2500);
-    return () => {
-      alive.current = false;
-      c.abort();
-      window.clearInterval(timer);
-    };
-  }, [base, functionKey, onSessionEnd]);
+    },
+  });
   async function send(path: string, body?: unknown) {
     if (busy) return;
     setBusy(true);
@@ -135,6 +135,7 @@ export function GenerationChat({
         signal: controller.current?.signal,
         body: body === undefined ? undefined : JSON.stringify(body),
       });
+      if (alive.current) setReload((value) => value + 1);
       if (alive.current && path === '') {
         setQuestion('');
         requestId.current = '';
@@ -145,7 +146,6 @@ export function GenerationChat({
       if (alive.current) setBusy(false);
     }
   }
-  const active = turns.some((t) => ['QUEUED', 'RUNNING'].includes(t.status));
   return (
     <section className={`panel generation-chat-main${terminal ? ' cli-terminal-chat' : ''}`}>
       <div className="panel-head">

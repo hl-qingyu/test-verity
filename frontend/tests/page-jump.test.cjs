@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -10,28 +11,31 @@ function harness(props = {}) {
     key;
   const changes = [],
     exports = {};
-  const code = ts.transpileModule(
+  const code = compileModule(
     fs.readFileSync(path.resolve(__dirname, '../src/PageJump.tsx'), 'utf8'),
     {
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
     },
   ).outputText;
-  new Function('exports', 'require', code)(exports, (name) =>
-    name === 'react'
-      ? {
-          useId: () => 'jump-test',
-          useState(initial) {
-            const i = cursor++;
-            if (!(i in state)) state[i] = initial;
-            return [
-              state[i],
-              (v) => {
-                state[i] = v;
-              },
-            ];
-          },
-        }
-      : require(name),
+  evaluateModule(
+    code,
+    (name) =>
+      name === 'react'
+        ? {
+            useId: () => 'jump-test',
+            useState(initial) {
+              const i = cursor++;
+              if (!(i in state)) state[i] = initial;
+              return [
+                state[i],
+                (v) => {
+                  state[i] = v;
+                },
+              ];
+            },
+          }
+        : require(name),
+    exports,
   );
   const options = { page: 1, pages: 9, onChange: (page) => changes.push(page), ...props };
   function render() {

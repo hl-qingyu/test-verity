@@ -1,7 +1,7 @@
 # 需求分析页面（人工维护阶段）
 
 <!-- document-status:start -->
-> **历史资料，不再作为当前开发或运行规则。** 旧人工验收点主页面已退役，底层保留能力不删除。 当前说明见[REQUIREMENT_RISK_REPORTS.md](REQUIREMENT_RISK_REPORTS.md)。 查阅分类见[文档整理清单](DOCUMENT_REVIEW.md)。
+> **历史资料。** 旧人工验收点主页面已退役，原 11 个读取及写入接口已移除。旧表、历史记录及资料删除时的引用计数仍保留。当前需求分析见[需求风险报告](REQUIREMENT_RISK_REPORTS.md)，文档分类见[整理清单](DOCUMENT_REVIEW.md)。
 <!-- document-status:end -->
 
 2026-09-15需求分析页面已切换为风险报告，支持两JSON导入、来源固定版本关联、功能/风险/报告/原文展示及人工处理。旧验收点版页面和v2分析入口已移除，不兼容导入，不接AI。旧数据不自动迁移成新报告。当前说明见[REQUIREMENT_RISK_REPORTS.md](REQUIREMENT_RISK_REPORTS.md)，下文为旧人工验收点功能记录。

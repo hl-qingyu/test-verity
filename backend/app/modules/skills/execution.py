@@ -5,11 +5,12 @@ from datetime import UTC, datetime
 from time import monotonic
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy import select, update
+from sqlalchemy import update
 
 from app.core.errors import AppError
 from app.db.models import SkillChatTurn, UserAccount
 from app.integrations import ai_client as responses
+from app.modules.ai import task_lifecycle
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.skills import files, service
@@ -40,31 +41,8 @@ def parse_answer(raw):
 
 
 def recover(db):
-    db.execute(
-        update(SkillChatTurn)
-        .where(SkillChatTurn.status == "RUNNING")
-        .values(
-            status="FAILED", error_code="skill_worker_interrupted", updated_at=datetime.now(UTC)
-        )
-    )
+    task_lifecycle.mark_interrupted(db, (SkillChatTurn,), "skill_worker_interrupted")
     db.commit()
-
-
-def claim(db):
-    row = db.scalar(
-        select(SkillChatTurn)
-        .where(SkillChatTurn.status == "QUEUED")
-        .order_by(SkillChatTurn.id)
-        .with_for_update(skip_locked=True)
-        .limit(1)
-    )
-    if row is None:
-        db.rollback()
-        return None
-    row.status, row.updated_at = "RUNNING", datetime.now(UTC)
-    ident = row.id
-    db.commit()
-    return ident
 
 
 def execute(turn_id, session_factory):

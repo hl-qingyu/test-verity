@@ -15,7 +15,7 @@ from app.db.models import (
     CaseGenerationRun,
     UserAccount,
 )
-from app.integrations import ai_client, codex_terminal
+from app.integrations import codex_terminal
 from app.modules.ai import native_terminal as shared_terminal
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration, configuration_snapshot
@@ -190,12 +190,17 @@ def start(project_id, run_id, payload, actor, db):
     ):
         raise AppError(409, "generation_chat_busy")
     sources.recheck(project_id, run.metadata_snapshot, actor, db)
+    identity = main["terminal"]["identity"]
+    thread_id = codex_terminal.history_thread(identity, main["terminal"]["execution"])
     prior = (
         db.get(CaseGenerationChatTurn, previous["id"])
         if previous and previous["terminal"]["identity"] == main["terminal"]["identity"]
         else None
     )
-    if prior:
+    if thread_id:
+        context = {"native_terminal": {"identity": identity, "thread_id": thread_id}}
+        config_snapshot = configuration_snapshot(config)
+    elif prior:
         analysis_configuration(actor, db, prior.ai_config)
         context = copy.deepcopy(prior.context)
         config_snapshot = copy.deepcopy(prior.ai_config)
@@ -318,21 +323,18 @@ def execute(turn_id, factory, *, save_completed_turns):
                     logger.warning("Could not save native generation results for chat %s", turn_id)
                     finished.clear()
 
-        ai_client.terminal(
-            config["base_url"],
-            config["model"],
+        if not spec["resume"]:
+            raise AppError(409, "generation_terminal_not_started")
+        shared_terminal.resume_session(
+            config,
             key,
-            config["reasoning_effort"],
-            identity=spec["identity"],
-            execution=turn_id,
-            instructions=context.get("skill", {}).get("instructions", ""),
-            fixed_input={k: v for k, v in context.items() if k != "native_terminal"},
-            resume=spec["resume"],
-            rows=spec["rows"],
-            cols=spec["cols"],
-            on_progress=check,
+            {**spec, "execution": turn_id},
+            check,
+            legacy_context={k: v for k, v in context.items() if k != "native_terminal"}
+            if not spec.get("thread_id")
+            else None,
+            legacy_instructions=context.get("skill", {}).get("instructions", ""),
         )
-        check(force=True)
         with factory() as db:
             turn = db.get(CaseGenerationChatTurn, turn_id, with_for_update=True)
             if turn.status == "RUNNING":

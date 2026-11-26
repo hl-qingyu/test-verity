@@ -6,6 +6,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import select
 
+from app.core.errors import AppError
 from app.db.models import CaseGenerationBatch, CaseGenerationRun
 from app.modules.case_generation import contract, service, sources
 from app.modules.cases import service as cases
@@ -17,6 +18,9 @@ from app.modules.requirements import analysis_materials
 
 
 def pairs(data, report):
+    contract.require(isinstance(data, dict) and isinstance(report, dict))
+    if data.get("contract_version") == 2 or report.get("contract_version") == 2:
+        raise AppError(422, "generation_legacy_contract_import_unsupported")
     if data.get("analysis_type") != "CASE_GENERATION_BUNDLE":
         return [(data, report)]
     fields = {"analysis_type", "contract_version", "project_id", "request_id", "batches"}
@@ -36,6 +40,10 @@ def pairs(data, report):
         contract.require(set(item) == {"batch_ref", "request_id", "status", "input"})
         other = outputs[ref]
         contract.require(set(other) == {"batch_ref", "request_id", "status", "report"})
+        if item["input"].get("contract_version") == 2 or (
+            isinstance(other["report"], dict) and other["report"].get("contract_version") == 2
+        ):
+            raise AppError(422, "generation_legacy_contract_import_unsupported")
         contract.require(
             item["request_id"] == other["request_id"]
             and item["input"]["request_id"] == item["request_id"]

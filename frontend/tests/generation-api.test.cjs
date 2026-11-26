@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
@@ -6,11 +7,11 @@ const { test } = require('node:test'),
 function load(name, overrides = {}) {
   const file = path.resolve(__dirname, '../src', name),
     exports = {};
-  const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const source = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  new Function('exports', 'require', source)(
-    exports,
+  evaluateModule(
+    source,
     (n) =>
       overrides[n] ||
       (n.startsWith('.')
@@ -20,6 +21,7 @@ function load(name, overrides = {}) {
             overrides,
           )
         : require(n)),
+    exports,
   );
   return exports;
 }

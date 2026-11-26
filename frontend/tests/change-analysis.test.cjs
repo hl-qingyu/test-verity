@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -7,7 +8,7 @@ const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 function load(file, overrides = {}) {
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const code = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
@@ -15,13 +16,17 @@ function load(file, overrides = {}) {
     },
   }).outputText;
   const exports = {};
-  new Function('exports', 'require', code)(exports, (name) => {
-    if (overrides[name]) return overrides[name];
-    if (name.endsWith('.css')) return {};
-    if (!name.startsWith('.')) return require(name);
-    const base = path.resolve(path.dirname(file), name);
-    return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), overrides);
-  });
+  evaluateModule(
+    code,
+    (name) => {
+      if (overrides[name]) return overrides[name];
+      if (name.endsWith('.css')) return {};
+      if (!name.startsWith('.')) return require(name);
+      const base = path.resolve(path.dirname(file), name);
+      return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), overrides);
+    },
+    exports,
+  );
   return exports;
 }
 const source = (name) => path.resolve(__dirname, '../src', name);
@@ -30,10 +35,8 @@ const api = load(source('changeAnalysisPage.ts'));
 test('cancelled entry requests restart immediately and stale completion cannot unlock the new request', async () => {
   const slots = new Map(),
     effects = [],
-    timers = new Map(),
     pending = [];
-  let hook = 0,
-    nextTimer = 0;
+  let hook = 0;
   const hooks = {
     ...React,
     useEffect: (setup) => effects.push(setup),
@@ -51,14 +54,9 @@ test('cancelled entry requests restart immediately and stale completion cannot u
       ];
     },
   };
-  const originalInterval = global.setInterval,
-    originalClear = global.clearInterval;
-  global.setInterval = (callback) => {
-    const id = ++nextTimer;
-    timers.set(id, callback);
-    return id;
-  };
-  global.clearInterval = (id) => timers.delete(id);
+  const originalWindow = global.window;
+  const browser = new EventTarget();
+  global.window = browser;
   try {
     const liveApi = load(source('changeAnalysisApi.ts'));
     const { ChangeAnalysis } = load(source('ChangeAnalysis.tsx'), {
@@ -84,7 +82,7 @@ test('cancelled entry requests restart immediately and stale completion cannot u
     assert.equal(pending[1].signal.aborted, false);
     pending[0].reject(new DOMException('aborted', 'AbortError'));
     await new Promise(setImmediate);
-    [...timers.values()][0]();
+    browser.dispatchEvent(new Event('focus'));
     assert.equal(pending.length, 2, 'old finally must not unlock the active request');
     const summary = {
       id: '4',
@@ -96,12 +94,12 @@ test('cancelled entry requests restart immediately and stale completion cannot u
     pending[1].resolve({ items: [summary], has_more: false });
     await new Promise(setImmediate);
     const unchangedRows = slots.get(0);
-    [...timers.values()][0]();
+    browser.dispatchEvent(new Event('focus'));
     assert.equal(pending.length, 3);
     pending[2].resolve({ items: [{ ...summary }], has_more: false });
     await new Promise(setImmediate);
     assert.equal(slots.get(0), unchangedRows, 'unchanged polling must preserve loaded rows');
-    [...timers.values()][0]();
+    browser.dispatchEvent(new Event('focus'));
     pending[3].resolve({ items: [{ ...summary, updatedAt: 'new', revision: 2 }], has_more: false });
     await new Promise(setImmediate);
     assert.notEqual(slots.get(0), unchangedRows);
@@ -118,7 +116,7 @@ test('cancelled entry requests restart immediately and stale completion cannot u
         context: ['fixed source'],
       },
     ]);
-    [...timers.values()][0]();
+    browser.dispatchEvent(new Event('focus'));
     pending[4].resolve({
       items: [
         {
@@ -141,10 +139,8 @@ test('cancelled entry requests restart immediately and stale completion cannot u
     assert.deepEqual(slots.get(0)[0].pairs, ['fixed pair']);
     assert.deepEqual(slots.get(0)[0].context, ['fixed source']);
     restartedCleanup.forEach((cleanup) => cleanup?.());
-    assert.equal(timers.size, 0);
   } finally {
-    global.setInterval = originalInterval;
-    global.clearInterval = originalClear;
+    global.window = originalWindow;
   }
 });
 
@@ -241,7 +237,20 @@ function payload() {
 function record() {
   const p = payload();
   return {
-    ...api.parseChangePreview(JSON.stringify(p.input), JSON.stringify(p.report), 1),
+    origin: 'PREVIEW',
+    projectId: 1,
+    mode: p.input.mode,
+    pairs: p.input.comparison_pairs,
+    targets: p.input.targets.map((t) => t.name),
+    context: p.input.context,
+    focus: p.input.focus || '',
+    changes: p.report.changes,
+    impacts: p.report.risks,
+    regressions: p.report.regression_scope,
+    handling: {},
+    chatDraft: '',
+    inputText: JSON.stringify(p.input),
+    reportText: JSON.stringify(p.report),
     id: 'record-1',
     title: '核销变化',
     createdAt: '2026-10-08T00:00:00Z',
@@ -274,55 +283,11 @@ test('page preflight rejects missing target-side code, same versions and unconfi
   );
 });
 
-test('paired display parser rejects wrong identities, duplicate IDs, dangling refs and malformed evidence', () => {
-  const p = payload(),
-    parse = (input = p.input, report = p.report) =>
-      api.parseChangePreview(JSON.stringify(input), JSON.stringify(report), 1);
-  assert.equal(parse().regressions.length, 12);
-  assert.throws(() => parse({ ...p.input, project_id: 2 }), /项目/);
-  assert.throws(() => parse(p.input, { ...p.report, request_id: 'other' }), /request_id/);
-  assert.throws(() => parse({ ...p.input, contract_version: 2 }), /展示格式/);
-  assert.throws(
-    () => parse(p.input, { ...p.report, risks: [{ ...p.report.risks[0], chain: 'bad' }] }),
-    /列表/,
-  );
-  assert.throws(
-    () =>
-      parse(p.input, {
-        ...p.report,
-        risks: [{ ...p.report.risks[0], key: p.report.changes[0].key }],
-      }),
-    /重复/,
-  );
-  assert.throws(
-    () =>
-      parse(p.input, { ...p.report, risks: [{ ...p.report.risks[0], change_keys: ['missing'] }] }),
-    /不存在/,
-  );
-  assert.throws(() => parse({ ...p.input, comparison_pairs: [] }), /范围/);
-  assert.throws(
-    () => parse(p.input, { ...p.report, changes: [{ key: '__proto__', title: '', text: '' }] }),
-    /不能为空/,
-  );
-});
-
-test('unchanged items are excluded, complete export preserves all pages and raw files stay unchanged', () => {
+test('change list excludes unchanged items without mutating the original report export', () => {
   const r = record(),
     fixed = r.reportText;
-  r.changes.push({
-    ...r.changes[0],
-    key: 'KEEP-1',
-    title: '未变旧规则不应铺开',
-    kind: '旧规则保留',
-  });
+  r.changes = [...r.changes, { ...r.changes[0], key: 'KEEP-1', kind: '旧规则保留' }];
   assert.equal(api.changeItems(r, 'changes').length, 3);
-  r.handling['RG-012'] = [{ status: '采纳', note: '纳入人工回归', time: 'today' }];
-  const markdown = api.changeMarkdown(r);
-  assert.match(markdown, /RG-001/);
-  assert.match(markdown, /RG-012/);
-  assert.match(markdown, /纳入人工回归/);
-  assert.ok(!markdown.includes('未变旧规则不应铺开'));
-  assert.match(markdown, /旧问题不自动关闭/);
   assert.equal(r.reportText, fixed);
 });
 
@@ -366,13 +331,14 @@ test('React page keeps reviewed layout, escapes fixed content and exposes persis
   );
   assert.match(draft, /后台任务尚未完成/);
   assert.ok(!draft.includes('<strong>0</strong>'));
-  const app = fs.readFileSync(source('App.tsx'), 'utf8');
-  assert.match(app, /path="\/changes"/);
-  assert.match(
-    fs.readFileSync(source('ChangeAnalysis.tsx'), 'utf8'),
-    /props\.user\.id.*props\.project\?\.id/,
-  );
-  assert.ok(!fs.readFileSync(source('ChangeAnalysis.tsx'), 'utf8').includes('localStorage'));
+  const { ChangeAnalysis: KeyedChangeAnalysis } = load(source('ChangeAnalysis.tsx'), {
+    react: { ...React, useState: (initial) => [initial, () => {}] },
+  });
+  const key = (project, user) =>
+    KeyedChangeAnalysis({ project: { id: project }, user: { id: user } }).key;
+  assert.equal(key(1, 7), key(1, 7));
+  assert.notEqual(key(1, 7), key(2, 7));
+  assert.notEqual(key(1, 7), key(1, 8));
 });
 
 test('failed preparation shows retry and explains original-scope preparation without replacing history', () => {
@@ -439,7 +405,6 @@ test('legacy batch progress remains readable while retry uses the complete fixed
     input,
     report: {},
     handling: {},
-    can_start: true,
     batches: {
       total: 2,
       completed: 0,
@@ -461,7 +426,6 @@ test('legacy batch progress remains readable while retry uses the complete fixed
   });
   const parsed = live.parseChangeDetail(details, 1);
   assert.equal(parsed.batches.total, 2);
-  assert.equal(parsed.can_start, true);
   assert.throws(() =>
     live.parseChangeDetail({ ...details, batches: { ...details.batches, completed: 1 } }, 1),
   );
@@ -486,7 +450,6 @@ test('legacy batch progress remains readable while retry uses the complete fixed
         {
           ...parsed,
           status: 'COMPLETED',
-          can_start: false,
           can_retry: true,
           batches: { ...parsed.batches, completed: 1, failed: 1 },
         },
@@ -523,7 +486,6 @@ test('association plan validates stages, dependencies and chargeable calls while
     input,
     report: {},
     handling: {},
-    can_start: true,
     batches: {
       version: 2,
       total: 3,
@@ -657,9 +619,7 @@ test('association plan validates stages, dependencies and chargeable calls while
   const old = renderToStaticMarkup(
     React.createElement(ChangeAnalysis, {
       ...props,
-      rows: [
-        { ...parsed, status: 'CANCELLED', can_start: false, can_retry: true, retry_replan: true },
-      ],
+      rows: [{ ...parsed, status: 'CANCELLED', can_retry: true, retry_replan: true }],
     }),
   );
   assert.match(old, /完整输入重新分析（1次调用）/);
@@ -672,7 +632,6 @@ test('association plan validates stages, dependencies and chargeable calls while
         {
           ...parsed,
           status: 'COMPLETED',
-          can_start: false,
           targetResults: [
             { name: '代码Bug', status: 'BLOCKED', note: '仅本批固定范围，关联证据尚未复核。' },
           ],
@@ -707,7 +666,6 @@ test('legacy V2 full-input retry creates one request and never continues a saved
     status: 'CANCELLED',
     loaded: true,
     can_retry: true,
-    can_start: true,
     retry_replan: true,
     batches: {
       version: 2,
@@ -739,7 +697,6 @@ test('legacy V2 full-input retry creates one request and never continues a saved
           status: 'QUEUED',
           batches: undefined,
           can_retry: false,
-          can_start: false,
         };
       },
     },

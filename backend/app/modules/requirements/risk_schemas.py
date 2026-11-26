@@ -1,4 +1,4 @@
-"""Skill v3 report import: structure and internal references, never original-source proof."""
+"""Requirement-risk contracts and validation of fixed evidence references."""
 
 import re
 from copy import deepcopy
@@ -113,18 +113,25 @@ class Coverage(Strict):
     limitation: Text
 
 
+LimitationKind = Literal[
+    "UNREADABLE",
+    "NOT_LOADED",
+    "PARTIAL_CONTENT",
+    "MISSING_RELATED_MATERIAL",
+    "OUT_OF_SCOPE",
+    "INVALID_INPUT",
+]
+
+
 class Limitation(Strict):
-    kind: Literal[
-        "UNREADABLE",
-        "NOT_LOADED",
-        "PARTIAL_CONTENT",
-        "MISSING_RELATED_MATERIAL",
-        "OUT_OF_SCOPE",
-        "INVALID_INPUT",
-    ]
+    kind: LimitationKind
     source_ids: list[Key]
     detail: Nonempty
     effect: Nonempty
+
+
+class LimitationV4(Limitation):
+    kind: LimitationKind | Literal["NOT_PROCESSED"]
 
 
 class Summary(Strict):
@@ -133,16 +140,45 @@ class Summary(Strict):
     priority_risk_keys: list[Key]
 
 
-class Report(Strict):
-    contract_version: Literal[3]
+Outcome = Literal["COMPLETE", "PARTIAL", "BLOCKED"]
+
+
+class ReportBody(Strict):
     request_id: Key
-    outcome: Literal["COMPLETE", "PARTIAL", "BLOCKED"]
     summary: Summary
     functions: list[Function]
     risks: list[Risk]
     optional_suggestions: list[Suggestion]
+
+
+class Report(ReportBody):
+    contract_version: Literal[3]
+    outcome: Outcome
     coverage: list[Coverage]
     limitations: list[Limitation]
+
+
+class CandidateV4(ReportBody):
+    contract_version: Literal[4]
+    limitations: list[LimitationV4]
+
+
+class SegmentV4(Strict):
+    segment_id: Key
+    disposition: Literal["REFERENCED", "UNREFERENCED"]
+    function_keys: list[Key]
+    risk_keys: list[Key]
+
+
+class CoverageV4(Strict):
+    source_id: Key
+    segments: list[SegmentV4]
+    limitation: Text
+
+
+class ReportV4(CandidateV4):
+    outcome: Outcome
+    coverage: list[CoverageV4]
 
 
 class InputSegment(Strict):
@@ -164,7 +200,7 @@ class Material(Strict):
 
 
 class AnalysisInput(Strict):
-    contract_version: Literal[3]
+    contract_version: Literal[3, 4]
     request_id: Key
     project_id: Annotated[int, Field(gt=0)] | None
     revision: Annotated[int, Field(ge=0)] | None
@@ -317,7 +353,7 @@ def normalize_comparison_text(raw: dict) -> tuple[dict, list[dict]]:
     return result, corrections
 
 
-def normalize_function_risks(report: Report) -> tuple[Report, list[dict]]:
+def normalize_function_risks[T: ReportBody](report: T) -> tuple[T, list[dict]]:
     """Derive the redundant function-side index from the risk's declared owners."""
     functions = unique(report.functions, "key", "functions")
     risks = unique(report.risks, "key", "risks")
@@ -338,7 +374,7 @@ def normalize_function_risks(report: Report) -> tuple[Report, list[dict]]:
 
 
 def validate_report(
-    report: Report,
+    report: Report | CandidateV4,
     input_data: AnalysisInput,
     project_id: int,
     review_warnings: list[dict] | None = None,
@@ -366,6 +402,12 @@ def validate_report(
         "invalid_revision",
     )
     require(report.request_id == input_data.request_id, "request_id", "request_mismatch")
+    require(
+        report.contract_version == input_data.contract_version,
+        "contract_version",
+        "version_mismatch",
+    )
+    legacy = isinstance(report, Report)
     inputs = unique(input_data.materials, "source_id", "input.materials")
     input_segments = {}
     for i, material in enumerate(input_data.materials):
@@ -386,75 +428,80 @@ def validate_report(
             )
         if material.read_state != "READABLE":
             require(bool(material.read_note.strip()), path, "limitation_required")
-            review(report.outcome != "COMPLETE", "outcome", "incomplete_coverage")
+            if legacy:
+                review(report.outcome != "COMPLETE", "outcome", "incomplete_coverage")
     functions = unique(report.functions, "key", "functions")
     risks = unique(report.risks, "key", "risks")
     unique(report.optional_suggestions, "key", "optional_suggestions")
-    sources = unique(report.coverage, "source_id", "coverage")
-    require(set(sources) <= set(inputs), "coverage", "unknown_reference")
-    review(set(sources) == set(inputs), "coverage", "source_coverage_mismatch")
     segments = {}
-    for i, cover in enumerate(report.coverage):
-        segments[cover.source_id] = unique(cover.segments, "segment_id", f"coverage[{i}].segments")
-        require(
-            set(segments[cover.source_id]) <= set(input_segments[cover.source_id]),
-            f"coverage[{i}].segments",
-            "unknown_reference",
-        )
-        review(
-            set(segments[cover.source_id]) == set(input_segments[cover.source_id]),
-            f"coverage[{i}].segments",
-            "segment_coverage_mismatch",
-            source_id=cover.source_id,
-        )
-        if inputs[cover.source_id].read_state != "READABLE":
+    if legacy:
+        sources = unique(report.coverage, "source_id", "coverage")
+        require(set(sources) <= set(inputs), "coverage", "unknown_reference")
+        review(set(sources) == set(inputs), "coverage", "source_coverage_mismatch")
+        for i, cover in enumerate(report.coverage):
+            segments[cover.source_id] = unique(
+                cover.segments, "segment_id", f"coverage[{i}].segments"
+            )
+            require(
+                set(segments[cover.source_id]) <= set(input_segments[cover.source_id]),
+                f"coverage[{i}].segments",
+                "unknown_reference",
+            )
             review(
-                bool(cover.limitation.strip())
-                and any(cover.source_id in limit.source_ids for limit in report.limitations),
-                f"coverage[{i}]",
-                "limitation_required",
+                set(segments[cover.source_id]) == set(input_segments[cover.source_id]),
+                f"coverage[{i}].segments",
+                "segment_coverage_mismatch",
                 source_id=cover.source_id,
             )
-        if not cover.segments:
-            review(bool(cover.limitation.strip()), f"coverage[{i}]", "limitation_required")
-            review(report.outcome != "COMPLETE", "outcome", "incomplete_coverage")
-        for j, segment in enumerate(cover.segments):
-            path = f"coverage[{i}].segments[{j}]"
-            refs(segment.function_keys, functions, path)
-            refs(segment.risk_keys, risks, path)
-            if segment.disposition != "REVIEWED":
+            if inputs[cover.source_id].read_state != "READABLE":
                 review(
-                    not segment.function_keys and not segment.risk_keys,
-                    path,
-                    "invalid_coverage",
+                    bool(cover.limitation.strip())
+                    and any(cover.source_id in limit.source_ids for limit in report.limitations),
+                    f"coverage[{i}]",
+                    "limitation_required",
                     source_id=cover.source_id,
-                    segment_id=segment.segment_id,
                 )
-            if segment.disposition == "UNPROCESSED":
+            if not cover.segments:
+                review(bool(cover.limitation.strip()), f"coverage[{i}]", "limitation_required")
                 review(report.outcome != "COMPLETE", "outcome", "incomplete_coverage")
-            for key in segment.risk_keys:
-                review(
-                    bool(set(risks[key].function_keys) & set(segment.function_keys)),
-                    path,
-                    "invalid_coverage",
-                    source_id=cover.source_id,
-                    segment_id=segment.segment_id,
-                    risk_key=key,
-                )
+            for j, segment in enumerate(cover.segments):
+                path = f"coverage[{i}].segments[{j}]"
+                refs(segment.function_keys, functions, path)
+                refs(segment.risk_keys, risks, path)
+                if segment.disposition != "REVIEWED":
+                    review(
+                        not segment.function_keys and not segment.risk_keys,
+                        path,
+                        "invalid_coverage",
+                        source_id=cover.source_id,
+                        segment_id=segment.segment_id,
+                    )
+                if segment.disposition == "UNPROCESSED":
+                    review(report.outcome != "COMPLETE", "outcome", "incomplete_coverage")
+                for key in segment.risk_keys:
+                    review(
+                        bool(set(risks[key].function_keys) & set(segment.function_keys)),
+                        path,
+                        "invalid_coverage",
+                        source_id=cover.source_id,
+                        segment_id=segment.segment_id,
+                        risk_key=key,
+                    )
 
     def evidence(values: list[Evidence], path: str, risk_key=""):
         for e in values:
             original = input_segments.get(e.source_id, {}).get(e.segment_id)
             require(original is not None, path, "invalid_evidence")
-            segment = segments.get(e.source_id, {}).get(e.segment_id)
-            review(
-                segment is not None and segment.disposition == "REVIEWED",
-                path,
-                "invalid_evidence",
-                source_id=e.source_id,
-                segment_id=e.segment_id,
-                risk_key=risk_key,
-            )
+            if legacy:
+                segment = segments.get(e.source_id, {}).get(e.segment_id)
+                review(
+                    segment is not None and segment.disposition == "REVIEWED",
+                    path,
+                    "invalid_evidence",
+                    source_id=e.source_id,
+                    segment_id=e.segment_id,
+                    risk_key=risk_key,
+                )
             review(
                 original.location == e.location,
                 path,
@@ -482,11 +529,12 @@ def validate_report(
         path = f"functions[{i}]"
         refs(function.risk_keys, risks, path)
         evidence(function.evidence, path + ".evidence")
-        review(
-            any(function.key in s.function_keys for c in report.coverage for s in c.segments),
-            path,
-            "missing_coverage",
-        )
+        if legacy:
+            review(
+                any(function.key in s.function_keys for c in report.coverage for s in c.segments),
+                path,
+                "missing_coverage",
+            )
     for i, risk in enumerate(report.risks):
         path = f"risks[{i}]"
         refs(risk.function_keys, functions, path)
@@ -497,12 +545,13 @@ def validate_report(
                 path,
                 "inconsistent_reference",
             )
-        review(
-            any(risk.key in s.risk_keys for c in report.coverage for s in c.segments),
-            path,
-            "missing_coverage",
-            risk_key=risk.key,
-        )
+        if legacy:
+            review(
+                any(risk.key in s.risk_keys for c in report.coverage for s in c.segments),
+                path,
+                "missing_coverage",
+                risk_key=risk.key,
+            )
         if risk.basis == "SCOPE_GAP":
             review(
                 bool(risk.checked_scope),
@@ -512,17 +561,21 @@ def validate_report(
             )
         unique(risk.checked_scope, "source_id", path + ".checked_scope")
         for scope in risk.checked_scope:
-            refs(scope.segment_ids, segments.get(scope.source_id, {}), path + ".checked_scope")
-            review(
-                all(
-                    segments[scope.source_id][key].disposition == "REVIEWED"
-                    for key in scope.segment_ids
-                ),
-                path,
-                "invalid_coverage",
-                source_id=scope.source_id,
-                risk_key=risk.key,
+            scope_segments = segments if legacy else input_segments
+            refs(
+                scope.segment_ids, scope_segments.get(scope.source_id, {}), path + ".checked_scope"
             )
+            if legacy:
+                review(
+                    all(
+                        segments[scope.source_id][key].disposition == "REVIEWED"
+                        for key in scope.segment_ids
+                    ),
+                    path,
+                    "invalid_coverage",
+                    source_id=scope.source_id,
+                    risk_key=risk.key,
+                )
         if risk.type == "SOURCE_DIFFERENCE":
             review(
                 risk.source_comparison is not None, path, "comparison_required", risk_key=risk.key
@@ -533,9 +586,24 @@ def validate_report(
     for i, suggestion in enumerate(report.optional_suggestions):
         refs(suggestion.function_keys, functions, f"optional_suggestions[{i}]")
     for i, limitation in enumerate(report.limitations):
-        refs(limitation.source_ids, sources, f"limitations[{i}]")
-        if limitation.kind in ("UNREADABLE", "NOT_LOADED", "PARTIAL_CONTENT", "INVALID_INPUT"):
+        refs(limitation.source_ids, sources if legacy else inputs, f"limitations[{i}]")
+        if limitation.kind == "NOT_PROCESSED":
+            require(bool(limitation.source_ids), f"limitations[{i}].source_ids", "scope_required")
+        if legacy and limitation.kind in (
+            "UNREADABLE",
+            "NOT_LOADED",
+            "PARTIAL_CONTENT",
+            "INVALID_INPUT",
+        ):
             review(report.outcome != "COMPLETE", "outcome", "incomplete_coverage")
+    if not legacy:
+        if not any(material.segments for material in input_data.materials):
+            review(
+                not report.functions and not report.risks and not report.optional_suggestions,
+                "outcome",
+                "blocked_has_results",
+            )
+        return
     if report.outcome == "BLOCKED":
         review(
             not report.functions and not report.risks and not report.optional_suggestions,
@@ -555,3 +623,53 @@ def validate_report(
             "coverage",
             "no_reviewed_content",
         )
+
+
+def derive_report(candidate: CandidateV4, input_data: AnalysisInput) -> ReportV4:
+    """Project evidence into the fixed material order after reference validation."""
+    functions: dict[tuple[str, str], dict[str, None]] = {}
+    risks: dict[tuple[str, str], dict[str, None]] = {}
+    for function in candidate.functions:
+        for item in function.evidence:
+            functions.setdefault((item.source_id, item.segment_id), {})[function.key] = None
+    for risk in candidate.risks:
+        evidence = risk.evidence
+        if risk.source_comparison:
+            evidence = [
+                *evidence,
+                *(item for side in risk.source_comparison.sides for item in side.evidence),
+            ]
+        for item in evidence:
+            risks.setdefault((item.source_id, item.segment_id), {})[risk.key] = None
+
+    coverage = []
+    for material in input_data.materials:
+        segments = []
+        for segment in material.segments:
+            ref = (material.source_id, segment.segment_id)
+            segments.append(
+                SegmentV4(
+                    segment_id=segment.segment_id,
+                    disposition="REFERENCED"
+                    if ref in functions or ref in risks
+                    else "UNREFERENCED",
+                    function_keys=list(functions.get(ref, {})),
+                    risk_keys=list(risks.get(ref, {})),
+                )
+            )
+        coverage.append(
+            CoverageV4(
+                source_id=material.source_id,
+                segments=segments,
+                limitation=material.read_note if material.read_state != "READABLE" else "",
+            )
+        )
+
+    outcome: Outcome = "COMPLETE"
+    if not any(material.segments for material in input_data.materials):
+        outcome = "BLOCKED"
+    elif any(material.read_state != "READABLE" for material in input_data.materials) or any(
+        limitation.kind == "NOT_PROCESSED" for limitation in candidate.limitations
+    ):
+        outcome = "PARTIAL"
+    return ReportV4(**candidate.model_dump(), coverage=coverage, outcome=outcome)

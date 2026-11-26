@@ -371,22 +371,25 @@ class Coverage(Strict):
     limitation_refs: Refs
 
 
+LimitationCode = Literal[
+    "INVALID_INPUT",
+    "READ_GAP",
+    "SCOPE_GAP",
+    "MAPPING_UNCONFIRMED",
+    "MISSING_DEPENDENCY",
+    "AMBIGUOUS_RULE",
+    "UNPROCESSED",
+    "NO_CASE_SCOPE",
+    "HISTORY_NOT_CHECKED",
+    "ATTRIBUTION_GAP",
+    "VISUAL_NOT_PROVIDED",
+    "REVIEW_WARNING",
+]
+
+
 class Limitation(Strict):
     key: Key
-    code: Literal[
-        "INVALID_INPUT",
-        "READ_GAP",
-        "SCOPE_GAP",
-        "MAPPING_UNCONFIRMED",
-        "MISSING_DEPENDENCY",
-        "AMBIGUOUS_RULE",
-        "UNPROCESSED",
-        "NO_CASE_SCOPE",
-        "HISTORY_NOT_CHECKED",
-        "ATTRIBUTION_GAP",
-        "VISUAL_NOT_PROVIDED",
-        "REVIEW_WARNING",
-    ]
+    code: LimitationCode
     description: Text
     affects: list[str]
     needed: Text
@@ -398,8 +401,7 @@ class Summary(Strict):
     inheritance_note: Text
 
 
-class Report(Identity):
-    outcome: Status
+class ReportBody(Identity):
     summary: Summary
     target_results: list[TargetResult]
     changes: list[Change]
@@ -411,8 +413,29 @@ class Report(Identity):
     regression_scope: list[Regression]
     evidence: list[Evidence]
     chains: list[Chain]
-    coverage: list[Coverage]
     limitations: list[Limitation]
+
+
+class Report(ReportBody):
+    outcome: Status
+    coverage: list[Coverage]
+
+
+class EvidenceV3(Evidence):
+    segment_id: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+
+
+class LimitationV3(Limitation):
+    code: LimitationCode | Literal["NOT_ASSESSED"]
+    unit_refs: list[SubjectRef] = Field(default_factory=list)
+
+
+class CandidateV3(ReportBody):
+    contract_version: Literal[3]
+    evidence: list[EvidenceV3]
+    limitations: list[LimitationV3]
 
 
 def require(condition, code="change_evidence_invalid"):
@@ -557,8 +580,11 @@ def validate_input(data):
 
 def validate_report(data, report):
     validate_input(data)
-    for k in ("request_id", "project_id", "revision", "mode", "analysis_type", "contract_version"):
+    for k in ("request_id", "project_id", "revision", "mode", "analysis_type"):
         require(getattr(data, k) == getattr(report, k))
+    legacy = isinstance(report, Report)
+    if legacy:
+        require(data.contract_version == report.contract_version)
     snapshots, pairs = (
         index(data.snapshots, "snapshot_ref"),
         index(data.comparison_pairs, "pair_id"),
@@ -872,6 +898,19 @@ def validate_report(data, report):
                 )
             if c.assessment == "CONSISTENT":
                 require(c.evidence_refs and not c.risk_refs)
+    if not legacy:
+        for limit in report.limitations:
+            identities = [(ref.snapshot_ref, ref.unit_id) for ref in limit.unit_refs]
+            require(len(identities) == len(set(identities)))
+            require(
+                all(
+                    ref in snapshots and uid in index(snapshots[ref].units, "unit_id")
+                    for ref, uid in identities
+                )
+            )
+            if limit.code == "NOT_ASSESSED":
+                require(bool(identities))
+        return
     expected = {
         (p.pair_id, side, ref, u.unit_id)
         for p in pairs.values()

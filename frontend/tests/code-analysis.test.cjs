@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -7,7 +8,7 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 
 function load(file, overrides = {}) {
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const code = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
@@ -15,13 +16,17 @@ function load(file, overrides = {}) {
     },
   }).outputText;
   const exports = {};
-  new Function('exports', 'require', code)(exports, (name) => {
-    if (overrides[name]) return overrides[name];
-    if (name.endsWith('.css')) return {};
-    if (!name.startsWith('.')) return require(name);
-    const base = path.resolve(path.dirname(file), name);
-    return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), overrides);
-  });
+  evaluateModule(
+    code,
+    (name) => {
+      if (overrides[name]) return overrides[name];
+      if (name.endsWith('.css')) return {};
+      if (!name.startsWith('.')) return require(name);
+      const base = path.resolve(path.dirname(file), name);
+      return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), overrides);
+    },
+    exports,
+  );
   return exports;
 }
 const source = (name) => path.resolve(__dirname, '../src/', name);
@@ -334,8 +339,6 @@ test('new/import dialogs and file tree retain prototype controls and ordering', 
   assert.match(imported, /report.json/);
   assert.match(imported, /每份最大16MB/);
   assert.equal((imported.match(/选择文件/g) || []).length, 2);
-  assert.match(fs.readFileSync(source('CodeAnalysis.tsx'), 'utf8'), /AI候选原文/);
-  assert.match(fs.readFileSync(source('CodeAnalysis.tsx'), 'utf8'), /ai-candidate\.txt/);
   const tree = renderToStaticMarkup(
     React.createElement(CodeFileTree, {
       paths: ['src/a.py', 'src/b.py'],
@@ -360,24 +363,23 @@ test('new/import dialogs and file tree retain prototype controls and ordering', 
 });
 
 test('production layout follows prototype columns, statuses, scroll and narrow-screen rules', () => {
-  const code = fs.readFileSync(source('CodeAnalysis.tsx'), 'utf8');
-  assert.match(code, /重新校验候选/);
-  assert.match(code, /action\('revalidate'\)/);
   const css = fs.readFileSync(source('code-analysis.css'), 'utf8');
   assert.match(css, /grid-template-columns:\s*220px minmax\(0, 1fr\) 270px/);
   assert.match(css, /overflow-y:\s*scroll/);
   assert.match(css, /@media \(max-width: 680px\)/);
   assert.match(css, /\.code-target-detail/);
   assert.match(css, /\.code-evidence-chain/);
-  const main = fs.readFileSync(source('CodeAnalysis.tsx'), 'utf8');
-  for (const text of [
-    '新建代码分析',
-    '导入代码分析',
-    '历史对话',
-    '分析记录',
-    '本记录范围',
-    '查看分析内容',
-    'codeOutcomes',
-  ])
-    assert.ok(main.includes(text), text);
+  const { CodeAnalysis } = load(source('CodeAnalysis.tsx'));
+  const { MemoryRouter } = require('react-router-dom');
+  const markup = renderToStaticMarkup(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(CodeAnalysis, { project: { id: 1 }, user: { id: 1 }, onSessionEnd() {} }),
+    ),
+  );
+  assert.match(markup, /新建代码分析/);
+  assert.match(markup, /导入代码分析/);
+  assert.match(markup, /分析记录/);
+  assert.match(markup, /本记录范围/);
 });

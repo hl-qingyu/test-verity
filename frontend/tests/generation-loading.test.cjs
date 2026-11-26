@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
@@ -126,25 +127,31 @@ function harness(mode = 'remote', pageCache) {
     if (cache.has(file)) return cache.get(file);
     const exports = {};
     cache.set(file, exports);
-    const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    const code = compileModule(fs.readFileSync(file, 'utf8'), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         jsx: ts.JsxEmit.ReactJSX,
       },
     }).outputText;
-    new Function('exports', 'require', code)(exports, (name) => {
-      if (name === 'react') return react;
-      if (name === './generationApi') return api;
-      if (name === './generationRead')
-        return { generationCaseSnapshot: async () => ({ items: [], categories: [], revision: 0 }) };
-      if (name === './generationExport')
-        return { downloadGeneration: (...args) => downloads.push(args) };
-      if (name.endsWith('.css')) return {};
-      if (!name.startsWith('.')) return require(name);
-      const base = path.resolve(path.dirname(file), name);
-      return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'));
-    });
+    evaluateModule(
+      code,
+      (name) => {
+        if (name === 'react') return react;
+        if (name === './generationApi') return api;
+        if (name === './generationRead')
+          return {
+            generationCaseSnapshot: async () => ({ items: [], categories: [], revision: 0 }),
+          };
+        if (name === './generationExport')
+          return { downloadGeneration: (...args) => downloads.push(args) };
+        if (name.endsWith('.css')) return {};
+        if (!name.startsWith('.')) return require(name);
+        const base = path.resolve(path.dirname(file), name);
+        return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'));
+      },
+      exports,
+    );
     return exports;
   }
   const { CaseGeneration, GenerationWorkspace } = load(
@@ -256,7 +263,10 @@ function harness(mode = 'remote', pageCache) {
     return found;
   }
   const previousWindow = global.window;
+  const events = new EventTarget();
   global.window = {
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
     setInterval: (fn) => {
       timers.set(++timerId, fn);
       return timerId;
@@ -264,6 +274,7 @@ function harness(mode = 'remote', pageCache) {
     clearInterval: (id) => timers.delete(id),
   };
   return {
+    focus: () => events.dispatchEvent(new Event('focus')),
     render,
     settle,
     workspace,
@@ -443,6 +454,9 @@ test('entry reads summaries then only the selected detail; unchanged polls reuse
     assert.equal(h.workspace().detailLoading, false);
     h.tick();
     await h.settle();
+    assert.equal(h.summaryReads(), 1);
+    h.focus();
+    await h.settle();
     assert.equal(h.summaryReads(), 2);
     assert.equal(h.reads.length, 1);
     h.workspace().onSelectRecord('1');
@@ -455,7 +469,7 @@ test('entry reads summaries then only the selected detail; unchanged polls reuse
     await h.settle();
     assert.equal(h.reads.length, 2);
     h.summaries[0].refreshKey = 'b'.repeat(64);
-    h.tick();
+    h.focus();
     await h.settle();
     assert.equal(h.reads.length, 3);
     assert.equal(h.reads[2].id, '2');

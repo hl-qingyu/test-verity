@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -43,24 +44,28 @@ function harness(options = {}) {
     if (cache.has(name)) return cache.get(name);
     const exports = {};
     cache.set(name, exports);
-    const code = ts.transpileModule(fs.readFileSync(name, 'utf8'), {
+    const code = compileModule(fs.readFileSync(name, 'utf8'), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         jsx: ts.JsxEmit.ReactJSX,
       },
     }).outputText;
-    new Function('exports', 'require', code)(exports, (dep) => {
-      if (dep === 'react') return react;
-      if (dep === './CaseDialog') return { CaseDialog: 'dialog' };
-      if (dep === './Form') return { Form: 'form' };
-      if (dep === './FormSelect') return { FormSelect: 'select' };
-      if (dep === './FilePicker') return { FilePicker: 'file-picker' };
-      if (['./api/http', './generationApi', './codeAnalysisApi'].includes(dep)) return {};
-      if (!dep.startsWith('.')) return require(dep);
-      const file = path.resolve(path.dirname(name), dep);
-      return load(fs.existsSync(file + '.ts') ? file + '.ts' : file + '.tsx');
-    });
+    evaluateModule(
+      code,
+      (dep) => {
+        if (dep === 'react') return react;
+        if (dep === './CaseDialog') return { CaseDialog: 'dialog' };
+        if (dep === './Form') return { Form: 'form' };
+        if (dep === './FormSelect') return { FormSelect: 'select' };
+        if (dep === './FilePicker') return { FilePicker: 'file-picker' };
+        if (['./api/http', './generationApi', './codeAnalysisApi'].includes(dep)) return {};
+        if (!dep.startsWith('.')) return require(dep);
+        const file = path.resolve(path.dirname(name), dep);
+        return load(fs.existsSync(file + '.ts') ? file + '.ts' : file + '.tsx');
+      },
+      exports,
+    );
     return exports;
   }
   const api = load(path.resolve(__dirname, '../src/caseApi.ts')),

@@ -1,57 +1,21 @@
+const { load } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const path = require('node:path');
-const ts = require('typescript');
 function harness(response) {
-  const source = fs.readFileSync(path.resolve(__dirname, '../src/nativeTerminalApi.ts'), 'utf8');
-  const code = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS },
-  }).outputText;
-  const exports = {},
-    calls = [];
-  new Function('require', 'exports', code)(
-    () => ({
-      apiRequest: async (...args) => {
-        calls.push(args);
-        return response;
+  const calls = [];
+  return {
+    ...load(path.resolve(__dirname, '../src/nativeTerminalApi.ts'), {
+      './api/http': {
+        apiRequest: async (...args) => {
+          calls.push(args);
+          return response;
+        },
       },
     }),
-    exports,
-  );
-  return { ...exports, calls };
+    calls,
+  };
 }
-test('native terminal preserves original ANSI output and has no event label conversion', async () => {
-  const raw = '\x1b[?1049h\x1b[31mOpenAI Codex\x1b[0m\r\n> 中文';
-  const h = harness({
-    chunks: [raw],
-    next_cursor: 1,
-    has_more: false,
-    session: { id: 7, status: 'RUNNING', error_code: '' },
-  });
-  const signal = new AbortController().signal;
-  const result = await h.readNative('/terminal/7', 0, signal);
-  assert.deepEqual(result.chunks, [raw]);
-  assert.equal(h.calls[0][0], '/terminal/7?cursor=0');
-  assert.equal(h.calls[0][1].signal, signal);
-});
-test('native terminal rejects malformed output and missing session identity', async () => {
-  for (const response of [
-    { chunks: [{}], next_cursor: 1, has_more: false, session: null },
-    { chunks: ['raw'], next_cursor: 2, has_more: false, session: null },
-    {
-      chunks: [],
-      next_cursor: 0,
-      has_more: false,
-      session: { id: '7', status: 'RUNNING', error_code: '' },
-    },
-  ])
-    await assert.rejects(
-      harness(response).readNative('/terminal', 0, new AbortController().signal),
-      /generation_response_invalid/,
-    );
-});
-
 test('generation transport uses the batch namespace and retains attempt identity', () => {
   const h = harness(null);
   const session = h.sessionResponse({

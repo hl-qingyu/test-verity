@@ -1,10 +1,12 @@
-# 变更分析调用契约 v2
+# 变更分析调用契约 v3
 
-Skill `1.0.4`，2026-10-26。`analysis_type="CHANGE_IMPACT"`、`contract_version=2`。
+平台保存完整的 v2 根输入结构，并发送 contract_version=3 的差异优先视图。比较对只列变化映射，text_diffs.hunks 为带上下文的统一差异。未变代码与上下文代码可能标记 OMITTED_UNCHANGED 或 OMITTED_CONTEXT。CLI 可从任务目录读取完整双侧文件，API 局限说明列出只发送清单的范围。
 
-用户随后授权“接入变更分析”，平台已接本契约、后台分析/独立对话、严格导入、人工处理与完整导出。版本2明确区别原页面v1合成展示格式，不自动转换v1预览或修改需求v3/代码v2；实现状态和验证边界见[CHANGE_ANALYSIS.md](../../docs/CHANGE_ANALYSIS.md)。结构与权限错误硬拒绝，不把静态证据校验当推理正确或运行通过。
+Skill `2.0.0`。`analysis_type="CHANGE_IMPACT"`、`contract_version=3`。
 
-AI候选先原子保存原文；仅同一固定代码片段中的唯一完整原文行允许确定性校正行号/末尾LF，另存校正记录，原候选和输入不改。严格人工双JSON导入不做这项校正。历史问题只带入显式所选问题/处理快照与警示，未带旧正文时不证明修复。当前完整输入模式即使调用方文本diff为空，也交模型核对，不由平台提前判为已完成分析或零风险。
+用户随后授权“接入变更分析”，平台已接本契约、后台分析/独立对话、严格导入、人工处理与完整导出。旧版记录继续按其冻结契约读取；实现状态和验证边界见[CHANGE_ANALYSIS.md](../../docs/CHANGE_ANALYSIS.md)。结构与权限错误硬拒绝，不把静态证据校验当推理正确或运行通过。
+
+AI候选先原子保存原文；仅同一固定代码片段中的唯一完整原文行允许确定性校正行号/末尾LF，另存校正记录，原候选和输入不改。严格人工双JSON导入不做这项校正。历史问题只带入显式所选问题/处理快照与警示，未带旧正文时不证明修复。固定比较范围无变化时由平台保存已跳过分析的报告。
 
 ## 公共规则
 
@@ -12,9 +14,9 @@ AI候选先原子保存原文；仅同一固定代码片段中的唯一完整原
 
 key/ref非空且最长200字符；标题最长500字符，普通说明最长10000字符；原始片段text不套说明长度限制。标识不得重复，引用数组无重复且只能指向本次对象。不输出凭据、AI配置密钥、人工处理或任务运行状态。
 
-代码与文本统一LF；哈希由调用方对实际UTF-8内容计算SHA-256，不要求模型重新计算。2026-10-26用户要求系统减少自行判断、完整内容交给AI，并指出多次传输对应独立分析会丢失整体上下文。当前新建和人工重试恢复完整固定input及全部原附件的一次模型请求，取消平台静态关联筛选、目标剔除、预排复核及跨批报告拼接。所选文件、版本、正文、范围、比较映射、diff、目标、上下文、用例和历史均完整提供，关联和业务结论由模型基于整个输入分析。同次请求可用多个连续input_text及无损相同正文引用装配，但不是多次模型分析，也不能扩大总上下文容量。模型拒绝或返回不完整时明确失败，仅人工重试，不静默截断、缩范围、自动分批或重发。单文件大小、来源权限、路径/哈希/引用和输出契约校验保持，只有URL不能充当已读图片。
+代码与文本统一 LF，平台保存完整根输入。每个任务一次提交模型视图。结合真实变化、两侧证据和所选上下文判断，不把仅列路径的代码算作已读。
 
-历史V1/V2分批记录、原Skill、候选、成果和人工处理保留作审计，不自动补写或重跑。人工点击完整输入重新分析会新建记录，以本人当前配置一次分析完整固定根输入；旧批报告和人工处理不冒充新的整体结论。当前不返回INTEGRATION或reconciliations包装，最终report.json及人工双JSON导入仍为本v2结构。
+历史V1/V2分批记录、原Skill、候选、成果和人工处理保留作审计，不自动补写或重跑。人工点击完整输入重新分析会新建记录，以本人当前配置一次分析完整固定根输入；旧批报告和人工处理不冒充新的整体结论。当前不返回INTEGRATION或reconciliations包装，新任务采用契约 v3，旧任务维持原冻结版本。
 
 ## 输入
 
@@ -36,7 +38,7 @@ key/ref非空且最长200字符；标题最长500字符，普通说明最长1000
 
 ### snapshots：新旧原文和补充上下文
 
-读取GitHub代码时先取得旧基准全文，新目标相同blob经哈希校验复用正文，新增/修改blob再只读获取；根input保存所选范围完整双侧快照，分批子输入按固定计划选取完整文件。scope_note/read_note与unit_mappings.note明确标识旧基准、新目标、固定提交、路径和正文新增/修改/删除/未变，补充依据仅由context_refs标识。复用不是版本替换；证据必须引用对应侧自己的snapshot_ref/unit_id/segment_id。文件是否变化不直接证明风险归因，路径变化不自动认定重命名。
+读取GitHub代码时先取得旧基准全文，新目标相同blob经哈希校验复用正文，新增/修改blob再只读获取；根input保存所选范围完整双侧快照。scope_note/read_note与unit_mappings.note明确标识旧基准、新目标、固定提交、路径和正文新增/修改/删除/未变，补充依据仅由context_refs标识。复用不是版本替换；证据必须引用对应侧自己的snapshot_ref/unit_id/segment_id。文件是否变化不直接证明风险归因，路径变化不自动认定重命名。
 
 每项：`snapshot_ref`、`source_id`、`kind`、`repository_kind`、`name`、`provenance`、`scope_complete`、`scope_note`、`units`。
 
@@ -82,9 +84,9 @@ historical_items每项：`history_ref`、`module`（REQUIREMENT_ANALYSIS/CODE_RE
 
 ## 输出
 
-顶层：`contract_version`、`analysis_type`、`request_id`、`project_id`、`revision`、`mode`、`outcome`、`summary`、`target_results`、`changes`、`function_impacts`、`code_impacts`、`case_impacts`、`risks`、`historical_reviews`、`regression_scope`、`evidence`、`chains`、`coverage`、`limitations`。
+顶层：`contract_version`、`analysis_type`、`request_id`、`project_id`、`revision`、`mode`、`summary`、`target_results`、`changes`、`function_impacts`、`code_impacts`、`case_impacts`、`risks`、`historical_reviews`、`regression_scope`、`evidence`、`chains`、`limitations`。
 
-身份字段原样回传。outcome为COMPLETE / PARTIAL / BLOCKED：比较覆盖与所选目标均完成才COMPLETE；无法开展任何有效分析或输入非法为BLOCKED；其他为PARTIAL。完成只表示固定范围分析完成。summary为`{conclusion, priority_risk_refs, inheritance_note}`，不让模型生成重复统计数、分数或通过率；调用方按唯一对象计算。inheritance_note概述增量继承，完整替换可空。
+身份字段原样回传，模型返回 contract_version=3。平台计算总体 outcome 与 platform_coverage。summary 为 {conclusion, priority_risk_refs, inheritance_note}。
 
 所有结果key、evidence.key、chains.key、limitations.key全报告唯一，前缀建议C/F/K/U/R/H/G/E/N/L，不赋予项目稳定业务编号。未选目标不能出现在结果target_refs中。
 
@@ -146,15 +148,15 @@ STILL_PRESENT需本次目标证据，STATIC_IMPROVED需旧问题基准与目标�
 
 change_refs非空，关联case/risk须实际存在。已有用例action与对应case_impacts一致；ADD_SCENARIO.case_refs为空，不声称全库不存在对应场景。STATIC_SUPPORTED.expected及依据非空；NEEDS_CLARIFICATION需questions与限制，expected可以为空，不能把建议当确定业务规则。RETIRE.expected可写“停用理由需人工审阅”，不表示还要执行过时场景。优先级单独说明，KEEP可以HIGH。步骤与场景级预期不用校验行数相等。
 
-### target_results、coverage、limitations
+### target_results 与 limitations
 
 target_results每个所选目标恰好一项：`{target, status, scope, checks, risk_refs, limitation_refs}`。status：COMPLETE/PARTIAL/BLOCKED。checks每项`{subject, assessment, evidence_refs, risk_refs, note}`，assessment：CONSISTENT/DEVIATION/SUSPECTED/UNRESOLVED/OUT_OF_SCOPE；静态无偏差也可留checks，不作为未变变化卡片。DEVIATION/SUSPECTED需证据及对应本目标风险，CONSISTENT需证据且风险引用为空。BLOCKED的checks/risk_refs为空、limitations非空。risk_refs恰为该目标风险集合及checks.risk_refs并集。
 
-coverage每个比较对每侧snapshot的每个unit，以及每个context快照的每个unit，按`(pair_ref, side, snapshot_ref, unit_id)`恰好一项：`{snapshot_ref, unit_id, side, pair_ref, status, segment_reviews, note, limitation_refs}`。同一快照若用于多个比较对须分别核对该对覆盖。status：CHECKED/PARTIAL/UNAVAILABLE/OUT_OF_SCOPE；side/pair归属同evidence。segment_reviews每个已提供片段恰好一项`{segment_id, status, note}`，status：CHECKED/IRRELEVANT/UNPROCESSED。缺片段正文与模型未处理分别记录，不用“提供过”证明检查过。VERIFIED_ABSENT可CHECKED（检查存在性），OUT_OF_SCOPE不能当不存在。范围不完整、PARTIAL/未读/未处理或相关UNKNOWN链必须有对应限制，并影响有关目标和总体完成程度。
+模型无需逐文件、逐片段生成覆盖台账。未能评估的单元使用 NOT_ASSESSED 限制，附 unit_refs [{snapshot_ref, unit_id}]。TEXT 证据保留 excerpt 和真实单元身份；段号或行号未知时可为 null，由平台在固定单元内按唯一匹配补全。
 
 limitations每项：`{key, code, description, affects, needed}`；code：INVALID_INPUT / READ_GAP / SCOPE_GAP / MAPPING_UNCONFIRMED / MISSING_DEPENDENCY / AMBIGUOUS_RULE / UNPROCESSED / NO_CASE_SCOPE / HISTORY_NOT_CHECKED / ATTRIBUTION_GAP / VISUAL_NOT_PROVIDED / REVIEW_WARNING。affects为受影响的目标或对象key/输入ref字符串数组，needed说明需补什么或人工确认什么。
 
-无效输入诊断仍返回同顶层结构，身份中缺失字段用request_id空字符串、project_id/revision为null、mode为null；可识别身份原样回传。所有结果/evidence/chains/coverage数组为空，所能识别的合法目标均BLOCKED，至少一个INVALID_INPUT限制。它不是可入库报告；调用方在模型调用前本应阻断此类输入。
+无效输入诊断仍返回同顶层结构，身份中缺失字段用request_id空字符串、project_id/revision为null、mode为null；可识别身份原样回传。所有结果/evidence/chains数组为空，所能识别的合法目标均BLOCKED，至少一个INVALID_INPUT限制。它不是可入库报告；调用方在模型调用前本应阻断此类输入。
 
 ## 平台校验与人工复核责任（后续设计）
 

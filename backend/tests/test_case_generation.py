@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import io
 import json
 import logging
 import os
@@ -17,17 +18,21 @@ from pydantic import ValidationError
 from sqlalchemy import event, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
+from worker_fixtures import claim as claim_for_execution
 
 from app.core.errors import AppError
+from app.db import models as worker_models
 from app.db.models import (
     AIConnection,
     CaseCategory,
     CaseGenerationApplication,
     CaseGenerationBatch,
+    CaseGenerationChatTurn,
     CaseGenerationRun,
     Project,
     UserAccount,
 )
+from app.integrations import responses as responses_api
 from app.integrations.response_diagnostics import safe_snapshot
 from app.modules.case_generation import apply, chat, compact, contract, execution, service, sources
 from app.modules.case_generation.schemas import ApplicationItem, MaterialSelection
@@ -876,7 +881,7 @@ class GenerationDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(started.status_code, 202, started.text)
         with self.factory() as db:
-            bid = execution.claim(db)
+            bid = claim_for_execution(db, worker_models.CaseGenerationBatch)
         with patch.object(
             execution.responses, "analyze", side_effect=answer or self.answer
         ) as remote:
@@ -906,11 +911,11 @@ class GenerationDatabaseTests(unittest.TestCase):
         self.assertEqual(response.json()["applications"][-1]["status"], "COMPLETED")
         return response.json()
 
-    def test_prepare_confirmation_personal_worker_import_and_comments(self):
+    def test_legacy_record_stays_readable_but_import_is_rejected_without_ai(self):
         row = self.prepare()
         self.assertEqual(row["status"], "PREPARED")
         with self.factory() as db:
-            self.assertIsNone(execution.claim(db))
+            self.assertIsNone(claim_for_execution(db, worker_models.CaseGenerationBatch))
         done, remote = self.finish(row)
         self.assertEqual(remote.call_args.args[2], f"synthetic-secret-{self.member_id}")
         runtime = remote.call_args.kwargs["instruction_messages"]
@@ -933,7 +938,8 @@ class GenerationDatabaseTests(unittest.TestCase):
                 ],
             },
         )
-        self.assertEqual(imported.status_code, 201, imported.text)
+        self.assertEqual(imported.status_code, 422, imported.text)
+        self.assertEqual(imported.json()["detail"], "generation_legacy_contract_import_unsupported")
         tampered = json.loads(done["inputText"])
         tampered["materials"][0]["segments"][0]["text"] = "wrong original"
         rejected = self.post(
@@ -1625,7 +1631,7 @@ class GenerationDatabaseTests(unittest.TestCase):
         row = self.prepare(legacy=False)
         self.post(f"/{row['id']}/start", {"revision": row["serverRevision"], "confirmed": True})
         with self.factory() as db:
-            bid = execution.claim(db)
+            bid = claim_for_execution(db, worker_models.CaseGenerationBatch)
         raw_output = {
             "cases": [
                 {
@@ -1874,7 +1880,7 @@ class GenerationDatabaseTests(unittest.TestCase):
         row = self.prepare()
         self.post(f"/{row['id']}/start", {"revision": row["serverRevision"], "confirmed": True})
         with self.factory() as db:
-            bid = execution.claim(db)
+            bid = claim_for_execution(db, worker_models.CaseGenerationBatch)
         running = self.client.get(self.api + f"/{row['id']}").json()
         self.assertEqual(running["status"], "RUNNING")
         self.assertTrue(running["batches"][0]["startedAt"])
@@ -1907,7 +1913,7 @@ class GenerationDatabaseTests(unittest.TestCase):
         self.assertFalse(failed["batches"][0]["candidateAvailable"])
 
     def test_cancel_retry_uses_frozen_input_and_retry_operators_ai(self):
-        row = self.prepare()
+        row = self.prepare(legacy=False)
         self.post(f"/{row['id']}/cancel")
         self.login(self.admin_name)
         b = row["batches"][0]
@@ -1915,18 +1921,36 @@ class GenerationDatabaseTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202, response.text)
         with self.factory() as db:
             fixed = db.get(CaseGenerationBatch, b["id"]).input_snapshot
-            bid = execution.claim(db)
-        with patch.object(execution.responses, "analyze", side_effect=self.answer) as remote:
+            bid = claim_for_execution(db, worker_models.CaseGenerationBatch)
+        with patch.object(
+            execution.responses, "analyze", return_value='{"cases":[],"notes":[],"complete":true}'
+        ) as remote:
             execution.execute(bid, self.factory)
         self.assertEqual(remote.call_args.args[2], f"synthetic-secret-{self.admin_id}")
-        sent = json.loads(remote.call_args.args[5][0]["text"])
-        self.assertEqual(sent, fixed)
+        self.assertEqual(remote.call_args.args[5], compact.model_content(fixed, []))
+
+    def test_cancelled_legacy_batch_cannot_retry_or_change_its_snapshot(self):
+        row = self.prepare()
+        self.post(f"/{row['id']}/cancel")
+        bid = row["batches"][0]["id"]
+        with self.factory() as db:
+            batch = db.get(CaseGenerationBatch, bid)
+            original = copy.deepcopy(batch.input_snapshot)
+        with patch.object(service, "analysis_configuration") as config:
+            response = self.post(f"/{row['id']}/batches/{bid}/retry", {"request_id": str(uuid4())})
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"], "generation_legacy_contract_retry_unsupported")
+        config.assert_not_called()
+        with self.factory() as db:
+            batch = db.get(CaseGenerationBatch, bid)
+            self.assertEqual((batch.status, batch.input_snapshot), ("CANCELLED", original))
+            self.assertIsNone(claim_for_execution(db, worker_models.CaseGenerationBatch))
 
     def test_missing_title_candidate_revalidation_is_free_audited_and_not_applied(self):
         row = self.prepare(legacy=False)
         self.post(f"/{row['id']}/start", {"revision": row["serverRevision"], "confirmed": True})
         with self.factory() as db:
-            bid = execution.claim(db)
+            bid = claim_for_execution(db, worker_models.CaseGenerationBatch)
         output = {
             "cases": [
                 {
@@ -1991,7 +2015,7 @@ class GenerationDatabaseTests(unittest.TestCase):
         row = self.prepare()
         self.post(f"/{row['id']}/start", {"revision": row["serverRevision"], "confirmed": True})
         with self.factory() as db:
-            bid = execution.claim(db)
+            bid = claim_for_execution(db, worker_models.CaseGenerationBatch)
         with patch.object(execution.responses, "analyze", return_value='{"wrong":"candidate"}'):
             execution.execute(bid, self.factory)
         failed = self.client.get(self.api + f"/{row['id']}").json()
@@ -2015,13 +2039,51 @@ class GenerationDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(turn.status_code, 202, turn.text)
         with self.factory() as db:
-            tid = execution.claim_chat(db)
+            tid = claim_for_execution(db, worker_models.CaseGenerationChatTurn)
         with patch.object(execution.responses, "converse", return_value="合成解释，不应用用例"):
             execution.execute_chat(tid, self.factory)
         history = self.client.get(self.api + f"/{row['id']}/chat?function_key=F-SCOPE").json()
         self.assertEqual(history["items"][0]["status"], "COMPLETED")
         self.assertEqual(self.client.get(self.api + f"/{row['id']}/chat").json()["items"], [])
         self.assertEqual(self.client.post(self.cases_api + "/search", json={}).json()["total"], 0)
+
+    def test_api_chat_completes_and_saves_response_diagnostics(self):
+        from test_responses_stream import event
+
+        done, _ = self.finish(self.prepare())
+        turn = self.post(
+            f"/{done['id']}/chat",
+            {"request_id": str(uuid4()), "function_key": "F-SCOPE", "question": "解释固定场景"},
+        )
+        self.assertEqual(turn.status_code, 202, turn.text)
+        with self.factory() as db:
+            turn_id = claim_for_execution(db, worker_models.CaseGenerationChatTurn)
+        answer = "合成解释，等待人工核对。"
+        response = io.BytesIO(
+            event(
+                "response.completed",
+                response={
+                    "status": "completed",
+                    "output": [{"content": [{"type": "output_text", "text": answer}]}],
+                },
+            )
+        )
+        response.headers = {
+            "Content-Type": "text/event-stream",
+            "x-request-id": "req_abcdef123456",
+        }
+        opener = Mock()
+        opener.open.return_value = response
+        with patch.object(responses_api, "build_opener", return_value=opener):
+            execution.execute_chat(turn_id, self.factory)
+        opener.open.assert_called_once()
+        with self.factory() as db:
+            saved = db.get(CaseGenerationChatTurn, turn_id)
+            self.assertEqual((saved.status, saved.answer), ("COMPLETED", answer))
+            diagnostics = saved.context["cli_diagnostics"]
+            self.assertEqual(diagnostics["request_id"], "req_abcdef123456")
+            self.assertEqual(diagnostics["termination"], "response.completed")
+            self.assertGreater(diagnostics["received_bytes"], 0)
 
     def test_lifecycle_preserves_versions_records_and_blocks_new_tests(self):
         done, _ = self.finish(self.prepare())
@@ -2075,12 +2137,12 @@ class GenerationDatabaseTests(unittest.TestCase):
         self.assertEqual(restored.json()["versions"], before)
 
     def test_late_response_after_cancel_and_retry_cannot_replace_new_attempt(self):
-        row = self.prepare()
+        row = self.prepare(legacy=False)
         self.post(f"/{row['id']}/start", {"revision": row["serverRevision"], "confirmed": True})
         bid = row["batches"][0]["id"]
         old_request = json.loads(row["inputText"])["request_id"]
         with self.factory() as db:
-            execution.claim(db)
+            claim_for_execution(db, worker_models.CaseGenerationBatch)
         new_request = str(uuid4())
 
         def late(*args, **kwargs):
@@ -2088,7 +2150,7 @@ class GenerationDatabaseTests(unittest.TestCase):
             self.login(self.admin_name)
             retried = self.post(f"/{row['id']}/batches/{bid}/retry", {"request_id": new_request})
             self.assertEqual(retried.status_code, 202, retried.text)
-            return self.answer(*args, **kwargs)
+            return '{"cases":[],"notes":[],"complete":true}'
 
         with patch.object(execution.responses, "analyze", side_effect=late):
             execution.execute(bid, self.factory)
@@ -2108,7 +2170,7 @@ class GenerationDatabaseTests(unittest.TestCase):
         )
         tid = sent.json()["id"]
         with self.factory() as db:
-            execution.claim_chat(db)
+            claim_for_execution(db, worker_models.CaseGenerationChatTurn)
         with patch.object(
             execution.responses, "converse", return_value="合成测试建议，尚未人工确认"
         ):
@@ -2169,7 +2231,7 @@ class GenerationDatabaseTests(unittest.TestCase):
     def test_native_terminal_is_bound_to_generation_and_cannot_start_an_independent_job(self):
         from app.modules.case_generation import native_terminal
 
-        row = self.prepare()
+        row = self.prepare(legacy=False)
         bid = row["batches"][0]["id"]
 
         def config(actor, db, version=None, **kwargs):
@@ -2184,7 +2246,7 @@ class GenerationDatabaseTests(unittest.TestCase):
                 "Settings",
                 return_value=SimpleNamespace(ai_cli_terminal_user_ids=None),
             ),
-            patch.object(native_terminal.ai_client, "terminal") as no_start,
+            patch.object(native_terminal.shared_terminal.ai_client, "terminal") as no_start,
         ):
             independent = self.post(f"/{row['id']}/terminal", {"request_id": str(uuid4())})
             self.assertEqual(independent.status_code, 409, independent.text)
@@ -2199,6 +2261,12 @@ class GenerationDatabaseTests(unittest.TestCase):
             self.assertEqual(queued.status_code, 202, queued.text)
             self.assertTrue(queued.json()["batches"][0]["terminalAvailable"])
             current = self.client.get(self.api + f"/{row['id']}/terminal").json()
+            shared_terminal = (
+                f"/api/projects/{self.project}/analysis-terminal/generation/{row['id']}"
+            )
+            shared = self.client.get(shared_terminal)
+            self.assertEqual(shared.status_code, 200, shared.text)
+            self.assertEqual(shared.json(), current)
             self.assertEqual(current["session"]["id"], bid)
             self.assertEqual(current["session"]["kind"], "generation")
             with self.factory() as db:
@@ -2266,7 +2334,9 @@ class GenerationDatabaseTests(unittest.TestCase):
                 return {**value, "call_mode": "CODEX_EXEC", "base_url": provider.url}, key
 
             local = SimpleNamespace(
-                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+                ai_cli_terminal_work_path=Path(folder) / "interactive",
+                ai_cli_work_path=Path(folder),
+                ai_cli_executable=settings.ai_cli_executable,
             )
             with (
                 patch.object(service, "analysis_configuration", side_effect=config),
@@ -2283,7 +2353,9 @@ class GenerationDatabaseTests(unittest.TestCase):
                 )
                 self.assertEqual(start.status_code, 202, start.text)
                 with self.factory() as db:
-                    self.assertEqual(execution.claim(db), bid)
+                    self.assertEqual(
+                        claim_for_execution(db, worker_models.CaseGenerationBatch), bid
+                    )
                     identity = db.get(CaseGenerationBatch, bid).ai_config["generation_terminal"][
                         "identity"
                     ]
@@ -2343,7 +2415,9 @@ class GenerationDatabaseTests(unittest.TestCase):
                 return original(*args, **kwargs)
 
             local = SimpleNamespace(
-                ai_cli_work_path=Path(folder), ai_cli_executable=settings.ai_cli_executable
+                ai_cli_terminal_work_path=Path(folder) / "interactive",
+                ai_cli_work_path=Path(folder),
+                ai_cli_executable=settings.ai_cli_executable,
             )
             stop = Mock()
             stop.is_set.return_value = False
@@ -2366,7 +2440,9 @@ class GenerationDatabaseTests(unittest.TestCase):
                 )
                 self.assertEqual(started.status_code, 202, started.text)
                 with self.factory() as db:
-                    self.assertEqual(execution.claim(db), bid)
+                    self.assertEqual(
+                        claim_for_execution(db, worker_models.CaseGenerationBatch), bid
+                    )
                 chat_worker._run_task(
                     CaseGenerationBatch,
                     execution.execute,

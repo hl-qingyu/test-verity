@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -11,8 +12,9 @@ function load(file, react = React, overrides = {}) {
     .readFileSync(file, 'utf8')
     .replace(/^function StartAnalysis\(/m, 'export function StartAnalysis(')
     .replace(/^function ScopeDialog\(/m, 'export function ScopeDialog(')
+    .replace(/^function RiskCoverage\(/m, 'export function RiskCoverage(')
     .replace(/^function CatalogRiskDialog\(/m, 'export function CatalogRiskDialog(');
-  const code = ts.transpileModule(source, {
+  const code = compileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
@@ -20,14 +22,18 @@ function load(file, react = React, overrides = {}) {
     },
   }).outputText;
   const exports = {};
-  new Function('exports', 'require', code)(exports, (name) => {
-    if (overrides[name]) return overrides[name];
-    if (name === 'react') return react;
-    if (name.endsWith('.css')) return {};
-    if (!name.startsWith('.')) return require(name);
-    const base = path.resolve(path.dirname(file), name);
-    return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), react, overrides);
-  });
+  evaluateModule(
+    code,
+    (name) => {
+      if (overrides[name]) return overrides[name];
+      if (name === 'react') return react;
+      if (name.endsWith('.css')) return {};
+      if (!name.startsWith('.')) return require(name);
+      const base = path.resolve(path.dirname(file), name);
+      return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), react, overrides);
+    },
+    exports,
+  );
   return exports;
 }
 const api = load(path.resolve(__dirname, '../src/riskApi.ts'));
@@ -138,9 +144,6 @@ test('analysis task candidate state and validation path stay visible', async () 
       ),
       /known_facts.*应为文本/,
     );
-    const component = fs.readFileSync(path.resolve(__dirname, '../src/RiskReports.tsx'), 'utf8');
-    assert.match(component, /下载AI候选/);
-    assert.match(component, /重新校验候选/);
   } finally {
     global.fetch = original;
   }
@@ -183,6 +186,42 @@ test('AI review warnings survive parsing and appear beside fixed report scope', 
   );
   assert.match(markup, /1 处 AI 依据\/覆盖待人工核对/);
   assert.match(markup, /R1.*摘录未匹配固定原文/);
+});
+
+test('v4 scope renders evidence reference labels and v3 keeps its coverage reasons', () => {
+  const { ScopeDialog, RiskCoverage } = load(path.resolve(__dirname, '../src/RiskReports.tsx'));
+  const render = (Component, value) =>
+    renderToStaticMarkup(React.createElement(Component, { detail: value, onClose() {} }));
+  const candidate = structuredClone(detail);
+  candidate.report.contract_version = 4;
+  candidate.input.contract_version = 4;
+  const material = candidate.input.materials[0];
+  material.segments.push({ ...material.segments[0], segment_id: 's2', location: '默认排序' });
+  const segments = candidate.report.coverage[0].segments;
+  segments[0].disposition = 'REFERENCED';
+  delete segments[0].reason;
+  segments.push({
+    segment_id: 's2',
+    disposition: 'UNREFERENCED',
+    function_keys: [],
+    risk_keys: [],
+  });
+  const parsed = api.parseRiskDetail(candidate, 1);
+  const { coverage, outcome, ...raw } = candidate.report;
+  assert.equal(api.parseRiskImportReport(raw).contract_version, 4);
+  assert.throws(() => api.parseRiskReport(raw));
+  assert.throws(() => api.parseRiskImportReport({ ...raw, coverage }));
+  assert.equal(api.parseRiskImportReport({ ...raw, coverage, outcome }).contract_version, 4);
+  const markup = render(ScopeDialog, parsed);
+  assert.match(markup, /默认排序 · 未被引用/);
+  assert.match(markup, / · 被引用/);
+  assert.match(markup, /<details class="evidence">/);
+  const legacy = render(RiskCoverage, api.parseRiskDetail(detail, 1));
+  assert.match(legacy, /已审查/);
+  assert.ok(legacy.includes(report.coverage[0].segments[0].reason));
+  assert.throws(() => api.parseRiskDetail({ ...candidate, input }, 1));
+  segments[0].disposition = 'REVIEWED';
+  assert.throws(() => api.parseRiskDetail(candidate, 1));
 });
 
 test('catalog risk groups coverage warnings and shows the actual function mismatch', () => {
@@ -449,16 +488,7 @@ test('human handling sends revision and conclusion without rewriting the report'
   });
 });
 
-test('report export includes functions, risks, source evidence, suggestions and handling', () => {
-  const { reportMarkdown } = load(path.resolve(__dirname, '../src/RiskReports.tsx'));
-  const markdown = reportMarkdown({
-    ...detail,
-    handling: [{ risk_key: 'R1', status: 'RESOLVED', note: '产品已补充', history: [] }],
-  });
-  assert.match(markdown, /功能清单/);
-  assert.match(markdown, /按订单号搜索/);
-  assert.match(markdown, /产品已补充/);
-  assert.match(markdown, /覆盖与边界/);
+test('form escapes rendered content', () => {
   const Form = load(path.resolve(__dirname, '../src/Form.tsx')).Form;
   const markup = renderToStaticMarkup(
     React.createElement(Form, {}, React.createElement('p', {}, '<script>secret</script>')),

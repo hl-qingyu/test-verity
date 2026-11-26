@@ -690,6 +690,8 @@ def retry(project_id, run_id, batch_id, payload, actor, db):
     row = own(project_id, run_id, actor, db, True)
     b = db.get(CaseGenerationBatch, batch_id, with_for_update=True)
     contract.require(b and b.run_id == row.id)
+    if b.input_snapshot.get("contract_version") == 2:
+        raise AppError(409, "generation_legacy_contract_retry_unsupported")
     if native_rounds.info(b):
         raise AppError(422, "generation_native_round_retry_forbidden")
     if b.request_id == str(payload.request_id):

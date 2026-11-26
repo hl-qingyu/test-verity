@@ -8,7 +8,7 @@
 
 CLI大文件阅读复用`integrations/cli_reading`在本任务目录生成无损、有界正文及内嵌图片的阅读表示；原件/Skill/历史保留，读取仍只由标准filesystem服务提供，无自定义MCP或业务拆批/自动模型重发。原生TUI及非交互大文件共用；首次构建后通过认证摘要核对并复用阅读目录，恢复指引复用历史、仅按需补读。详见[CLI实施契约](AI_CODEX_CLI_IMPLEMENTATION.md)。
 
-本文说明当前代码结构和开发边界。编码细节见[代码规范](CODE_STANDARDS.md)，界面规则见[界面规范](UI_STANDARDS.md)，模块入口见[文档目录](README.md)。原累计记录保存在[历史副本](archive/ARCHITECTURE_HISTORY.md)。
+本文说明当前代码结构和开发边界。编码细节见[代码规范](CODE_STANDARDS.md)，界面规则见[界面规范](UI_STANDARDS.md)，模块入口见[文档整理清单](DOCUMENT_REVIEW.md)。原累计记录保存在[历史副本](archive/ARCHITECTURE_HISTORY.md)。
 
 ## 工程组成
 
@@ -22,6 +22,8 @@ CLI大文件阅读复用`integrations/cli_reading`在本任务目录生成无损
 | skill | 五类业务分析规则、结果契约和引用文件 |
 
 当前使用单API进程、单后台调度进程。账号挑战和部分限流保留进程内状态；后台通过PostgreSQL咨询锁取得调度权，再按调用预算并发执行。扩容前需要重新设计共享状态，不能直接增加进程数。
+
+调度器按主键分页查找可领取的 AI 任务。空闲查询间隔从 1 秒逐步增至最多 5 秒，领取新任务或仍有任务执行时恢复为 1 秒。已确认的用例应用可在 AI 调用槽满时继续处理。
 
 调度锁使用独立NullPool连接和AUTOCOMMIT，不放回业务连接池；每5秒在同一连接保活，PostgreSQL只对该连接启用60秒空闲/空闲事务超时。Worker失联或退出而TCP尚未断开时，数据库自行回收会话并释放锁。重新连接必须重新取得锁；暂时被其他连接占锁或仍有活跃调用时，Worker等待重试，不直接退出或强制终止其他连接。业务连接不设置该空闲回收时间，CLI不因此被取消。
 
@@ -51,7 +53,7 @@ CLI大文件阅读复用`integrations/cli_reading`在本任务目录生成无损
 | projects、overview | 项目、成员、仓库、删除保护和概览 |
 | documents、prototypes | 资料上传、固定版本、附件关联、原型来源和目录读取 |
 | local_code、github | 本地代码目录元数据、个人连接和授权仓库读取 |
-| requirements | 需求风险报告、分析任务、对话；保留部分旧验收点服务 |
+| requirements | 需求风险报告、分析任务、对话。旧验收点数据保留用于资料引用计数 |
 | code_analysis | 代码范围准备、静态分析、人工处理和对话 |
 | change_analysis | 新旧来源对照、影响分析、人工处理和历史兼容 |
 | case_generation | 用例生成、建议草稿、澄清、审核和逐条入库 |
@@ -94,7 +96,7 @@ CLI 文件读取复用 MCP 项目的标准 filesystem 服务，依赖与锁文�
 
 Windows ConPTY 与 xterm 通过同源 WebSocket 传输原始 ANSI 和按键，每次连接复核会话、项目和发起人。Codex TUI 通过随机令牌保护的私有 RPC 代理与本任务 stdio app-server 通信，使用原文件读取范围和权限白名单。[CLI 实施契约](AI_CODEX_CLI_IMPLEMENTATION.md)
 
-新建和人工重试的变更分析使用完整固定输入一次分析，不按静态关系或字节数筛减、拆批。旧分批说明只用于历史兼容，见[完整输入规则](CHANGE_ANALYSIS_FULL_INPUT.md)和[旧分批说明](CHANGE_ANALYSIS_BATCHES.md)。
+变更分析 v3 保存完整根输入并发送一次差异优先视图。CLI 另提供完整双侧只读快照，API 报告记录未发送正文的范围。v2 任务及重试沿用既有完整输入。历史分批记录支持查看、导出及免费重新校验已保存候选。见[变更分析](CHANGE_ANALYSIS.md)和[旧分批说明](CHANGE_ANALYSIS_BATCHES.md)。
 
 ## 权限与数据
 

@@ -4,6 +4,8 @@ import os
 import secrets
 import unittest
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -18,6 +20,7 @@ from app.db.models import Project, ProjectMember, UserAccount, UserSession
 from app.db.session import get_db, get_engine
 from app.main import app
 from app.modules.accounts.schemas import UserFields
+from app.modules.skills import files as skill_files
 from app.security import passwords, rate_limit
 
 ORIGIN = {"Origin": "http://127.0.0.1:5173"}
@@ -76,6 +79,8 @@ class AuthDatabaseTests(unittest.TestCase):
 
     def setUp(self) -> None:
         rate_limit._login_windows.clear()
+        skill_storage = Path(self.enterContext(TemporaryDirectory(prefix="verity-test-skills-")))
+        self.enterContext(patch.object(skill_files, "BACKUPS", skill_storage))
         self.connection = get_engine().connect()
         self.transaction = self.connection.begin()
 

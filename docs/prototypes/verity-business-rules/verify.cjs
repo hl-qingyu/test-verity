@@ -1,4 +1,4 @@
-// Offline checks: specific modal routing, annotation isolation and standalone synchronization.
+// Offline checks: specific modal routing, annotation isolation and main prototype synchronization.
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -39,20 +39,15 @@ for (const [page, title, context, expected] of scenarios) {
   assert.deepEqual(ranked.filter(([, value]) => value === best).map(([id]) => id), [expected], title);
 }
 const root = path.resolve(__dirname, '../../..');
-const files = [
-  path.join(root, 'verity-prototype.html'),
-  path.join(root, 'docs/prototypes/verity-requirement-risk-review.html'),
-];
-const annotations = files.map(file => {
-  const text = fs.readFileSync(file, 'utf8');
-  assert.equal((text.match(/id="business-rules-script"/g) || []).length, 1);
-  assert.equal((text.match(/id="business-rules-style"/g) || []).length, 1);
-  assert.ok(!text.includes('实现入口'));
-  const script = text.match(/<script id="business-rules-script">([\s\S]*?)<\/script>/)[1];
-  new vm.Script(script);
-  return script;
-});
-assert.equal(annotations[0], annotations[1], 'both prototypes have the same rule catalog and runtime');
+const text = fs.readFileSync(path.join(root, 'verity-prototype.html'), 'utf8');
+assert.equal((text.match(/id="business-rules-script"/g) || []).length, 1);
+assert.equal((text.match(/id="business-rules-style"/g) || []).length, 1);
+assert.ok(!text.includes('实现入口'));
+const script = text.match(/<script id="business-rules-script">([\s\S]*?)<\/script>/)[1];
+const normalize = value => value.replace(/\r\n/g, '\n');
+const compiled = runtime.replace('__VERITY_BUSINESS_RULES__', JSON.stringify(catalog).replace(/</g, '\\u003c'));
+new vm.Script(script);
+assert.ok(normalize(script) === normalize(compiled), 'main prototype annotations match their sources');
 assert.ok(!/\bfetch\s*\(|localStorage|data-action=|openModal\s*\(/.test(runtime), 'annotations cannot invoke business writes');
 for (const [key, page] of Object.entries(catalog)) {
   assert.equal(new Set(page.entries.map(entry => entry.id)).size, page.entries.length, key);
@@ -61,4 +56,4 @@ for (const [key, page] of Object.entries(catalog)) {
     for (const source of entry.sources) assert.ok(fs.existsSync(path.join(root, source)), source);
   }
 }
-console.log(`${scenarios.length} modal routing scenarios passed; 13 page catalogs and both standalone files verified.`);
+console.log(`${scenarios.length} modal routing scenarios passed; 13 page catalogs and the main prototype verified.`);

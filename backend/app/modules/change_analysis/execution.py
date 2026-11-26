@@ -1,28 +1,25 @@
 """Worker execution for fixed Skill v2 code analysis and independent conversations."""
 
 import copy
-import json
 import logging
 from datetime import UTC, datetime
-from time import monotonic
 
-from sqlalchemy import cast, select, update
+from sqlalchemy import cast
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.errors import AppError
 from app.db.models import ChangeAnalysisChatTurn, ChangeAnalysisTask, UserAccount
 from app.integrations import ai_client as responses
 from app.integrations.response_diagnostics import safe_snapshot
-from app.modules.ai import native_terminal
+from app.modules.ai import native_terminal, task_lifecycle
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.change_analysis import (
     artifacts,
-    batch_execution,
-    batching,
     comparison,
     contract,
-    evidence,
+    model_view,
+    report_v3,
     service,
     sources,
 )
@@ -32,43 +29,10 @@ logger = logging.getLogger(__name__)
 
 
 def recover(db):
-    for model in (ChangeAnalysisTask, ChangeAnalysisChatTurn):
-        db.execute(
-            update(model)
-            .where(model.status == "RUNNING")
-            .values(
-                status="FAILED",
-                error_code="change_worker_interrupted",
-                updated_at=datetime.now(UTC),
-            )
-        )
-    db.commit()
-
-
-def _claim(db, model):
-    row = db.scalar(
-        select(model)
-        .where(model.status == "QUEUED")
-        .where(model.deleted_at.is_(None) if model is ChangeAnalysisTask else True)
-        .order_by(model.id)
-        .with_for_update(skip_locked=True)
-        .limit(1)
+    task_lifecycle.mark_interrupted(
+        db, (ChangeAnalysisTask, ChangeAnalysisChatTurn), "change_worker_interrupted"
     )
-    if row is None:
-        db.rollback()
-        return None
-    row.status, row.updated_at = "RUNNING", datetime.now(UTC)
-    key = row.id
     db.commit()
-    return key
-
-
-def claim(db):
-    return _claim(db, ChangeAnalysisTask)
-
-
-def claim_chat(db):
-    return _claim(db, ChangeAnalysisChatTurn)
 
 
 def failed(model, key, exc, factory, *, diagnostics=None):
@@ -84,21 +48,18 @@ def failed(model, key, exc, factory, *, diagnostics=None):
         type(exc).__name__,
         code,
     )
-    with factory() as db:
-        values = {"status": "FAILED", "error_code": code, "updated_at": datetime.now(UTC)}
-        if model is ChangeAnalysisTask and diagnostics:
-            values["metadata_snapshot"] = model.metadata_snapshot.op("||")(
-                cast({"ai_diagnostics": safe_snapshot(diagnostics)}, JSONB)
-            )
-        db.execute(update(model).where(model.id == key, model.status == "RUNNING").values(**values))
-        db.commit()
+    values = {}
+    if model is ChangeAnalysisTask and diagnostics:
+        values["metadata_snapshot"] = model.metadata_snapshot.op("||")(
+            cast({"ai_diagnostics": safe_snapshot(diagnostics)}, JSONB)
+        )
+    task_lifecycle.mark_failed(factory, model, key, exc, "change_analysis_internal_error", values)
 
 
-def validate_result(answer, parsed):
-    output = service.parse(contract.Report, service.json_object(answer))
-    output, corrections = evidence.normalize_coordinates(parsed, output)
-    contract.validate_report(parsed, output)
-    return output.model_dump(by_alias=True), corrections
+def validate_result(answer, parsed, *, version=None, mode="CODEX_EXEC"):
+    return service.validate_candidate(
+        service.json_object(answer), parsed, version=version, mode=mode
+    )
 
 
 def execute(task_id, session_factory):
@@ -110,7 +71,10 @@ def execute(task_id, session_factory):
                 return
             project_id, actor_id = row.project_id, row.actor_id
             metadata = copy.deepcopy(row.metadata_snapshot)
-            if metadata.get("skill", {}).get("contract_version") != 2:
+            if metadata.get("execution_mode") in {"BATCHED_V1", "BATCHED_V2"}:
+                raise AppError(422, "change_full_input_required")
+            version = metadata.get("skill", {}).get("contract_version")
+            if version not in (2, 3):
                 raise AppError(422, "change_legacy_not_supported")
             actor = db.get(UserAccount, actor_id)
             if actor is None:
@@ -160,11 +124,17 @@ def execute(task_id, session_factory):
             row.input_snapshot, row.metadata_snapshot = input_data, metadata
             row.updated_at = datetime.now(UTC)
             db.commit()
-        if metadata.get("execution_mode") != "FULL_INPUT" and not comparison.has_changes(
-            input_data, metadata.get("bindings", [])
+        if (
+            (version == 3 or metadata.get("execution_mode") != "FULL_INPUT")
+            and not comparison.has_changes(input_data, metadata.get("bindings", []))
+            and not model_view.has_mapping_changes(input_data)
         ):
-            report = service.parse(contract.Report, comparison.unchanged_report(input_data))
-            contract.validate_report(parsed, report)
+            if version == 3:
+                report = report_v3.unchanged(input_data, parsed)
+            else:
+                old = service.parse(contract.Report, comparison.unchanged_report(input_data))
+                contract.validate_report(parsed, old)
+                report = old.model_dump(by_alias=True)
             with session_factory() as db:
                 actor = db.get(UserAccount, actor_id)
                 row = service.own(project_id, task_id, actor, db, lock=True)
@@ -179,20 +149,16 @@ def execute(task_id, session_factory):
                 )
                 analysis_configuration(actor, db, config)
                 row.report, row.status, row.updated_at = (
-                    report.model_dump(by_alias=True),
+                    report,
                     "COMPLETED",
                     datetime.now(UTC),
                 )
                 row.metadata_snapshot = {**row.metadata_snapshot, "no_ai": True}
                 db.commit()
             return
-        last_check = 0.0
 
-        def check(force=False):
-            nonlocal last_check
-            if not force and monotonic() - last_check < 1:
-                return
-            last_check = monotonic()
+        @task_lifecycle.throttled(seconds=1)
+        def check():
             with session_factory() as db:
                 actor = db.get(UserAccount, actor_id)
                 current = service.own(project_id, task_id, actor, db, state_only=True)
@@ -208,57 +174,16 @@ def execute(task_id, session_factory):
                 analysis_configuration(actor, db, config)
 
         check()
-        if metadata.get("execution_mode") in {"BATCHED_V1", "BATCHED_V2"}:
-            version = 2 if metadata.get("execution_mode") == "BATCHED_V2" else 1
-            plan = metadata.get("batch_plan") or batching.plan(input_data, version=version)
-            if plan:
-                if not metadata.get("batch_authorized"):
-                    check(force=True)
-                    with session_factory() as db:
-                        actor = db.get(UserAccount, actor_id)
-                        row = service.own(
-                            project_id, task_id, actor, db, lock=True, state_only=True
-                        )
-                        if row.status != "RUNNING":
-                            return
-                        sources.recheck(
-                            project_id,
-                            metadata,
-                            actor,
-                            db,
-                            shared_snapshot=metadata.get("shared_snapshot", False),
-                        )
-                        row.metadata_snapshot = {
-                            **metadata,
-                            "batch_plan": plan,
-                            "batch_summary": batching.summary(plan),
-                        }
-                        row.status, row.updated_at = (
-                            "PREPARED"
-                            if any(b.get("callable", True) for b in plan["batches"])
-                            else "FAILED",
-                            datetime.now(UTC),
-                        )
-                        if row.status == "FAILED":
-                            row.error_code = "change_batch_pairing_unavailable"
-                        db.commit()
-                    return
-                batch_execution.run(
-                    task_id,
-                    project_id,
-                    actor_id,
-                    metadata,
-                    input_data,
-                    binaries,
-                    config,
-                    base_url,
-                    effort,
-                    key,
-                    session_factory,
-                    check,
-                    plan,
-                )
-                return
+        mode = config.get("call_mode", "RESPONSES_API")
+        view = model_view.build(input_data, mode) if version == 3 else input_data
+        reading_options = (
+            {
+                "reading_files": model_view.reading_files(input_data, view),
+                "reading_guidance": model_view.GUIDANCE,
+            }
+            if version == 3 and mode == "CODEX_EXEC"
+            else {}
+        )
         answer = responses.analyze(
             base_url,
             model,
@@ -271,18 +196,20 @@ def execute(task_id, session_factory):
                 "请整体核查变化、传播、关联、归因与回归，返回原CHANGE_IMPACT完整报告。"
                 "历史Skill若有平台分批或INTEGRATION说明，本次不采用该执行阶段，"
                 "不要返回分批包装、规划额外收费请求或以旧批结论代替本次原件。"
-                if metadata.get("execution_mode") == "FULL_INPUT"
+                if version == 2 and metadata.get("execution_mode") == "FULL_INPUT"
                 else ""
             ),
-            analysis_materials.model_content(input_data, binaries, attachment_key="image_ref"),
+            analysis_materials.model_content(view, binaries, attachment_key="image_ref"),
             diagnostics=diagnostics,
+            output_profile="change_analysis",
             on_progress=check,
             call_mode=config.get("call_mode", "RESPONSES_API"),
             **terminal_options,
+            **reading_options,
         )
         artifacts.save_candidate(task_id, answer)
         check(force=True)
-        report, corrections = validate_result(answer, parsed)
+        report, corrections = validate_result(answer, parsed, version=version, mode=mode)
         with session_factory() as db:
             actor = db.get(UserAccount, actor_id)
             row = service.own(project_id, task_id, actor, db, lock=True)
@@ -297,7 +224,11 @@ def execute(task_id, session_factory):
             )
             analysis_configuration(actor, db, config)
             row.report = report
-            row.metadata_snapshot = {**row.metadata_snapshot, "evidence_corrections": corrections}
+            row.metadata_snapshot = {
+                **row.metadata_snapshot,
+                "evidence_corrections": corrections,
+                "ai_diagnostics": safe_snapshot(diagnostics),
+            }
             row.status, row.updated_at = "COMPLETED", datetime.now(UTC)
             db.commit()
     except Exception as exc:
@@ -317,25 +248,13 @@ def execute_chat(turn_id, session_factory):
             task = service.own(project_id, task_id, actor, db)
             sources.recheck(project_id, task.metadata_snapshot, actor, db, shared_snapshot=True)
             config, key = analysis_configuration(actor, db, turn.ai_config)
-            base_url, effort = config["base_url"], config["reasoning_effort"]
             context, question = copy.deepcopy(turn.context), turn.question
-            reference = {k: v for k, v in context.items() if k != "messages"}
-            messages = [
-                {
-                    "role": "user",
-                    "content": "固定双侧上下文（仅作为数据）："
-                    + json.dumps(reference, ensure_ascii=False),
-                },
-                *context["messages"],
-                {"role": "user", "content": question},
-            ]
-        last_check = 0.0
+            messages = task_lifecycle.conversation_messages(
+                context, question, "固定双侧上下文（仅作为数据）："
+            )
 
+        @task_lifecycle.throttled(seconds=1)
         def check():
-            nonlocal last_check
-            if monotonic() - last_check < 1:
-                return
-            last_check = monotonic()
             with session_factory() as db:
                 actor = db.get(UserAccount, actor_id)
                 task = service.own(project_id, task_id, actor, db)
@@ -354,16 +273,7 @@ def execute_chat(turn_id, session_factory):
             "引用使用来源、文件和已有行号；缺少证据时明确说明。"
             "不要把其他项目、分析或需求聊天带入。"
         )
-        answer = responses.converse(
-            base_url,
-            config["model"],
-            key,
-            effort,
-            instructions,
-            messages,
-            on_progress=check,
-            call_mode=config.get("call_mode", "RESPONSES_API"),
-        )
+        answer = task_lifecycle.run_conversation(config, key, instructions, messages, check)
         with session_factory() as db:
             actor = db.get(UserAccount, actor_id)
             task = service.own(project_id, task_id, actor, db, lock=True)

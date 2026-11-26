@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
@@ -39,32 +40,36 @@ function harness() {
     if (cache.has(file)) return cache.get(file);
     const exports = {};
     cache.set(file, exports);
-    const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    const js = compileModule(fs.readFileSync(file, 'utf8'), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         jsx: ts.JsxEmit.ReactJSX,
       },
     }).outputText;
-    new Function('exports', 'require', js)(exports, (dep) => {
-      if (dep === 'react') return react;
-      const stubs = {
-        './CaseDialog': { CaseDialog: 'dialog' },
-        './Form': { Form: 'form' },
-        './FormSelect': { FormSelect: 'select' },
-        './CodeAnalysisNew': { CodeFileTree: 'file-tree' },
-        './PrototypeLinkPages': { PrototypeLinkPages: 'pages' },
-        './GitVersionPicker': { GitVersionPicker: 'versions' },
-        './generationApi': { generationError: (e) => e.message },
-        './codeAnalysisApi': { codeError: (e) => e.message },
-        './prototypeApi': {},
-        './api/http': {},
-      };
-      if (stubs[dep]) return stubs[dep];
-      if (!dep.startsWith('.')) return require(dep);
-      const base = path.resolve(path.dirname(file), dep);
-      return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'));
-    });
+    evaluateModule(
+      js,
+      (dep) => {
+        if (dep === 'react') return react;
+        const stubs = {
+          './CaseDialog': { CaseDialog: 'dialog' },
+          './Form': { Form: 'form' },
+          './FormSelect': { FormSelect: 'select' },
+          './CodeAnalysisNew': { CodeFileTree: 'file-tree' },
+          './PrototypeLinkPages': { PrototypeLinkPages: 'pages' },
+          './GitVersionPicker': { GitVersionPicker: 'versions' },
+          './generationApi': { generationError: (e) => e.message },
+          './codeAnalysisApi': { codeError: (e) => e.message },
+          './prototypeApi': {},
+          './api/http': {},
+        };
+        if (stubs[dep]) return stubs[dep];
+        if (!dep.startsWith('.')) return require(dep);
+        const base = path.resolve(path.dirname(file), dep);
+        return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'));
+      },
+      exports,
+    );
     return exports;
   }
   const New = load(path.resolve(__dirname, '../src/CaseGenerationNew.tsx')).CaseGenerationNew,

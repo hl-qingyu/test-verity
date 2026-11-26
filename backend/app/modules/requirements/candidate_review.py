@@ -1,6 +1,5 @@
 """Review immutable requirement-analysis candidates without invoking a model."""
 
-from copy import deepcopy
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -10,7 +9,7 @@ from app.db.models import RequirementRiskAnalysis
 from app.modules.candidate_results import service as candidates
 from app.modules.documents import service as documents
 from app.modules.projects.record_deletion import require_visible
-from app.modules.requirements import artifacts, risk_schemas, risk_service
+from app.modules.requirements import artifacts, risk_service
 from app.modules.requirements import risk_analysis_service as service
 
 
@@ -39,19 +38,10 @@ def review(project_id, task_id, actor, db, payload=None):
         if row.status != "FAILED":
             raise AppError(409, "candidate_review_not_ready")
         service.frozen_materials(project_id, row, actor, db)
-        data = risk_service.parse(
-            risk_schemas.AnalysisInput, deepcopy(row.context["input"]), "input"
-        )
+        data = service.candidate_input(row.context)
 
         def validate(raw):
-            value, comparison = risk_schemas.normalize_comparison_text(
-                risk_service.json_object(raw)
-            )
-            output = risk_service.parse(risk_schemas.Report, value, "report")
-            output, corrections = risk_schemas.normalize_function_risks(output)
-            warnings = []
-            risk_schemas.validate_report(output, data, project_id, warnings)
-            return output, comparison, corrections, warnings
+            return risk_service.validate_candidate(raw, data, project_id)
 
         result, updated, error = candidates.evaluate(
             "requirements",
@@ -64,14 +54,14 @@ def review(project_id, task_id, actor, db, payload=None):
             previous_error=row.error_code,
         )
         if result is not None:
-            output, comparison, corrections, warnings = result
+            output, corrections, comparison, warnings = result
             saved = risk_service.store_report(
                 project_id,
                 row.title,
                 "input.json",
                 "risk-report.json",
-                data.model_dump(),
-                output.model_dump(),
+                data,
+                output,
                 row.context["bindings"],
                 actor,
                 db,
@@ -82,7 +72,11 @@ def review(project_id, task_id, actor, db, payload=None):
                 comparison_text_corrections=comparison,
                 function_risk_corrections=corrections,
                 review_warnings=warnings,
-                revalidation={"actor_id": actor.id, "at": datetime.now(UTC).isoformat()},
+                revalidation={
+                    "actor_id": actor.id,
+                    "at": datetime.now(UTC).isoformat(),
+                    "contract_version": data["contract_version"],
+                },
             )
             row.status, row.error_code = "COMPLETED", ""
         else:

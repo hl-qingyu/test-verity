@@ -18,9 +18,11 @@ from app.db.models import (
 from app.integrations import codex_terminal
 from app.modules.ai import native_terminal
 from app.modules.ai.service import analysis_configuration, configuration_snapshot
+from app.modules.case_generation import chat as generation_chat
+from app.modules.case_generation import native_terminal as generation_terminal
 from app.modules.documents.service import access
 
-RecordKind = Literal["requirements", "code", "changes", "coverage"]
+RecordKind = Literal["requirements", "code", "changes", "coverage", "generation"]
 MODELS = {
     "requirements": RequirementRiskAnalysis,
     "code": CodeAnalysisTask,
@@ -96,6 +98,8 @@ def project_session(row, resume=None):
 
 
 def current(project_id, kind: RecordKind, record_id, actor, db):
+    if kind == "generation":
+        return generation_terminal.current(project_id, record_id, actor, db)
     row = own(project_id, kind, record_id, actor, db)
     latest = db.scalar(
         resumes(project_id, kind, row).order_by(AnalysisTerminalResume.id.desc()).limit(1)
@@ -109,6 +113,9 @@ def current(project_id, kind: RecordKind, record_id, actor, db):
 
 
 def binding(project_id, kind: RecordKind, record_id, execution_id, actor, db, *, initial=False):
+    if kind == "generation":
+        bind = generation_terminal.generation_binding if initial else generation_terminal.binding
+        return bind(project_id, record_id, execution_id, actor, db)
     row = own(project_id, kind, record_id, actor, db)
     if initial:
         if execution_id != row.id:
@@ -130,6 +137,8 @@ def binding(project_id, kind: RecordKind, record_id, execution_id, actor, db, *,
 
 
 def start(project_id, kind: RecordKind, record_id, payload, actor, db):
+    if kind == "generation":
+        return generation_terminal.start(project_id, record_id, payload, actor, db)
     row = own(project_id, kind, record_id, actor, db, lock=True)
     if not native_terminal.enabled_for(actor.id):
         raise AppError(403, "generation_terminal_permission_required")
@@ -185,6 +194,9 @@ def start(project_id, kind: RecordKind, record_id, payload, actor, db):
 
 
 def cancel(project_id, kind: RecordKind, record_id, execution_id, actor, db):
+    if kind == "generation":
+        generation_terminal.authorized(project_id, record_id, actor, db, execution_id)
+        return generation_chat.cancel(project_id, record_id, execution_id, actor, db)
     row = own(project_id, kind, record_id, actor, db, lock=True)
     resume = db.scalar(
         resumes(project_id, kind, row)

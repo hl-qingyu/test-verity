@@ -203,17 +203,20 @@ class Coverage(Strict):
     targets: list[CoverageTarget] = Field(min_length=1, max_length=3)
 
 
+LimitationKind = Literal[
+    "INVALID_INPUT",
+    "MISSING_CODE",
+    "MISSING_MATERIAL",
+    "PARTIAL_CONTENT",
+    "UNREADABLE",
+    "UNRESOLVED_RELATION",
+    "OUT_OF_SCOPE",
+]
+
+
 class Limitation(Strict):
     key: Identifier
-    kind: Literal[
-        "INVALID_INPUT",
-        "MISSING_CODE",
-        "MISSING_MATERIAL",
-        "PARTIAL_CONTENT",
-        "UNREADABLE",
-        "UNRESOLVED_RELATION",
-        "OUT_OF_SCOPE",
-    ]
+    kind: LimitationKind
     target_refs: list[Target] = Field(min_length=1, max_length=3)
     source_refs: Refs
     detail: Nonempty
@@ -225,18 +228,43 @@ class Summary(Strict):
     priority_finding_keys: Refs
 
 
-class Report(Strict):
+class ReportBody(Strict):
     contract_version: Literal[2]
     analysis_type: Literal["CODE_REVIEW"]
     request_id: Identifier
-    outcome: Outcome
     summary: Summary
     target_results: list[TargetResult] = Field(min_length=1, max_length=3)
     findings: list[Finding] = Field(max_length=20000)
     evidence: list[Evidence] = Field(max_length=50000)
     chains: list[Chain] = Field(max_length=10000)
-    coverage: list[Coverage] = Field(max_length=50000)
     limitations: list[Limitation] = Field(max_length=10000)
+
+
+class Report(ReportBody):
+    outcome: Outcome
+    coverage: list[Coverage] = Field(max_length=50000)
+
+
+class CodeEvidenceV3(CodeEvidence):
+    segment_id: Identifier | None = None
+    start_line: int | None = Field(default=None, gt=0)
+    end_line: int | None = Field(default=None, gt=0)
+
+
+class FileRef(Strict):
+    source_id: Identifier
+    file_id: Identifier
+
+
+class LimitationV3(Limitation):
+    kind: LimitationKind | Literal["NOT_ASSESSED"]
+    file_refs: list[FileRef] = Field(default_factory=list)
+
+
+class CandidateV3(ReportBody):
+    contract_version: Literal[3]
+    evidence: list[Annotated[CodeEvidenceV3 | MaterialEvidence, Field(discriminator="kind")]]
+    limitations: list[LimitationV3]
 
 
 def require(value, code="code_contract_invalid"):
@@ -384,13 +412,48 @@ def validate_input(value: AnalysisInput):
     return data, sources, materials, segments, states
 
 
-def normalize_code_evidence(value: AnalysisInput, result: Report) -> tuple[Report, list[dict]]:
+def normalize_code_evidence(value: AnalysisInput, result: Report | CandidateV3):
     # Repair only a unique, complete original line range; never guess a missing source or excerpt.
     _, _, _, segments, _ = validate_input(value)
     report = result.model_dump(by_alias=True)
     corrections = []
     for evidence in report["evidence"]:
         if evidence["kind"] != "CODE":
+            continue
+        if isinstance(result, CandidateV3) and (
+            evidence["segment_id"] is None
+            or evidence["start_line"] is None
+            or evidence["end_line"] is None
+        ):
+            matches = []
+            quote = evidence["excerpt"].split("\n")
+            for (kind, source, file, segment_id), candidate in segments.items():
+                if (kind, source, file) != ("CODE", evidence["source_id"], evidence["file_id"]):
+                    continue
+                lines = candidate["text"].split("\n")
+                for offset, line in enumerate(lines):
+                    if line == quote[0] and lines[offset : offset + len(quote)] == quote:
+                        start = candidate["start_line"] + offset
+                        matches.append((segment_id, start, start + len(quote) - 1))
+                        if len(matches) > 1:
+                            break
+                if len(matches) > 1:
+                    break
+            if len(matches) == 1:
+                segment_id, start, end = matches[0]
+                corrections.append(
+                    {
+                        "evidence_key": evidence["key"],
+                        "kind": "EXACT_V3_COORDINATES",
+                        "original_segment_id": evidence["segment_id"],
+                        "original_start_line": evidence["start_line"],
+                        "original_end_line": evidence["end_line"],
+                        "segment_id": segment_id,
+                        "start_line": start,
+                        "end_line": end,
+                    }
+                )
+                evidence.update(segment_id=segment_id, start_line=start, end_line=end)
             continue
         segment = segments.get(
             ("CODE", evidence["source_id"], evidence["file_id"], evidence["segment_id"])
@@ -433,10 +496,10 @@ def normalize_code_evidence(value: AnalysisInput, result: Report) -> tuple[Repor
             }
         )
         evidence.update(start_line=actual_start, end_line=actual_end, excerpt=excerpt)
-    return Report.model_validate(report), corrections
+    return type(result).model_validate(report), corrections
 
 
-def validate_report(value: AnalysisInput, result: Report):
+def validate_report(value: AnalysisInput, result: Report | CandidateV3):
     data, sources, materials, segments, states = validate_input(value)
     report = result.model_dump(by_alias=True)
     require(report["request_id"] == data["request_id"], "code_request_mismatch")
@@ -453,6 +516,9 @@ def validate_report(value: AnalysisInput, result: Report):
         require(key in segments, "code_evidence_invalid")
         segment = segments[key]
         if e["kind"] == "CODE":
+            require(
+                e["start_line"] is not None and e["end_line"] is not None, "code_evidence_invalid"
+            )
             start, end = (
                 e["start_line"] - segment["start_line"],
                 e["end_line"] - segment["start_line"],
@@ -552,6 +618,18 @@ def validate_report(value: AnalysisInput, result: Report):
             for m in materials.values()
         ):
             require(goal["status"] == "BLOCKED")
+    if isinstance(result, CandidateV3):
+        files = {
+            (source["source_id"], file["file_id"])
+            for source in sources.values()
+            for file in source["files"]
+        }
+        for limit in result.limitations:
+            identities = [(ref.source_id, ref.file_id) for ref in limit.file_refs]
+            require(len(identities) == len(set(identities)) and set(identities) <= files)
+            if limit.kind == "NOT_ASSESSED":
+                require(bool(identities))
+        return report
     statuses = [g["status"] for g in goals.values()]
     require(
         report["outcome"]

@@ -1,3 +1,4 @@
+import { usePolling } from './usePolling';
 import { callModeName, readSelectedAI } from './aiConfiguration';
 import { PageJump } from './PageJump';
 import { useEffect, useRef, useState } from 'react';
@@ -108,24 +109,25 @@ function Chat({
     risk_key?: string;
   } | null>(null);
 
-  useEffect(() => {
-    const c = new AbortController();
-    controller.current = c;
-    let firstLoad = true;
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
+  const pollKey = base + ':' + endpoint + ':' + reportId + ':' + functionKey;
+  const historyScope = useRef('');
+  usePolling({
+    active: turns.some((row) => row.status === 'RUNNING' || row.status === 'QUEUED'),
+    refreshKey: pollKey,
+    interval: 2500,
+    load: async (signal) => {
       try {
-        const data = await chatHistory(endpoint, reportId, c.signal, undefined, functionKey);
-        if (c.signal.aborted) return;
+        const data = await chatHistory(endpoint, reportId, signal, undefined, functionKey);
+        if (signal.aborted) return;
         latest.current = data.items.at(-1)?.id || 0;
         setTurns((old) => merge(old, data.items));
-        if (firstLoad) {
+        if (historyScope.current !== pollKey) {
           setHasMore(data.has_more);
-          firstLoad = false;
+          historyScope.current = pollKey;
         }
         setLoading(false);
       } catch (reason) {
-        if (!c.signal.aborted) {
+        if (!signal.aborted) {
           setError(chatError(reason, onSessionEnd));
           setLoading(false);
           if (
@@ -140,14 +142,15 @@ function Chat({
             setDetail(null);
             setTurns([]);
             setRecords([]);
-            c.abort();
+            controller.current.abort();
           }
         }
-      } finally {
-        if (!c.signal.aborted) timer = setTimeout(poll, 2500);
       }
-    }
-    void poll();
+    },
+  });
+  useEffect(() => {
+    const c = new AbortController();
+    controller.current = c;
     riskDetailRequest(`${base}/${reportId}`, project.id, { signal: c.signal })
       .then((v) => {
         if (!c.signal.aborted) setDetail(v);
@@ -169,7 +172,6 @@ function Chat({
       });
     return () => {
       c.abort();
-      clearTimeout(timer);
     };
   }, [base, endpoint, reportId, project.id, functionKey, onSessionEnd]);
 

@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
@@ -43,22 +44,26 @@ function harness(count = 35, customize = () => {}, component = 'GenerationReview
     if (cache.has(file)) return cache.get(file);
     const exports = {};
     cache.set(file, exports);
-    const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    const code = compileModule(fs.readFileSync(file, 'utf8'), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         jsx: ts.JsxEmit.ReactJSX,
       },
     }).outputText;
-    new Function('exports', 'require', code)(exports, (dep) => {
-      if (dep === 'react') return react;
-      if (dep === './CaseDialog') return { CaseDialog: 'dialog' };
-      if (dep === './FormSelect') return { FormSelect: 'select' };
-      if (dep === './CaseGenerationDialogs') return { GenerationDetail: 'edit-detail' };
-      if (!dep.startsWith('.')) return require(dep);
-      const base = path.resolve(path.dirname(file), dep);
-      return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'));
-    });
+    evaluateModule(
+      code,
+      (dep) => {
+        if (dep === 'react') return react;
+        if (dep === './CaseDialog') return { CaseDialog: 'dialog' };
+        if (dep === './FormSelect') return { FormSelect: 'select' };
+        if (dep === './CaseGenerationDialogs') return { GenerationDetail: 'edit-detail' };
+        if (!dep.startsWith('.')) return require(dep);
+        const base = path.resolve(path.dirname(file), dep);
+        return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'));
+      },
+      exports,
+    );
     return exports;
   }
   const blank = load(path.resolve(__dirname, '../src/caseApi.ts')).blankDesign,

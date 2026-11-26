@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { apiRequest } from './api/http';
 
 export type CliEvent = {
@@ -18,11 +19,9 @@ export type CliEvents = {
   attempts: { index: number; status: string; started_at: string | null }[];
 };
 
-function object(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw Error('generation_response_invalid');
-  return value as Record<string, unknown>;
-}
+const guards = createGuards('generation_response_invalid');
+const object = guards.obj;
+
 export function parseCliEvents(value: unknown): CliEvents {
   const r = object(value);
   if (

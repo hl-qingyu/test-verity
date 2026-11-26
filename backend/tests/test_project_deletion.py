@@ -145,19 +145,21 @@ class ProjectDeletionTests(unittest.TestCase):
             db.commit()
         self.assertEqual(self.delete().status_code, 200)
 
-    def test_fresh_access_rechecks_cached_project_and_identifier_stays_reserved(self):
+    def test_deleted_project_access_is_rechecked_and_name_can_be_reused(self):
         self.login(self.admin_name)
         with self.factory() as db:
             actor = db.get(UserAccount, self.admin_id)
             stale = service.access_project(self.project, actor, db)
-            identifier = stale.identifier
+            identifier, name = stale.identifier, stale.name
             self.assertEqual(self.delete().status_code, 200)
             with self.assertRaises(AppError) as caught:
                 service.access_project(self.project, actor, db, lock=True)
             self.assertEqual(caught.exception.detail, "project_not_found")
             response = self.client.post(
                 "/api/projects",
-                json={"name": "同标识项目", "identifier": identifier, "owner_id": self.admin_id},
+                json={"name": name, "identifier": identifier, "owner_id": self.admin_id},
                 headers=test_auth.ORIGIN,
             )
-            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.status_code, 201, response.text)
+            self.assertEqual(response.json()["name"], name)
+            self.assertNotEqual(response.json()["identifier"], identifier)

@@ -1,3 +1,6 @@
+const { compileModule, load: loadModule, evaluateModule } = require('./helpers/load.cjs');
+const React = require('react');
+const { renderToStaticMarkup } = require('react-dom/server');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
@@ -6,11 +9,11 @@ const { test } = require('node:test'),
 function load(name, overrides = {}) {
   const file = path.resolve(__dirname, '../src', name),
     exports = {};
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const code = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  new Function('exports', 'require', code)(
-    exports,
+  evaluateModule(
+    code,
     (n) =>
       overrides[n] ||
       (n.startsWith('.')
@@ -20,6 +23,7 @@ function load(name, overrides = {}) {
             overrides,
           )
         : require(n)),
+    exports,
   );
   return exports;
 }
@@ -158,21 +162,78 @@ test('review prose and design field labels use Chinese without changing raw repo
   const raw = JSON.stringify(r);
   assert.equal(api.reviewText(r.report.findings[0].title), '预期结果不明确');
   assert.equal(JSON.stringify(r), raw);
-  const page = fs.readFileSync(path.resolve(__dirname, '../src/CaseAnalysis.tsx'), 'utf8');
-  assert.match(page, /finding\.fields\.map\(reviewFieldName\)/);
-  assert.doesNotMatch(page, /finding\.fields\.join\(/);
-  assert.match(page, /reviewFieldName\(f\)/);
-  assert.match(page, /reviewText\(finding\.description\)/);
-  assert.doesNotMatch(page, /reviewText\(e\.quote\)/);
+  const file = path.resolve(__dirname, '../src/CaseAnalysis.tsx');
+  const source = fs.readFileSync(file, 'utf8') + '\nexport { ReviewDetail };';
+  const { outputText } = compileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
+  });
+  const exported = {};
+  evaluateModule(
+    outputText,
+    (name) => {
+      if (name.endsWith('.css')) return {};
+      if (name === './CaseDialog') {
+        return {
+          CaseDialog: ({ title, footer, sideControls, children }) =>
+            React.createElement('section', null, title, sideControls, children, footer),
+        };
+      }
+      if (!name.startsWith('.')) return require(name);
+      const base = path.resolve(path.dirname(file), name);
+      return loadModule(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'));
+    },
+    exported,
+  );
+  const finding = r.report.findings[0];
+  finding.case_ids = [11];
+  r.input.cases = [{ id: 11, number: 'C11', version: 1, title: '固定用例' }];
+  r.input.materials = [
+    {
+      source_id: 'M1',
+      name: '固定需求',
+      version: '1',
+      segments: [{ location: '§1', text: '原文明确叫expected字段' }],
+    },
+  ];
+  const markup = renderToStaticMarkup(
+    React.createElement(exported.ReviewDetail, {
+      record: r,
+      finding,
+      sequence: [finding.key],
+      busy: false,
+      onClose() {},
+      onSave() {},
+      onNavigate() {},
+      onDraft() {},
+      onAsk() {},
+    }),
+  );
+  assert.match(markup, /预期结果不明确/);
+  assert.match(markup, /前置条件、预期结果/);
+  assert.match(markup, /原文明确叫expected字段/);
+  assert.match(markup, /class="change-dialog-footer review-dialog-footer"/);
+  assert.match(markup, /form="reviewHandle"[^>]*>保存处理/);
 });
 test('formal route has no demo state and shares safe literal 14-column spreadsheet export', () => {
-  const source = fs.readFileSync(path.resolve(__dirname, '../src/App.tsx'), 'utf8');
-  assert.match(source, /path="\/coverage"/);
-  assert.match(source, /CaseAnalysis/);
-  const page = fs.readFileSync(path.resolve(__dirname, '../src/CaseAnalysis.tsx'), 'utf8');
-  assert.doesNotMatch(page, /localStorage|CR-DEMO|Review_001|fetch\(/);
-  assert.match(page, /allReviewFindings/);
-  assert.match(page, /尚未检查/);
+  const { CaseAnalysis } = loadModule(path.resolve(__dirname, '../src/CaseAnalysis.tsx'));
+  const { MemoryRouter } = require('react-router-dom');
+  const view = renderToStaticMarkup(
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(CaseAnalysis, {
+        project: { id: 7 },
+        user: { id: 2 },
+        onSessionEnd() {},
+      }),
+    ),
+  );
+  assert.match(view, /用例分析/);
+  assert.doesNotMatch(view, /CR-DEMO|Review_001/);
   const exports = load('generationExport.ts', { './generationPage': {} }),
     d = Object.fromEntries(
       load('caseApi.ts', { './api/http': {} }).DESIGN_FIELDS.map((f) => [f, '']),
@@ -193,15 +254,6 @@ test('prototype workspace has an actual grid and every review dialog has themed 
   assert.match(css, /\.case-review-dialog \.review-dialog-footer\s*\{[^}]*display:\s*flex/);
   assert.match(css, /\.case-review-dialog \.field-label > textarea\s*\{/);
   assert.match(css, /\.case-review-dialog \.form-grid\s*\{[^}]*grid-template-columns:/);
-  const page = fs.readFileSync(path.resolve(__dirname, '../src/CaseAnalysis.tsx'), 'utf8');
-  const create = fs.readFileSync(path.resolve(__dirname, '../src/CaseAnalysisNew.tsx'), 'utf8');
-  assert.match(page, /className="change-result-tabs tabs"/);
-  assert.match(page, /function ReviewDialog/);
-  assert.match(page, /className="change-dialog-footer review-dialog-footer"/);
-  assert.match(page, /onClick=\{\(\) => setFixedCase\(c\)\}/);
-  assert.match(create, /className="case-review-dialog case-review-new"/);
-  assert.match(create, /className="change-dialog-footer review-dialog-footer"/);
-  assert.match(create, /className="field-label"/);
 });
 
 test('new review labels use original selected/latest filenames for requirement and prototype files', async () => {
@@ -225,7 +277,7 @@ test('new review labels use original selected/latest filenames for requirement a
       return (refs[refCursor++] ||= { current: initial });
     },
   };
-  const code = ts.transpileModule(
+  const code = compileModule(
     fs.readFileSync(path.resolve(__dirname, '../src/CaseAnalysisNew.tsx'), 'utf8'),
     {
       compilerOptions: {
@@ -246,7 +298,7 @@ test('new review labels use original selected/latest filenames for requirement a
       './PrototypeDirectoryFiles': { PrototypeDirectoryFiles: () => null },
       './PrototypeLinkPages': { PrototypeLinkPages: 'prototype-pages' },
     };
-  new Function('exports', 'require', code)(exports, (name) => stubs[name] || require(name));
+  evaluateModule(code, (name) => stubs[name] || require(name), exports);
   const props = {
     projectId: 7,
     prototypes: [],

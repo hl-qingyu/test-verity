@@ -8,8 +8,10 @@ from uuid import uuid4
 
 import test_auth
 from sqlalchemy.orm import Session
+from worker_fixtures import claim as claim_for_execution
 
 from app.core.errors import AppError
+from app.db import models as worker_models
 from app.db.models import AIConnection, SkillChatTurn, UserAccount
 from app.modules.skills import execution, files, schemas, service
 
@@ -133,6 +135,15 @@ class SkillFilesTests(LocalFiles, unittest.TestCase):
             return
         with self.assertRaises(AppError):
             files.bundle("case-generation")
+
+    def test_requirement_snapshot_checks_contract_heading_against_registry(self):
+        target = self.root / "requirement-analysis/contract.md"
+        heading = files.REQUIREMENT_CONTRACT_HEADING
+        target.write_text(heading.format(3) + "\n\nOld contract", encoding="utf-8")
+        with self.assertRaisesRegex(AppError, "risk_analysis_contract_mismatch"):
+            files.snapshot("requirement-analysis")
+        target.write_text(heading.format(4) + "\n\nCurrent contract", encoding="utf-8")
+        self.assertEqual(files.snapshot("requirement-analysis")["contract_version"], 4)
 
     def test_ai_output_retains_unicode_and_rejects_structure_or_metadata_changes(self):
         text = json.dumps(
@@ -436,7 +447,7 @@ class SkillDatabaseTests(LocalFiles, unittest.TestCase):
             first.json()["id"],
         )
         with self.factory() as db:
-            task = execution.claim(db)
+            task = claim_for_execution(db, worker_models.SkillChatTurn)
             row = db.get(SkillChatTurn, task)
             self.assertEqual(row.context["body"], "Fixed draft")
             self.assertEqual(len(row.context["references"]), 3)
@@ -478,7 +489,7 @@ class SkillDatabaseTests(LocalFiles, unittest.TestCase):
         p = self.chat_payload()
         first = self.client.post(url, json=p, headers=test_auth.ORIGIN).json()
         with self.factory() as db:
-            task = execution.claim(db)
+            task = claim_for_execution(db, worker_models.SkillChatTurn)
         self.client.post(url + f"/{task}/cancel", headers=test_auth.ORIGIN)
         with patch.object(execution.responses, "converse", return_value='{"body":"bad"}'):
             execution.execute(task, self.factory)
@@ -486,7 +497,7 @@ class SkillDatabaseTests(LocalFiles, unittest.TestCase):
         p = self.chat_payload(last_turn_id=first["id"])
         second = self.client.post(url, json=p, headers=test_auth.ORIGIN).json()
         with self.factory() as db:
-            task = execution.claim(db)
+            task = claim_for_execution(db, worker_models.SkillChatTurn)
         with patch.object(execution.responses, "converse", return_value='{"body":"bad"}'):
             execution.execute(task, self.factory)
         with self.factory() as db:
@@ -496,7 +507,7 @@ class SkillDatabaseTests(LocalFiles, unittest.TestCase):
         p = self.chat_payload(last_turn_id=second["id"])
         self.client.post(url, json=p, headers=test_auth.ORIGIN)
         with self.factory() as db:
-            task = execution.claim(db)
+            task = claim_for_execution(db, worker_models.SkillChatTurn)
             actor = db.get(UserAccount, self.admin_id)
             actor.platform_role = "USER"
             db.commit()

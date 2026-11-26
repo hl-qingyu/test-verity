@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,7 +7,7 @@ const ts = require('typescript');
 
 // Exercise the actual dialog cancel handler without adding a browser/renderer dependency.
 const source = fs.readFileSync(path.join(__dirname, '../src/Documents.tsx'), 'utf8');
-const compiled = ts.transpileModule(source + '\nexport { DocumentDialog };', {
+const compiled = compileModule(source + '\nexport { DocumentDialog };', {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
     target: ts.ScriptTarget.ES2022,
@@ -14,12 +15,16 @@ const compiled = ts.transpileModule(source + '\nexport { DocumentDialog };', {
   },
 }).outputText;
 const component = {};
-new Function('exports', 'require', compiled)(component, (name) => {
-  if (name === 'react')
-    return { useRef: () => ({ current: { showModal() {} } }), useEffect: (effect) => effect() };
-  if (name === 'react/jsx-runtime') return require(name);
-  return {};
-});
+evaluateModule(
+  compiled,
+  (name) => {
+    if (name === 'react')
+      return { useRef: () => ({ current: { showModal() {} } }), useEffect: (effect) => effect() };
+    if (name === 'react/jsx-runtime') return require(name);
+    return {};
+  },
+  component,
+);
 
 test('cancelling the file picker does not close the upload dialog; explicit dialog cancellation still works', () => {
   const dialogElement = {},

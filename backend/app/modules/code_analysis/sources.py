@@ -3,7 +3,6 @@
 import hashlib
 import json
 import re
-from pathlib import Path
 
 from sqlalchemy import select
 
@@ -26,7 +25,6 @@ from app.modules.requirements import analysis_materials
 from app.modules.skills import files as skill_files
 from app.security.source_content import contains_private_key
 
-ROOT = Path(__file__).resolve().parents[4]
 FILE_LIMIT = 16 * 1024 * 1024
 
 

@@ -1,5 +1,4 @@
-import { apiRequest } from './api/http';
-
+import { createGuards } from './api/guards';
 export type NativeSession = {
   id: number;
   status: string;
@@ -49,11 +48,9 @@ export function nativeSessionUrl(base: string, session: NativeSession) {
 export function terminalEnabled(value: unknown) {
   return object(value).enabled === true;
 }
-function object(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw Error('generation_response_invalid');
-  return value as Record<string, unknown>;
-}
+const guards = createGuards('generation_response_invalid');
+const object = guards.obj;
+
 export function sessionResponse(value: unknown): NativeSession | null {
   const response = object(value);
   if (response.session === null) return null;
@@ -94,24 +91,6 @@ export function sessionResponse(value: unknown): NativeSession | null {
     ...(s.replay_cols !== undefined ? { replay_cols: s.replay_cols as number } : {}),
   };
 }
-export async function readNative(url: string, cursor: number, signal: AbortSignal) {
-  const r = object(await apiRequest<unknown>(`${url}?cursor=${cursor}`, { signal }));
-  if (
-    !Array.isArray(r.chunks) ||
-    r.chunks.some((c: unknown) => typeof c !== 'string') ||
-    !Number.isSafeInteger(r.next_cursor) ||
-    Number(r.next_cursor) !== cursor + r.chunks.length ||
-    typeof r.has_more !== 'boolean'
-  )
-    throw Error('generation_response_invalid');
-  return {
-    chunks: r.chunks as string[],
-    nextCursor: Number(r.next_cursor),
-    hasMore: r.has_more,
-    session: sessionResponse(r),
-  };
-}
-
 export function terminalSocket(url: string, cursor = 0) {
   if (!Number.isSafeInteger(cursor) || cursor < 0) throw Error('generation_response_invalid');
   return new WebSocket(

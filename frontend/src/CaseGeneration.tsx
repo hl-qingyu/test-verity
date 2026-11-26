@@ -1,3 +1,4 @@
+import { usePolling } from './usePolling';
 import { CandidateIssueDialog, GenerationCandidateIssues } from './GenerationCandidateIssues';
 import type { GenerationCandidateIssue } from './generationPage';
 import { AIConfigurationSummary } from './AIConfigurationSummary';
@@ -139,27 +140,27 @@ function GenerationRemote(props: Props) {
       pageCache.listPage = listPage;
     }
   }, [pageCache, loaded, error, selectedId, listPage]);
-  useEffect(() => {
-    alive.current = true;
-    if (!props.project) return;
-    const c = new AbortController();
-    let fetching = false;
-    async function read() {
-      if (fetching || c.signal.aborted || !props.project) return;
-      fetching = true;
+  const loadedPage = useRef(0);
+  usePolling({
+    enabled: !!props.project,
+    active: summaries.some((row) => row.active),
+    interval: 3000,
+    refreshKey: String(listPage) + ':' + (props.overviewTarget?.id || ''),
+    load: async (signal) => {
       const e = epoch.current;
       try {
+        const firstLoad = loadedPage.current !== listPage;
         const results = await Promise.all(
-          Array.from({ length: listPage }, (_, n) =>
-            generationSummaries(props.project!.id, c.signal, n + 1),
+          Array.from({ length: firstLoad ? listPage : 1 }, (_, n) =>
+            generationSummaries(props.project!.id, signal, n + 1),
           ),
         );
-        if (c.signal.aborted || e !== epoch.current) return;
+        if (signal.aborted || e !== epoch.current) return;
         const next = results.flatMap((r) => r.items);
         if (props.overviewTarget && !next.some((r) => r.id === String(props.overviewTarget!.id))) {
           const targeted = await generationSummaries(
             props.project!.id,
-            c.signal,
+            signal,
             1,
             String(props.overviewTarget.id),
           );
@@ -167,15 +168,30 @@ function GenerationRemote(props: Props) {
             throw Error('generation_not_found');
           next.push(...targeted.items);
         }
-        if (c.signal.aborted || e !== epoch.current) return;
-        setSummaries(next);
-        setSelectedId((id) => (next.some((r) => r.id === id) ? id : next[0]?.id || ''));
-        setHasMore(results.at(-1)?.hasMore || false);
+        if (signal.aborted || e !== epoch.current) return;
+        if (firstLoad) {
+          setSummaries(next);
+          setSelectedId((id) => (next.some((row) => row.id === id) ? id : next[0]?.id || ''));
+          setHasMore(results.at(-1)?.hasMore || false);
+          loadedPage.current = listPage;
+        } else {
+          setSummaries((old) => {
+            const byId = new Map(old.map((item) => [item.id, item]));
+            let changed = false;
+            for (const item of next) {
+              const previous = byId.get(item.id);
+              if (previous && JSON.stringify(previous) === JSON.stringify(item)) continue;
+              byId.set(item.id, item);
+              changed = true;
+            }
+            return changed ? [...byId.values()].sort((a, b) => Number(b.id) - Number(a.id)) : old;
+          });
+        }
         setLoaded(true);
         setError('');
       } catch (e) {
         if (
-          !c.signal.aborted &&
+          !signal.aborted &&
           e instanceof Error &&
           ['not_authenticated', 'project_not_found'].includes(e.message)
         ) {
@@ -189,38 +205,31 @@ function GenerationRemote(props: Props) {
           setSummaries([]);
           setLoaded(true);
         }
-        if (!c.signal.aborted) setError(generationError(e, props.onSessionEnd));
-      } finally {
-        fetching = false;
+        if (!signal.aborted) setError(generationError(e, props.onSessionEnd));
       }
-    }
-    void read();
-    const timer = window.setInterval(() => void read(), 3000);
-    return () => {
-      c.abort();
-      window.clearInterval(timer);
-    };
-  }, [props.project, props.onSessionEnd, props.overviewTarget, listPage, pageCache]);
+    },
+  });
   useEffect(
     () => () => {
       alive.current = false;
     },
     [],
   );
-  const refreshKey = summaries.find((r) => r.id === selectedId)?.refreshKey;
-  useEffect(() => {
-    if (!props.project || !selectedId || refreshKey === undefined) return;
-    if (loadedKeys.current.get(selectedId) === refreshKey) return;
-    const c = new AbortController(),
-      e = epoch.current;
-    let fetching = false;
-    async function readDetail() {
-      if (fetching || c.signal.aborted || !props.project) return;
-      fetching = true;
+  const selectedSummary = summaries.find((row) => row.id === selectedId);
+  const refreshKey = selectedSummary?.refreshKey;
+  usePolling({
+    enabled: !!props.project && !!selectedId && refreshKey !== undefined,
+    active: selectedSummary?.active ?? false,
+    interval: 3000,
+    refreshKey: selectedId + ':' + refreshKey,
+    load: async (signal) => {
+      if (!props.project || !refreshKey || loadedKeys.current.get(selectedId) === refreshKey)
+        return;
+      const e = epoch.current;
       setDetailLoading(!rowsRef.current.some((r) => r.id === selectedId));
       try {
-        const next = await generationDetail(props.project.id, selectedId, c.signal);
-        if (c.signal.aborted || e !== epoch.current) return;
+        const next = await generationDetail(props.project.id, selectedId, signal);
+        if (signal.aborted || e !== epoch.current) return;
         loadedKeys.current.set(selectedId, refreshKey!);
         setRows((old) => [
           { ...next, chatDrafts: old.find((r) => r.id === next.id)?.chatDrafts || {} },
@@ -228,22 +237,12 @@ function GenerationRemote(props: Props) {
         ]);
         setDetailError('');
       } catch (e) {
-        if (!c.signal.aborted) setDetailError(generationError(e, props.onSessionEnd));
+        if (!signal.aborted) setDetailError(generationError(e, props.onSessionEnd));
       } finally {
-        fetching = false;
-        if (!c.signal.aborted) setDetailLoading(false);
+        if (!signal.aborted) setDetailLoading(false);
       }
-    }
-    void readDetail();
-    // Retry only reads after a transient failure, never generation/application actions.
-    const timer = window.setInterval(() => {
-      if (loadedKeys.current.get(selectedId) !== refreshKey) void readDetail();
-    }, 3000);
-    return () => {
-      c.abort();
-      window.clearInterval(timer);
-    };
-  }, [props.project, props.onSessionEnd, selectedId, refreshKey]);
+    },
+  });
   return (
     <>
       {(error || detailError) && (

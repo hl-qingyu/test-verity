@@ -14,6 +14,7 @@ from cryptography.fernet import Fernet
 
 from app.core.errors import AppError
 from app.integrations import cli_reading, codex_terminal
+from app.modules.case_generation import reading
 
 
 def entries(root, page="index.json"):
@@ -51,6 +52,75 @@ class ReadingFilesTests(unittest.TestCase):
         crypto = patch.object(cli_reading, "credential_cipher", return_value=self.cipher)
         crypto.start()
         self.addCleanup(crypto.stop)
+
+    def test_structured_layout_splits_without_losing_lines_and_verifies_on_resume(self):
+        with tempfile.TemporaryDirectory() as folder:
+            work = Path(folder)
+            fixed = b'{"snapshot":"fixed"}'
+            (work / "input.json").write_bytes(fixed)
+            original = ("完整内容\r\n" * 13_000) + "长行" * 45_000
+            path = cli_reading.build_files(
+                work, [{"path": "source-1/原型:首页.txt", "text": original}], "先读索引"
+            )
+            self.assertEqual(cli_reading.resume_index(work), path)
+            root = (work / path).parent
+            parts = sorted(root.glob("source-1/原型_首页.part-*.txt"))
+            self.assertGreaterEqual(len(parts), 3)
+            self.assertEqual(
+                "".join(p.read_bytes().decode().split("\n", 1)[1] for p in parts), original
+            )
+            self.assertEqual((work / "input.json").read_bytes(), fixed)
+            parts[0].write_text("changed", encoding="utf-8")
+            with self.assertRaises(AppError) as caught:
+                cli_reading.resume_index(work)
+            self.assertEqual(caught.exception.detail, "ai_cli_reading_unavailable")
+
+    def test_structured_paths_cannot_escape_or_collide_after_sanitization(self):
+        with tempfile.TemporaryDirectory() as folder:
+            work = Path(folder)
+            (work / "input.json").write_text("{}", encoding="utf-8")
+            for paths in (
+                ["../escape.txt"],
+                ["D:/absolute.txt"],
+                ["a:b.txt"],
+                ["index.md"],
+                ["x?.txt", "x*.txt"],
+            ):
+                with self.subTest(paths=paths), self.assertRaises(AppError):
+                    cli_reading.build_files(
+                        work, [{"path": path, "text": "synthetic"} for path in paths], ""
+                    )
+
+    def test_case_generation_layout_preserves_prototype_and_document_sections(self):
+        original = json.loads(
+            (
+                Path(__file__).resolve().parents[2]
+                / "skill/case-generation/examples/compact-input.json"
+            ).read_text(encoding="utf-8")
+        )
+        text = "固定正文\r\n第二行"
+        prototype = {
+            **original["materials"][0],
+            "snapshot_ref": "prototype",
+            "kind": "LINK",
+            "segments": [{"segment_id": "page", "location": "订单 / 首页", "text": text}],
+        }
+        word = {
+            **prototype,
+            "snapshot_ref": "document",
+            "kind": "FILE",
+            "segments": [{"segment_id": "paragraph", "location": "第 1 段", "text": text}],
+        }
+        for materials in ([prototype], [prototype, word], [word]):
+            with self.subTest(materials=[item["snapshot_ref"] for item in materials]):
+                data = {**original, "materials": materials}
+                files = reading.reading_layout(data, [])
+                snippets = [entry for entry in files if "/segment-" in entry["path"]]
+                self.assertEqual(len(snippets), len(materials))
+                for material, entry in zip(materials, snippets, strict=True):
+                    metadata, body = entry["text"].split("\n", 1)
+                    self.assertEqual(json.loads(metadata)["snapshot_ref"], material["snapshot_ref"])
+                    self.assertEqual(body, text)
 
     def test_full_unicode_text_and_embedded_media_reassemble_exactly_without_printing_base64(self):
         binary = b"RIFF" + (100000).to_bytes(4, "little") + b"WEBP" + b"synthetic" * 20000
@@ -175,7 +245,7 @@ class ReadingFilesTests(unittest.TestCase):
     def test_resume_adds_reading_guidance_without_overwriting_original_input_skill_or_history(self):
         with tempfile.TemporaryDirectory() as folder:
             settings = SimpleNamespace(
-                ai_cli_work_path=Path(folder), ai_cli_executable=Path("codex.exe")
+                ai_cli_terminal_work_path=Path(folder), ai_cli_executable=Path("codex.exe")
             )
             with patch.object(codex_terminal, "Settings", return_value=settings):
                 identity = str(uuid4())

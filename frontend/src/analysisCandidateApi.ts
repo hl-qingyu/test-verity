@@ -1,3 +1,4 @@
+import { isRecord } from './api/guards';
 import { apiRequest } from './api/http';
 type Conflict = { path: string; values: string[] };
 export type AnalysisCandidate = {
@@ -24,9 +25,7 @@ export type AnalysisCandidate = {
   }[];
 };
 
-function record(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
+const record = isRecord;
 function conflicts(value: unknown): boolean {
   return (
     Array.isArray(value) &&

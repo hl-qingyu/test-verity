@@ -1,16 +1,17 @@
-"""Fixed file batches and deterministic, evidence-preserving report aggregation."""
+"""Read and locally revalidate historical change batches without model calls."""
 
 import copy
 import hashlib
 import json
-import re
 from collections import defaultdict
-from pathlib import PurePosixPath
+from datetime import UTC, datetime
 
-from app.modules.change_analysis import batch_merge, batch_planning, comparison, contract
+from pydantic import ValidationError
 
-TARGET_BYTES = 1024 * 1024
-LEGACY_TARGET_BYTES = 512 * 1024
+from app.core.errors import AppError
+from app.modules.change_analysis import artifacts, batch_merge, comparison, contract, evidence
+from app.modules.requirements.risk_service import json_object
+
 GROUPS = (
     "changes",
     "function_impacts",
@@ -36,34 +37,67 @@ RESULT_REFS = {
     "limitation_refs",
     "chain_refs",
 }
-NOTE = (
-    "\n\n平台分批执行说明：用户已授权按文件分批，本次是一个子输入；"
-    "历史Skill中的完整单次提交约定在此次执行中以本批范围为准，模型不自行追加调用。"
-    "本次只分析所给固定文件范围。主变化映射为下列清单；"
-    "其他文件是依赖或共同依据，不额外生成其独立变化项。原文及行号未裁剪，"
-    "未提供的文件不能声称已读；动态依赖、跨批次关系不明确时必须记录证据缺口。"
-    "仍按原CHANGE_IMPACT契约返回完整本批报告、覆盖清单及引用，不输出全项目完成结论。\n"
-)
 
 
-def size(value):
-    return len(json.dumps(value, ensure_ascii=False).encode())
-
-
-def fingerprint(data):
-    return hashlib.sha256(
-        json.dumps(
-            {k: v for k, v in data.items() if k != "request_id"},
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()
+def _input_for_v2(data, batch):
+    snapshots = {s["snapshot_ref"]: s for s in data["snapshots"]}
+    selected, pairs = defaultdict(set), []
+    mapping_keys = {tuple(k) for k in batch["mappings"]}
+    for pair in data["comparison_pairs"]:
+        mappings = [
+            m for m in pair["unit_mappings"] if (pair["pair_id"], m["mapping_id"]) in mapping_keys
+        ]
+        if not mappings:
+            continue
+        paths = set()
+        for side in ("before", "after"):
+            ref = pair[side + "_ref"]
+            selected[ref].update(uid for m in mappings for uid in m[side + "_unit_ids"])
+            paths.update(
+                u["path"] for u in snapshots[ref]["units"] if u["unit_id"] in selected[ref]
+            )
+        pairs.append(
+            {
+                **pair,
+                "scope": sorted(paths),
+                "unit_mappings": mappings,
+                "text_diffs": [
+                    d
+                    for d in pair["text_diffs"]
+                    if (pair["pair_id"], d["mapping_ref"]) in mapping_keys
+                ],
+            }
+        )
+    context_refs = []
+    for ref, ids in batch["context_units"].items():
+        selected[ref].update(ids)
+        context_refs.append(ref)
+    histories = [h for h in data["historical_items"] if h["history_ref"] in batch["history_refs"]]
+    for history in histories:
+        for ref in history["basis_refs"]:
+            if ref not in selected:
+                selected[ref].update(u["unit_id"] for u in snapshots[ref]["units"])
+                context_refs.append(ref)
+    result = {
+        **data,
+        "comparison_pairs": pairs,
+        "snapshots": [
+            {**s, "units": [u for u in s["units"] if u["unit_id"] in selected[s["snapshot_ref"]]]}
+            for s in data["snapshots"]
+            if s["snapshot_ref"] in selected
+        ],
+        "context_refs": list(dict.fromkeys(context_refs)),
+        "cases": [c for c in data["cases"] if c["case_ref"] in batch["case_refs"]],
+        "historical_items": histories,
+        "targets": [t for t in data["targets"] if t not in batch.get("blocked_targets", [])],
+        "input_limitations": [*data["input_limitations"], *batch.get("limitations", [])],
+    }
+    return copy.deepcopy(result)
 
 
 def input_for(data, batch):
     if batch.get("plan_version") == 2:
-        return batch_planning.input_for(data, batch)
+        return _input_for_v2(data, batch)
     snapshots = {s["snapshot_ref"]: s for s in data["snapshots"]}
     selections = defaultdict(set)
     for pair, mapping in batch["mappings"]:
@@ -126,7 +160,7 @@ def input_for(data, batch):
                 data["context_refs"]
             )
             choices = [
-                (size(u), ref, u)
+                (len(json.dumps(u, ensure_ascii=False).encode()), ref, u)
                 for ref in available
                 if snapshots[ref]["repository_kind"] in required
                 for u in snapshots[ref]["units"]
@@ -150,144 +184,6 @@ def input_for(data, batch):
         ],
     }
     return copy.deepcopy(result)
-
-
-def plan(data, *, version=2):
-    if version == 2:
-        return batch_planning.plan(data, TARGET_BYTES)
-    contract.require(version == 1, "change_batch_snapshot_mismatch")
-    return legacy_plan(data)
-
-
-def legacy_plan(data):
-    if size(data) <= LEGACY_TARGET_BYTES:
-        return None
-    snapshots = {s["snapshot_ref"]: s for s in data["snapshots"]}
-    atoms, changed, names = {}, [], defaultdict(set)
-    for p in data["comparison_pairs"]:
-        diffs = {d["mapping_ref"] for d in p["text_diffs"]}
-        for m in p["unit_mappings"]:
-            key = (p["pair_id"], m["mapping_id"])
-            units = [
-                u
-                for side in ("before", "after")
-                for u in snapshots[p[side + "_ref"]]["units"]
-                if u["unit_id"] in m[side + "_unit_ids"]
-            ]
-            atoms[key] = units
-            for u in units:
-                stem = PurePosixPath(u["path"]).stem
-                if len(stem) >= 3 and re.fullmatch(r"[A-Za-z_$][\w$]*", stem):
-                    names[(snapshots[p["before_ref"]]["source_id"], stem)].add(key)
-            if m["mapping_id"] in diffs:
-                changed.append(key)
-    if not changed:
-        return None
-    neighbors = defaultdict(set)
-    source_ids = {
-        p["pair_id"]: snapshots[p["before_ref"]]["source_id"] for p in data["comparison_pairs"]
-    }
-    for key, units in atoms.items():
-        tokens = set(
-            re.findall(
-                r"[A-Za-z_$][\w$]*", "\n".join(seg["text"] for u in units for seg in u["segments"])
-            )
-        )
-        for token in tokens:
-            matches = names.get((source_ids[key[0]], token), set())
-            if len(matches) == 1:
-                other = next(iter(matches))
-                if other != key:
-                    neighbors[key].add(other)
-                    neighbors[other].add(key)
-    weights = {key: size(units) for key, units in atoms.items()}
-    seeds, seed, used = [], [], 0
-    for primary in sorted(changed, key=lambda k: (k[0], atoms[k][0]["path"])):
-        if seed and used + weights[primary] > LEGACY_TARGET_BYTES // 2:
-            seeds.append(seed)
-            seed, used = [], 0
-        seed.append(primary)
-        used += weights[primary]
-    if seed:
-        seeds.append(seed)
-    # Assign shared dependency candidates once; cross-batch relations remain explicit gaps.
-    owner = {key: n for n, seed in enumerate(seeds) for key in seed}
-    assigned = defaultdict(set)
-    for dependency in atoms.keys() - owner.keys():
-        votes = defaultdict(int)
-        for related in neighbors[dependency]:
-            if related in owner:
-                votes[owner[related]] += 1
-        if votes:
-            assigned[min(votes, key=lambda n: (-votes[n], n))].add(dependency)
-    batches = []
-    for n, seed in enumerate(seeds):
-        selected = set(seed)
-        primary_bytes = sum(weights[k] for k in seed)
-        used = primary_bytes
-        budget = max(LEGACY_TARGET_BYTES, primary_bytes + LEGACY_TARGET_BYTES // 2)
-        for dep in sorted(assigned[n]):
-            if len(selected) > len(seed) and used + weights[dep] > budget:
-                batches.append(
-                    {
-                        "primary": [list(k) for k in seed],
-                        "mappings": [list(k) for k in sorted(selected)],
-                    }
-                )
-                selected, used = set(seed), primary_bytes
-            selected.add(dep)
-            used += weights[dep]
-        batches.append(
-            {"primary": [list(k) for k in seed], "mappings": [list(k) for k in sorted(selected)]}
-        )
-    common = []
-    for ref in data["context_refs"]:
-        common.extend(("unit", ref, u["unit_id"], size(u)) for u in snapshots[ref]["units"])
-    common.extend(("case", c["case_ref"], "", size(c)) for c in data["cases"])
-    common.extend(("history", h["history_ref"], "", size(h)) for h in data["historical_items"])
-    expanded = []
-    for batch in batches:
-        groups, group, used = [], [], 0
-        room = max(
-            64 * 1024, LEGACY_TARGET_BYTES - sum(weights[tuple(k)] for k in batch["mappings"])
-        )
-        for item in common:
-            if group and used + item[3] > room:
-                groups.append(group)
-                group, used = [], 0
-            group.append(item)
-            used += item[3]
-        groups.append(group)
-        for group in groups:
-            context = defaultdict(list)
-            for kind, ref, uid, _ in group:
-                if kind == "unit":
-                    context[ref].append(uid)
-            expanded.append(
-                {
-                    **batch,
-                    "context_units": dict(context),
-                    "case_refs": [ref for kind, ref, _, _ in group if kind == "case"],
-                    "history_refs": [ref for kind, ref, _, _ in group if kind == "history"],
-                }
-            )
-    batches = expanded
-    for n, batch in enumerate(batches, 1):
-        projected = input_for(data, batch)
-        contract.validate_input(contract.AnalysisInput.model_validate(projected))
-        batch.update(
-            id=n,
-            status="QUEUED",
-            error_code="",
-            report=None,
-            input_bytes=size(projected),
-            candidate_task_id=None,
-            attempts=[],
-            files=sorted(
-                {f"{s['name']} / {u['path']}" for s in projected["snapshots"] for u in s["units"]}
-            ),
-        )
-    return {"version": 1, "input_hash": fingerprint(data), "batches": batches}
 
 
 def summary(plan):
@@ -462,3 +358,170 @@ def aggregate(data, plan):
         contract.AnalysisInput.model_validate(data), contract.Report.model_validate(result)
     )
     return result
+
+
+def candidate(data, batch, raw, *, previous=()):
+    try:
+        value = json_object(raw)
+        decisions = []
+        if batch.get("plan_version") == 2 and batch.get("kind") == "INTEGRATION":
+            contract.require(
+                isinstance(value, dict) and set(value) == {"report", "reconciliations"}
+            )
+            decisions = value["reconciliations"]
+            value = value["report"]
+        output = contract.Report.model_validate(value)
+    except (ValidationError, TypeError, ValueError, AppError):
+        raise AppError(422, "change_contract_invalid") from None
+    subset = contract.AnalysisInput.model_validate(input_for(data, batch))
+    output, corrections = evidence.normalize_coordinates(subset, output)
+    validate_result(data, batch, output.model_dump(by_alias=True))
+    if batch.get("plan_version") == 2 and batch.get("kind") == "INTEGRATION":
+        batch["reconciliations"] = validate_reconciliations(
+            decisions, previous, output.model_dump(by_alias=True)
+        )
+    return output.model_dump(by_alias=True), corrections
+
+
+def validate_reconciliations(decisions, previous, report):
+    """A review may reconcile only supplied risks grounded in its current source evidence."""
+    contract.require(isinstance(decisions, list))
+    supplied = {
+        (b["id"], risk["key"]): (b["report"], risk)
+        for b in previous
+        for risk in b["report"]["risks"]
+    }
+    targets = {risk["key"]: risk for risk in report["risks"]}
+
+    def anchors(source, risk):
+        return [e for e in source["evidence"] if e["key"] in risk["evidence_refs"]]
+
+    def overlap(left, right):
+        if any(
+            left[k] != right[k] for k in ("side", "snapshot_ref", "unit_id", "segment_id", "kind")
+        ):
+            return False
+        if left["start_line"] is not None and right["start_line"] is not None:
+            return (
+                left["start_line"] <= right["end_line"] and right["start_line"] <= left["end_line"]
+            )
+        return left["excerpt"] == right["excerpt"] and (
+            left["kind"] == "TEXT" or left["observation"] == right["observation"]
+        )
+
+    for row in decisions:
+        contract.require(
+            isinstance(row, dict) and set(row) == {"kind", "risk_refs", "result_risk_key", "note"}
+        )
+        contract.require(isinstance(row["kind"], str) and row["kind"] in {"SAME_ROOT", "CONFLICT"})
+        contract.require(
+            isinstance(row["note"], str) and bool(row["note"].strip()) and len(row["note"]) <= 10000
+        )
+        contract.require(isinstance(row["risk_refs"], list) and len(row["risk_refs"]) >= 1)
+        refs = []
+        for ref in row["risk_refs"]:
+            contract.require(isinstance(ref, dict) and set(ref) == {"batch_id", "key"})
+            contract.require(type(ref["batch_id"]) is int and isinstance(ref["key"], str))
+            identity = (ref["batch_id"], ref["key"])
+            contract.require(identity in supplied and identity not in refs)
+            refs.append(identity)
+        contract.require(isinstance(row["result_risk_key"], str))
+        contract.require(bool(row["result_risk_key"]) or len(refs) >= 2)
+        if row["kind"] == "SAME_ROOT" or row["result_risk_key"]:
+            contract.require(row["result_risk_key"] in targets)
+            current = anchors(report, targets[row["result_risk_key"]])
+            contract.require(
+                all(
+                    any(overlap(a, b) for a in anchors(*supplied[ref]) for b in current)
+                    for ref in refs
+                )
+            )
+    return copy.deepcopy(decisions)
+
+
+def finish(row, data, plan):
+    done = sum(b["status"] == "COMPLETED" for b in plan["batches"])
+    failed = any(b["status"] != "COMPLETED" for b in plan["batches"])
+    row.report = aggregate(data, plan) if done else {}
+    if done and plan["version"] == 2:
+        row.handling = reconcile_handling(row.handling, row.report, plan)
+    row.status = "COMPLETED" if done else "FAILED"
+    row.error_code = "change_batches_failed" if failed else ""
+    if not any(b.get("callable", True) for b in plan["batches"]):
+        row.error_code = "change_batch_pairing_unavailable"
+    row.updated_at = datetime.now(UTC)
+
+
+def reconcile_handling(handling, report, plan):
+    """Keep human audit trails when reviewed findings acquire a shared identity."""
+    allowed = {item["key"] for group in GROUPS for item in report[group]}
+    aliases = plan.get("result_aliases", {})
+    conflicts = plan.get("result_alias_conflicts", {})
+    grouped = {}
+    changed = False
+    for key, entry in handling.items():
+        destinations = conflicts.get(key, [aliases.get(key, key)])
+        changed |= destinations != [key]
+        for target in destinations:
+            if target in allowed:
+                grouped.setdefault(target, []).append((key, entry))
+    if not changed:
+        return handling
+    plan.setdefault("handling_merge_audit", []).append(
+        {
+            "at": datetime.now(UTC).isoformat(),
+            "original": copy.deepcopy(handling),
+            "aliases": copy.deepcopy(aliases),
+            "conflicts": copy.deepcopy(conflicts),
+        }
+    )
+    result = {}
+    for key, entries in grouped.items():
+        histories = []
+        for old, entry in entries:
+            for event in entry.get("history", []):
+                if event not in histories:
+                    histories.append(copy.deepcopy(event))
+        histories.sort(key=lambda e: e["at"])
+        latest = max((entry for _, entry in entries), key=lambda e: e["at"])
+        result[key] = {**copy.deepcopy(latest), "history": histories}
+        if len({e["status"] for _, e in entries}) > 1 or any(
+            old in conflicts for old, _ in entries
+        ):
+            event = {
+                "status": "PENDING",
+                "note": "关联复核合并后的人工结论存在冲突，原处理历史已保留，请重新核对",
+                "actor_id": None,
+                "actor_name": "平台合并待核对",
+                "at": datetime.now(UTC).isoformat(),
+                "previous_status": latest["status"],
+            }
+            result[key] = {**event, "history": [*histories, event]}
+    return result
+
+
+def revalidate(row):
+    plan = copy.deepcopy(row.metadata_snapshot["batch_plan"])
+    for batch in plan["batches"]:
+        if batch["status"] == "COMPLETED" or batch["candidate_task_id"] != row.id:
+            continue
+        path = artifacts.batch_candidate_path(row.id, batch["id"])
+        if not path.is_file():
+            continue
+        try:
+            raw = path.read_text(encoding="utf-8")
+            previous = [b for b in plan["batches"] if b["id"] in batch.get("depends_on", [])]
+            report, corrections = candidate(row.input_snapshot, batch, raw, previous=previous)
+        except AppError:
+            continue
+        except (OSError, UnicodeError):
+            raise AppError(503, "change_candidate_storage_unavailable") from None
+        batch.update(
+            status="COMPLETED",
+            error_code="",
+            report=report,
+            evidence_corrections=corrections,
+            revalidated_at=datetime.now(UTC).isoformat(),
+        )
+    row.metadata_snapshot = {**row.metadata_snapshot, "batch_plan": plan}
+    finish(row, row.input_snapshot, plan)

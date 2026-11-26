@@ -3,9 +3,10 @@ import json
 from datetime import UTC, datetime
 from time import monotonic
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.core.errors import AppError
+from app.core.json_data import json_object
 from app.db.models import (
     CaseAnalysisApplication,
     CaseAnalysisChatTurn,
@@ -14,29 +15,20 @@ from app.db.models import (
 )
 from app.integrations import ai_client as responses
 from app.integrations.response_diagnostics import safe_snapshot
-from app.modules.ai import native_terminal
+from app.modules.ai import native_terminal, task_lifecycle
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.case_analysis import contract, service
 from app.modules.case_generation import sources
-from app.modules.requirements import analysis_materials, risk_service
+from app.modules.requirements import analysis_materials
 
 
 def recover(db):
-    for model in (CaseAnalysisRun, CaseAnalysisChatTurn):
-        db.execute(
-            update(model)
-            .where(model.status == "RUNNING")
-            .values(
-                status="FAILED",
-                error_code="case_analysis_worker_interrupted",
-                updated_at=datetime.now(UTC),
-            )
-        )
-    db.execute(
-        update(CaseAnalysisApplication)
-        .where(CaseAnalysisApplication.status == "RUNNING")
-        .values(status="QUEUED", updated_at=datetime.now(UTC))
+    task_lifecycle.mark_interrupted(
+        db,
+        (CaseAnalysisRun, CaseAnalysisChatTurn),
+        "case_analysis_worker_interrupted",
+        requeue=(CaseAnalysisApplication,),
     )
     db.commit()
 
@@ -57,14 +49,6 @@ def claim_model(db, model):
     key = row.id
     db.commit()
     return key
-
-
-def claim(db):
-    return claim_model(db, CaseAnalysisRun)
-
-
-def claim_chat(db):
-    return claim_model(db, CaseAnalysisChatTurn)
 
 
 def claim_application(db):
@@ -136,11 +120,13 @@ def execute_model(key, factory, chat=False):
             )
         else:
             refs = {m["snapshot_ref"]: m["source_id"] for m in data["materials"]}
+            binaries = [(p, ext, refs.get(ref, ref), name) for p, ext, ref, name in attachments]
             content = analysis_materials.model_content(
                 data,
-                [(p, ext, refs.get(ref, ref), name) for p, ext, ref, name in attachments],
+                binaries,
                 attachment_key="source_id",
             )
+            reading_options = _reading_options(config.get("call_mode"), data, binaries)
             answer = responses.analyze(
                 url,
                 config["model"],
@@ -151,7 +137,9 @@ def execute_model(key, factory, chat=False):
                 on_progress=check,
                 call_mode=config.get("call_mode", "RESPONSES_API"),
                 diagnostics=diagnostics,
+                output_profile="case_analysis",
                 **terminal_options,
+                **reading_options,
             )
         with factory() as db:
             row = db.get(cls, key, with_for_update=True)
@@ -167,7 +155,9 @@ def execute_model(key, factory, chat=False):
                 row.attempts = attempts
                 db.commit()
         check(True)
-        report = None if chat else contract.validate(data, risk_service.json_object(answer))
+        report = (
+            None if chat else contract.validate(data, json_object(answer, "case_analysis_invalid"))
+        )
         with factory() as db:
             actor = db.get(UserAccount, actor_id)
             service.own(project_id, run_id, actor, db, True)
@@ -191,6 +181,25 @@ def execute_model(key, factory, chat=False):
                 )
                 row.updated_at = datetime.now(UTC)
                 db.commit()
+
+
+def _reading_options(call_mode, data, binaries):
+    if call_mode != "CODEX_EXEC":
+        return {}
+    groups, files = {}, []
+    for case in data["cases"]:
+        module = case.get("module") or "未分类"
+        group = groups.setdefault(module, len(groups) + 1)
+        files.append(
+            {
+                "path": f"cases/module-{group:04d}/case-{case['id']}.md",
+                "description": f"{module} · {case.get('number', case['id'])}",
+                "text": json.dumps(case, ensure_ascii=False),
+            }
+        )
+    return analysis_materials.structured_reading_options(
+        call_mode, {k: v for k, v in data.items() if k != "cases"}, binaries, files=files
+    )
 
 
 def execute(key, factory):

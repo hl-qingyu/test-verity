@@ -63,6 +63,8 @@ EVENTS = {
     "response.reasoning_summary_part.added",
     "response.reasoning_summary_part.done",
 }
+USAGE_KEYS = ("input_tokens", "cached_tokens", "output_tokens", "reasoning_tokens", "total_tokens")
+INPUT_ESTIMATE_KEYS = ("characters", "bytes", "approx_tokens", "images")
 
 
 def safe_identifier(value, secret="") -> str | None:
@@ -246,6 +248,16 @@ def error_metadata(value: object) -> dict:
 def safe_snapshot(stats: dict) -> dict:
     """Persist only controlled metadata; never arbitrary upstream text or payloads."""
     result = {}
+    for group, keys in (("usage", USAGE_KEYS), ("input_estimate", INPUT_ESTIMATE_KEYS)):
+        values = stats.get(group)
+        if isinstance(values, dict):
+            metrics = {
+                key: value
+                for key in keys
+                if type(value := values.get(key)) is int and 0 <= value < 1e12
+            }
+            if metrics:
+                result[group] = metrics
     if stats.get("call_mode") in ("RESPONSES_API", "CODEX_EXEC"):
         result["call_mode"] = stats["call_mode"]
     if stats.get("call_mode") == "CODEX_EXEC":
@@ -274,7 +286,7 @@ def safe_snapshot(stats: dict) -> dict:
                 and type(v) is int
                 and v >= 0
             }
-    for key in ("error_body_truncated", "error_capture_failed", "generation_sent"):
+    for key in ("error_body_truncated", "error_capture_failed"):
         if type(stats.get(key)) is bool:
             result[key] = stats[key]
     attempt_id = safe_identifier(stats.get("cli_attempt_id"))
@@ -313,9 +325,6 @@ def safe_snapshot(stats: dict) -> dict:
         "split_text_count",
         "input_text_parts",
         "max_input_text_characters",
-        "websocket_handshake_status",
-        "websocket_close_code",
-        "ping_interval_seconds",
         "cli_event_count",
     ):
         value = stats.get(key)
@@ -374,7 +383,6 @@ def safe_snapshot(stats: dict) -> dict:
         "upstream_parameter": PARAMETERS,
         "incomplete_reason": ERROR_CODES,
         "outcome": {"completed", "failed"},
-        "transport": {"websocket", "http"},
         "error_body_format": {"json", "non_json", "unavailable_or_non_json"},
     }
     for key, values in allowed.items():

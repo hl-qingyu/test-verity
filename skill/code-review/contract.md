@@ -1,6 +1,6 @@
-# 代码分析调用契约 v2
+# 代码分析调用契约 v3
 
-配合SKILL.md 2.0.1使用。2026-09-21平台已接入本契约：AI执行和双文件导入均由后端严格校验，创建请求与本契约输入不同，由平台从已授权来源组装。v1输入不得按v2猜测来源类型，历史报告不自动转换。
+配合 SKILL.md 3.0.0 使用。2026-09-21平台已接入本契约：AI执行和双文件导入均由后端严格校验，创建请求与本契约输入不同，由平台从已授权来源组装。v1输入不得按v2猜测来源类型，历史报告不自动转换。
 
 ## 通用规则
 
@@ -10,7 +10,7 @@
 
 ## 输入
 
-顶层字段：contract_version=2、analysis_type="CODE_REVIEW"、request_id、source_mode（GITHUB/LOCAL）、targets（非空目标数组）、focus（字符串）、sources、materials、input_limitations（字符串数组）。
+顶层字段：contract_version=3、analysis_type="CODE_REVIEW"、request_id、source_mode（GITHUB/LOCAL）、targets（非空目标数组）、focus（字符串）、sources、materials、input_limitations（字符串数组）。
 
 ### sources
 
@@ -38,7 +38,7 @@
 
 ## 输出
 
-顶层字段：contract_version=2、analysis_type="CODE_REVIEW"、request_id（原样回传）、outcome、summary、target_results、findings、evidence、chains、coverage、limitations。
+顶层字段：contract_version=3、analysis_type="CODE_REVIEW"、request_id（原样回传）、summary、target_results、findings、evidence、chains、limitations。
 
 summary：conclusion（非空说明主要发现及边界）、priority_finding_keys（findings.key子集，允许空）。不输出分数、通过率或人工验收结论。
 
@@ -55,7 +55,7 @@ checks每项：key（全报告唯一）、subject、assessment、evidence_refs�
 - finding_refs与findings.target_views对应：该目标的finding_refs恰好为其所有checks.finding_refs的集合，也恰好为关联本目标的findings.key集合。一个发现可以被多个目标关联，但只计一次总数。
 - BLOCKED时checks和finding_refs为空，并至少关联一项说明阻塞原因的limitation。
 
-总体outcome：全部目标COMPLETE为COMPLETE；全部BLOCKED为BLOCKED；其他组合为PARTIAL。无效输入诊断也必须BLOCKED。每个非COMPLETE目标须有limitation_refs解释边界。
+平台计算总体 outcome。每个非 COMPLETE 目标须有 limitation_refs 解释边界。
 
 ### findings
 
@@ -89,23 +89,14 @@ key在整个evidence数组唯一。使用两种精确结构：
 
 edges每项：from、to、relation、evidence_refs、note。两端指向本链节点，不能自连；relation为CALL、RETURN、FIELD_MAPPING、STATE_ASSIGNMENT或UNKNOWN。前四类必须有非空代码证据，note解释支持该连接的具体事实；UNKNOWN允许空证据，但必须说明为何无法核实。节点存在本身不证明连接；不得用CALL表示后端直接调用前端。多个独立根因不塞进一条无关长链。
 
-### coverage
+### 平台覆盖
 
-每个输入代码/资料片段恰好一项；未取得片段的文件/资料也恰好一项，segment_id为空。每项：kind（CODE/MATERIAL）、source_id、file_id（资料用空字符串）、segment_id、targets。
-
-targets对每个已选目标恰好一项：target、disposition、check_refs、reason。
-
-- REVIEWED：已在该目标下审查，check_refs非空且指向该目标checks，可有零发现。
-- NOT_RELEVANT：不属于该目标职责或明确选定关注范围，check_refs为空，reason解释；不能把未读伪装为无关。
-- UNPROCESSED：未完成，check_refs为空，reason说明，关联目标不能COMPLETE。
-
-READABLE不是REVIEWED；read_state=PARTIAL或缺少依赖时，即使提供的片段已检查，也需limitations说明遗漏及受影响目标。没有输出发现不能作为没有审查的判据。
+平台统计各来源的可读、部分和不可读文件，并计算总体 outcome。候选只输出目标判断。未评估的文件使用 NOT_ASSESSED 限制，附 file_refs [{source_id, file_id}]。CODE 证据在段号或行号未知时可返回 null，保持真实文件身份和完整原文摘录，由平台唯一匹配补齐。
 
 ### limitations
 
 每项：key、kind、target_refs、source_refs、detail、effect。kind为INVALID_INPUT、MISSING_CODE、MISSING_MATERIAL、PARTIAL_CONTENT、UNREADABLE、UNRESOLVED_RELATION或OUT_OF_SCOPE。target_refs只引用已选目标；source_refs只引用输入来源，未提供的依赖用空数组并在detail说明，不能捏造来源ID。detail/effect非空。
 
-无效标识使coverage无法无歧义形成时，诊断允许coverage为空；其他正常或仅缺另一端的输入仍如实列出可识别的覆盖条目。无效输入不生成正常报告，不自动修复标识或升级旧版本。
 
 ## 调用与验证边界
 

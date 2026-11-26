@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { deletionErrors } from './analysisDeletionApi';
 import { aiErrors } from './aiErrors';
 import { apiErrorMessage, apiRequest } from './api/http';
@@ -30,7 +31,7 @@ export type Evidence = {
   observation: string;
 };
 export type Input = {
-  contract_version: 3;
+  contract_version: 3 | 4;
   request_id: string;
   focus: string;
   materials: {
@@ -71,10 +72,8 @@ export type Risk = {
     unknowns: string;
   } | null;
 };
-export type RiskReport = {
-  contract_version: 3;
+type RiskCandidateBody = {
   request_id: string;
-  outcome: keyof typeof outcomes;
   summary: { assessment: string; conclusion: string; priority_risk_keys: string[] };
   functions: {
     key: string;
@@ -86,19 +85,16 @@ export type RiskReport = {
   }[];
   risks: Risk[];
   optional_suggestions: (Improvement & { key: string; function_keys: string[]; title: string })[];
-  coverage: {
-    source_id: string;
-    segments: {
-      segment_id: string;
-      disposition: string;
-      function_keys: string[];
-      risk_keys: string[];
-      reason: string;
-    }[];
-    limitation: string;
-  }[];
   limitations: { kind: string; source_ids: string[]; detail: string; effect: string }[];
 };
+type SegmentReferences = { segment_id: string; function_keys: string[]; risk_keys: string[] };
+type ReferencedSegment = SegmentReferences & { disposition: 'REFERENCED' | 'UNREFERENCED' };
+type LegacySegment = SegmentReferences & { disposition: string; reason: string };
+type Coverage<T> = { source_id: string; segments: T[]; limitation: string };
+export type RiskReport = RiskCandidateBody & { outcome: keyof typeof outcomes } & (
+    | { contract_version: 3; coverage: Coverage<LegacySegment>[] }
+    | { contract_version: 4; coverage: Coverage<ReferencedSegment>[] }
+  );
 export type Binding = {
   source_id: string;
   document_id: number;
@@ -282,37 +278,20 @@ export type SourceBinding = { source_id: string; document_id: number; version_id
 function invalid(): never {
   throw new Error('risk_response_invalid');
 }
-function obj(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return invalid();
-  return v as Record<string, unknown>;
-}
-function array(v: unknown): unknown[] {
-  if (!Array.isArray(v)) return invalid();
-  return v;
-}
-function string(v: unknown): string {
-  if (typeof v !== 'string') return invalid();
-  return v;
-}
+const guards = createGuards('risk_response_invalid');
+const obj = guards.obj,
+  array = guards.array,
+  string = guards.str,
+  number = guards.int,
+  boolean = guards.bool;
+
 function strings(v: unknown): string[] {
   return array(v).map(string);
-}
-function number(v: unknown, min = 1): number {
-  if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < min) return invalid();
-  return v;
-}
-function boolean(v: unknown): boolean {
-  if (typeof v !== 'boolean') return invalid();
-  return v;
 }
 function nullable(v: unknown): string | null {
   return v === null ? null : string(v);
 }
-function choice<T extends string>(v: unknown, values: Record<T, string>): T {
-  const s = string(v);
-  if (!Object.hasOwn(values, s)) return invalid();
-  return s as T;
-}
+const choice = guards.choice;
 function parseEvidence(v: unknown): Evidence {
   const o = obj(v);
   return {
@@ -347,9 +326,10 @@ function improvement(v: unknown): Improvement {
 }
 export function parseRiskInput(v: unknown): Input {
   const o = obj(v);
-  if (o.contract_version !== 3) throw new Error('risk_version_unsupported');
+  if (o.contract_version !== 3 && o.contract_version !== 4)
+    throw new Error('risk_version_unsupported');
   return {
-    contract_version: 3,
+    contract_version: o.contract_version,
     request_id: string(o.request_id),
     focus: string(o.focus),
     materials: array(o.materials).map((v) => {
@@ -375,14 +355,10 @@ export function parseRiskInput(v: unknown): Input {
     }),
   };
 }
-export function parseRiskReport(v: unknown): RiskReport {
-  const o = obj(v);
-  if (o.contract_version !== 3) throw new Error('risk_version_unsupported');
+function parseRiskCandidateBody(o: Record<string, unknown>): RiskCandidateBody {
   const summary = obj(o.summary);
   return {
-    contract_version: 3,
     request_id: string(o.request_id),
-    outcome: choice(o.outcome, outcomes),
     summary: {
       assessment: string(summary.assessment),
       conclusion: string(summary.conclusion),
@@ -442,23 +418,6 @@ export function parseRiskReport(v: unknown): RiskReport {
         function_keys: strings(s.function_keys),
       };
     }),
-    coverage: array(o.coverage).map((v) => {
-      const c = obj(v);
-      return {
-        source_id: string(c.source_id),
-        limitation: string(c.limitation),
-        segments: array(c.segments).map((v) => {
-          const s = obj(v);
-          return {
-            segment_id: string(s.segment_id),
-            disposition: string(s.disposition),
-            function_keys: strings(s.function_keys),
-            risk_keys: strings(s.risk_keys),
-            reason: string(s.reason),
-          };
-        }),
-      };
-    }),
     limitations: array(o.limitations).map((v) => {
       const l = obj(v);
       return {
@@ -470,12 +429,68 @@ export function parseRiskReport(v: unknown): RiskReport {
     }),
   };
 }
+
+export function parseRiskImportReport(v: unknown): RiskCandidateBody & { contract_version: 3 | 4 } {
+  const o = obj(v);
+  if (o.contract_version === 4 && !('coverage' in o) && !('outcome' in o)) {
+    return { ...parseRiskCandidateBody(o), contract_version: 4 };
+  }
+  return parseRiskReport(o);
+}
+
+export function parseRiskReport(v: unknown): RiskReport {
+  const o = obj(v);
+  if (o.contract_version !== 3 && o.contract_version !== 4)
+    throw new Error('risk_version_unsupported');
+  const body = { ...parseRiskCandidateBody(o), outcome: choice(o.outcome, outcomes) };
+  const coverage = array(o.coverage).map((value) => {
+    const c = obj(value);
+    return {
+      source_id: string(c.source_id),
+      limitation: string(c.limitation),
+      segments: array(c.segments).map(obj),
+    };
+  });
+  function references(s: Record<string, unknown>): SegmentReferences {
+    return {
+      segment_id: string(s.segment_id),
+      function_keys: strings(s.function_keys),
+      risk_keys: strings(s.risk_keys),
+    };
+  }
+  if (o.contract_version === 4) {
+    return {
+      ...body,
+      contract_version: 4,
+      coverage: coverage.map((source) => ({
+        ...source,
+        segments: source.segments.map((s) => ({
+          ...references(s),
+          disposition: choice(s.disposition, { REFERENCED: '', UNREFERENCED: '' }),
+        })),
+      })),
+    };
+  }
+  return {
+    ...body,
+    contract_version: 3,
+    coverage: coverage.map((source) => ({
+      ...source,
+      segments: source.segments.map((s) => ({
+        ...references(s),
+        disposition: string(s.disposition),
+        reason: string(s.reason),
+      })),
+    })),
+  };
+}
 export function parseRiskDetail(v: unknown, project: number): RiskDetail {
   const o = obj(v);
   if (number(o.project_id) !== project) return invalid();
   const input = parseRiskInput(o.input),
     report = parseRiskReport(o.report);
-  if (input.request_id !== report.request_id) return invalid();
+  if (input.request_id !== report.request_id || input.contract_version !== report.contract_version)
+    return invalid();
   return {
     id: number(o.id),
     project_id: project,
@@ -755,11 +770,16 @@ export async function readRiskFile(file: File) {
     throw new Error('risk_json_invalid');
   }
 }
+const contractSnapshotMismatch = '分析契约版本不一致。若已保存候选，可重新校验。';
+
 export function riskError(e: unknown, onSessionEnd: () => void): string {
   if (e instanceof Error && e.message.startsWith('risk_report_invalid|')) {
     const [, path, reason] = e.message.split('|');
     const reasons: Record<string, string> = {
       request_mismatch: '两份文件的调用标识不一致',
+      version_mismatch: '两份文件的契约版本不一致',
+      derived_coverage_mismatch: '报告覆盖与固定输入及证据引用不一致',
+      derived_outcome_mismatch: '报告总体状态与固定输入及分析边界不一致',
       project_mismatch: '输入属于其他项目',
       evidence_excerpt_mismatch: '摘录不在对应输入片段中',
       evidence_location_mismatch: '证据定位与输入不一致',
@@ -777,12 +797,12 @@ export function riskError(e: unknown, onSessionEnd: () => void): string {
       missing: '缺少必填字段',
       literal_error: '版本或枚举值不正确',
     };
-    return `校验未通过：${path} — ${reasons[reason] || '字段格式或关联关系不符合 v3 契约'}。`;
+    return `校验未通过：${path} — ${reasons[reason] || '字段格式或关联关系不符合契约'}。`;
   }
   return apiErrorMessage(e, onSessionEnd, {
     ...aiErrors,
-    risk_response_invalid: '文件或返回结果结构不完整，请核对 v3 格式。',
-    risk_version_unsupported: '仅支持 Skill v3；不接受旧验收点版结果。',
+    risk_response_invalid: '文件或返回结果结构不完整，请核对对应版本的格式。',
+    risk_version_unsupported: '支持需求风险契约 v3 和 v4，请核对输入与报告的版本。',
     risk_json_invalid: '请选择有效的完整 JSON，不要包含 Markdown 围栏或重复字段。',
     risk_file_too_large: '每份 JSON 最大 16 MB，请检查是否选错文件。',
     risk_source_unavailable: '来源不存在、已删除、类型不匹配或不属于当前项目。',
@@ -806,6 +826,7 @@ export function riskError(e: unknown, onSessionEnd: () => void): string {
     risk_manual_request_conflict: '重复新增请求的内容不一致，请重新打开表单。',
     risk_analysis_request_conflict: '重复分析请求的内容不一致，请重新新建会话。',
     risk_analysis_retry_invalid: '只能重试本项目内失败或已停止的分析任务。',
+    risk_analysis_contract_mismatch: contractSnapshotMismatch,
     skill_snapshot_missing:
       '历史任务未保存当时的Skill指令，不能用当前文件冒充重试；请明确新建分析。',
     risk_analysis_cancel_owner_only: '只有本次分析发起人可以停止任务。',
@@ -827,6 +848,7 @@ export function riskTaskFailure(code: string): string {
   const messages: Record<string, string> = {
     ...deletionErrors,
     ...aiErrors,
+    risk_analysis_contract_mismatch: contractSnapshotMismatch,
     risk_analysis_worker_interrupted: '服务重启中断，未自动重试；请确认后人工重试。',
     risk_analysis_internal_error: '分析处理失败，请人工重试或联系管理员。',
     risk_source_unavailable: '所选资料已不可用。',

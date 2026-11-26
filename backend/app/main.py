@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.router import router
+from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging
 from app.db.session import check_database
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    Settings()
     handler = configure_logging("api")
     try:
         yield

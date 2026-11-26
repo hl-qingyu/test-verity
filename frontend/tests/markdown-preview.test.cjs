@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -13,7 +14,7 @@ test('Markdown renders labels and formatting without navigation, remote images o
     'remark-gfm': await import('remark-gfm'),
   };
   const source = fs.readFileSync(path.join(__dirname, '../src/MarkdownPreview.tsx'), 'utf8');
-  const compiled = ts.transpileModule(source, {
+  const compiled = compileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
@@ -21,7 +22,7 @@ test('Markdown renders labels and formatting without navigation, remote images o
     },
   }).outputText;
   const component = {};
-  new Function('exports', 'require', compiled)(component, (name) => dependencies[name]);
+  evaluateModule(compiled, (name) => dependencies[name], component);
   const render = (text) =>
     renderToStaticMarkup(React.createElement(component.MarkdownPreview, { text }));
   const text =

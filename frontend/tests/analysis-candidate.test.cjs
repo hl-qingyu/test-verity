@@ -1,18 +1,11 @@
+const { load: loadModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
-  fs = require('node:fs'),
-  path = require('node:path'),
-  ts = require('typescript');
+  path = require('node:path');
 function load(transport = {}) {
-  const exports = {};
-  const code = ts.transpileModule(
-    fs.readFileSync(path.resolve(__dirname, '../src/analysisCandidateApi.ts'), 'utf8'),
-    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
-  ).outputText;
-  new Function('exports', 'require', code)(exports, (name) =>
-    name === './api/http' ? transport : require(name),
-  );
-  return exports;
+  return loadModule(path.resolve(__dirname, '../src/analysisCandidateApi.ts'), {
+    './api/http': transport,
+  });
 }
 function candidate() {
   return {

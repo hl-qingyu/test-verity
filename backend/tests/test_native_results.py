@@ -153,7 +153,9 @@ class NativeResultsDatabaseTests(unittest.TestCase):
                 ),
             ),
             patch.object(codex_terminal, "turn_events", side_effect=[(events, 100), ([], 100)]),
-            patch.object(native_terminal.ai_client, "terminal", side_effect=terminal),
+            patch.object(
+                native_terminal.shared_terminal.ai_client, "terminal", side_effect=terminal
+            ),
         ):
             native_results.execute_chat(chat_id, self.factory)
         with self.factory() as db:

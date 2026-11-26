@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { apiErrorMessage, apiRequest } from './api/http';
 import type { OverviewModule } from './overviewApi';
 
@@ -78,14 +79,7 @@ export type AcceptanceGroup = {
   metrics: AcceptanceMetrics | null;
 };
 const modules = ['requirements', 'generate', 'coverage', 'code', 'changes'];
-const object = (v: unknown): Record<string, unknown> => {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) throw Error('acceptance_response_invalid');
-  return v as Record<string, unknown>;
-};
-function text(v: unknown): string {
-  if (typeof v !== 'string') throw Error('acceptance_response_invalid');
-  return v;
-}
+const { obj: object, str: text } = createGuards('acceptance_response_invalid');
 function state(v: unknown): AcceptanceState {
   const s = object(v),
     items = object(s.items);

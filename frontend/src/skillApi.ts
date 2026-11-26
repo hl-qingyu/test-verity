@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { parseCallMetadata } from './aiConfiguration';
 import { apiRequest, apiErrorMessage } from './api/http';
 import { aiErrors } from './aiErrors';
@@ -74,31 +75,14 @@ export const skillErrors: Record<string, string> = {
 export function skillError(error: unknown, onSessionEnd: () => void) {
   return apiErrorMessage(error, onSessionEnd, skillErrors);
 }
-function object(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) throw Error('invalid_response');
-  return v as Record<string, unknown>;
-}
-function str(v: unknown): string {
-  if (typeof v !== 'string') throw Error('invalid_response');
-  return v;
-}
-function int(v: unknown): number {
-  if (!Number.isSafeInteger(v) || Number(v) < 0) throw Error('invalid_response');
-  return Number(v);
-}
-function arr(v: unknown): unknown[] {
-  if (!Array.isArray(v)) throw Error('invalid_response');
-  return v;
-}
-function bool(v: unknown): boolean {
-  if (typeof v !== 'boolean') throw Error('invalid_response');
-  return v;
-}
-function hash(v: unknown): string {
-  const s = str(v);
-  if (!/^[0-9a-f]{64}$/.test(s)) throw Error('invalid_response');
-  return s;
-}
+const guards = createGuards('invalid_response');
+const object = guards.obj,
+  str = guards.str,
+  int = (value: unknown) => guards.int(value, 0),
+  arr = guards.array,
+  bool = guards.bool;
+
+const hash = guards.hash64;
 export function parseSkill(v: unknown): SkillSummary {
   const o = object(v);
   const key = str(o.key);
@@ -238,13 +222,6 @@ export async function skillBundle(
   )
     throw Error('invalid_response');
   return { ...p, contents };
-}
-export async function skillFile(key: string, id: string, signal?: AbortSignal) {
-  const f = parseContent(
-    await apiRequest<unknown>(`/api/skills/${encodeURIComponent(key)}/files/${id}`, { signal }),
-  );
-  if (f.key !== key || f.id !== id) throw Error('invalid_response');
-  return f;
 }
 export async function skillSave(
   key: string,

@@ -14,8 +14,11 @@ def analyze(*args, call_mode: CallMode = "RESPONSES_API", **kwargs) -> str:
         kwargs.pop("on_progress", None), keep_cli_on_outage=call_mode == "CODEX_EXEC"
     )
     if call_mode == "RESPONSES_API":
+        kwargs.pop("reading_files", None)
+        kwargs.pop("reading_guidance", None)
         return control.run(responses.analyze, *args, **kwargs)
     if call_mode == "CODEX_EXEC":
+        kwargs.pop("output_profile", None)
         terminal_spec = kwargs.pop("terminal_spec", None)
         if terminal_spec is not None:
             from app.integrations import codex_terminal

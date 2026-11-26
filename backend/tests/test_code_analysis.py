@@ -12,8 +12,10 @@ import test_auth
 import test_requirements
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from worker_fixtures import claim as claim_for_execution
 
 from app.core.errors import AppError
+from app.db import models as worker_models
 from app.db.models import (
     AIConnection,
     CodeAnalysisChatTurn,
@@ -41,6 +43,22 @@ def sample(prefix=""):
 
 
 class CodeContractTests(unittest.TestCase):
+    def test_v3_restores_missing_coordinates_and_calculates_readable_files(self):
+        data, raw = sample("local-")
+        raw["contract_version"] = 3
+        raw.pop("outcome")
+        raw.pop("coverage")
+        cited = next(item for item in raw["evidence"] if item["kind"] == "CODE")
+        cited.update(segment_id=None, start_line=None, end_line=None)
+        parsed = contract.AnalysisInput.model_validate(data)
+        finished, corrections = service.validate_candidate(raw, parsed, version=3)
+        self.assertEqual(finished["outcome"], "PARTIAL")
+        self.assertEqual(finished["platform_coverage"]["sources"][0]["readable"], 1)
+        self.assertEqual(corrections[0]["kind"], "EXACT_V3_COORDINATES")
+        cited["excerpt"] = "不存在于固定文件的完整原文"
+        with self.assertRaises(AppError):
+            service.validate_candidate(raw, parsed, version=3)
+
     def test_link_material_accepts_nested_paths_without_bypassing_project_or_source_checks(self):
         row = SourceDocument(
             id=7,
@@ -242,6 +260,12 @@ class CodeAnalysisDatabaseTests(unittest.TestCase):
         self.artifact_patch.start()
         self.addCleanup(self.artifact_patch.stop)
         self.input, self.report = sample("local-")
+        self.code_skill = sources.skill_snapshot()
+        legacy_skill = patch.object(
+            sources, "skill_snapshot", return_value={**self.code_skill, "contract_version": 2}
+        )
+        legacy_skill.start()
+        self.addCleanup(legacy_skill.stop)
         with self.factory() as db:
             source = LocalCodeSource(
                 project_id=self.project,
@@ -334,7 +358,7 @@ class CodeAnalysisDatabaseTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202, response.status_code)
         task_id = response.json()["id"]
         with self.factory() as db:
-            self.assertEqual(execution.claim(db), task_id)
+            self.assertEqual(claim_for_execution(db, worker_models.CodeAnalysisTask), task_id)
 
         def rejected(*args, **kwargs):
             sent = json.loads(args[5][0]["text"])
@@ -497,9 +521,22 @@ class CodeAnalysisDatabaseTests(unittest.TestCase):
         self.assertEqual(self.post("", payload).json()["id"], key)
         self.assertEqual(self.post("", {**payload, "focus": "changed"}).status_code, 409)
         self.running(key)
-        with patch("app.integrations.responses.analyze", side_effect=self.answer) as upstream:
+
+        def answer(*args, **kwargs):
+            kwargs["diagnostics"].update(
+                usage={"input_tokens": 12}, input_estimate={"characters": 10}, unsafe="private"
+            )
+            self.assertEqual(kwargs["output_profile"], "code_analysis")
+            return self.answer(*args, **kwargs)
+
+        with patch("app.integrations.responses.analyze", side_effect=answer) as upstream:
             execution.execute(key, self.factory)
             upstream.assert_called_once()
+        with self.factory() as db:
+            diagnostics = db.get(CodeAnalysisTask, key).metadata_snapshot["ai_diagnostics"]
+            self.assertEqual(diagnostics["usage"], {"input_tokens": 12})
+            self.assertEqual(diagnostics["input_estimate"], {"characters": 10})
+            self.assertNotIn("unsafe", diagnostics)
         record = self.client.get(f"{self.api}/{key}").json()
         self.assertEqual(record["status"], "COMPLETED", record)
         self.assertTrue(record["candidate_available"])

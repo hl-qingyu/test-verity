@@ -1,9 +1,14 @@
 from pathlib import Path
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 COOKIE_NAME = "verity_session"
+DEFAULT_ANALYSIS_OUTPUT_TOKENS = 32_000
+AnalysisProfile = Literal[
+    "requirement_analysis", "case_generation", "case_analysis", "code_analysis", "change_analysis"
+]
 
 
 class Settings(BaseSettings):
@@ -39,6 +44,9 @@ class Settings(BaseSettings):
     ai_max_concurrent: int = Field(default=2, ge=1, le=64)
     ai_max_per_user: int = Field(default=1, ge=1, le=64)
     ai_max_per_credential: int = Field(default=1, ge=1, le=64)
+    ai_analysis_max_output_tokens: dict[
+        AnalysisProfile, Annotated[int, Field(strict=True, ge=1024, le=200_000)]
+    ] = Field(default_factory=dict)
     ai_cli_executable: Path | None = None
     ai_cli_node_executable: Path | None = None
     ai_cli_work_path: Path = Path(__file__).resolve().parents[2] / "storage" / "codex-exec"

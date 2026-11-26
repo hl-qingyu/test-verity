@@ -1,0 +1,400 @@
+{
+  "contract_version": 3,
+  "analysis_type": "CODE_REVIEW",
+  "request_id": "synthetic-code-review-001",
+  "summary": {
+    "conclusion": "本次合成范围发现2个根因：移动端响应键错配、取消函数违反状态规则。Web字段解析静态一致；结论限于已给代码与规则，不代表实际页面或数据库验证。",
+    "priority_finding_keys": [
+      "F2",
+      "F1"
+    ]
+  },
+  "target_results": [
+    {
+      "target": "BUG",
+      "status": "COMPLETE",
+      "scope": "提供的模型解析及纯状态函数。",
+      "checks": [
+        {
+          "key": "B1",
+          "subject": "移动端状态解析",
+          "assessment": "DEVIATION",
+          "evidence_refs": [
+            "EB",
+            "EM"
+          ],
+          "finding_refs": [
+            "F1"
+          ],
+          "note": "直接解码与取键链路可定位。"
+        },
+        {
+          "key": "B2",
+          "subject": "取消状态函数",
+          "assessment": "DEVIATION",
+          "evidence_refs": [
+            "EC",
+            "ER"
+          ],
+          "finding_refs": [
+            "F2"
+          ],
+          "note": "明确限定函数输入输出，不断言外部写入。"
+        },
+        {
+          "key": "B3",
+          "subject": "Web状态解析",
+          "assessment": "CONSISTENT",
+          "evidence_refs": [
+            "EB",
+            "EW"
+          ],
+          "finding_refs": [],
+          "note": "同名字段直接读取，当前片段未发现该映射错误。"
+        }
+      ],
+      "finding_refs": [
+        "F1",
+        "F2"
+      ],
+      "limitation_refs": []
+    },
+    {
+      "target": "REQUIREMENT_DEVIATION",
+      "status": "COMPLETE",
+      "scope": "本次仅提供的取消函数业务规则。",
+      "checks": [
+        {
+          "key": "R1",
+          "subject": "已完成状态的取消限制",
+          "assessment": "DEVIATION",
+          "evidence_refs": [
+            "ER",
+            "EC"
+          ],
+          "finding_refs": [
+            "F2"
+          ],
+          "note": "明确要求与完整函数结果冲突。"
+        }
+      ],
+      "finding_refs": [
+        "F2"
+      ],
+      "limitation_refs": []
+    },
+    {
+      "target": "FRONTEND_BACKEND_MISMATCH",
+      "status": "COMPLETE",
+      "scope": "本次提供的GET订单详情响应与两个客户端解析。",
+      "checks": [
+        {
+          "key": "C1",
+          "subject": "Web与后端核销状态字段",
+          "assessment": "CONSISTENT",
+          "evidence_refs": [
+            "EB",
+            "EW"
+          ],
+          "finding_refs": [],
+          "note": "路径和响应消费按本次片段对应，未验证部署。"
+        },
+        {
+          "key": "C2",
+          "subject": "移动端与后端核销状态字段",
+          "assessment": "DEVIATION",
+          "evidence_refs": [
+            "EB",
+            "EM"
+          ],
+          "finding_refs": [
+            "F1"
+          ],
+          "note": "直接原始JSON消费，没有片段内转换。"
+        }
+      ],
+      "finding_refs": [
+        "F1"
+      ],
+      "limitation_refs": []
+    }
+  ],
+  "findings": [
+    {
+      "key": "F2",
+      "target_refs": [
+        "BUG",
+        "REQUIREMENT_DEVIATION"
+      ],
+      "title": "取消状态函数允许已完成状态转为已取消",
+      "category": "状态转换",
+      "severity": "HIGH",
+      "severity_reason": "明确禁止的状态转换在共享函数中可发生；当前证据只支持函数返回错误，不证明数据库已被修改。",
+      "evidence_state": "STATIC_SUPPORTED",
+      "trigger": "订单取消流程把当前状态COMPLETED传入cancel_status(state)。",
+      "actual": "函数只对CANCELLED做幂等分支，COMPLETED未命中拒绝分支，继续执行末尾返回CANCELLED。",
+      "impact": "任何直接使用该返回值的取消入口都会把已完成订单当成已取消；本次没有提供数据库写入调用方，因此不能进一步断言订单记录已被改写。",
+      "evidence_refs": [
+        "EC",
+        "ER"
+      ],
+      "chain_refs": [
+        "CH2"
+      ],
+      "target_views": [
+        {
+          "target": "BUG",
+          "evidence_state": "STATIC_SUPPORTED",
+          "expected": "COMPLETED输入不得产生CANCELLED结果。",
+          "basis": "本次明确提供的取消函数规则及完整函数实现。",
+          "basis_refs": [
+            "ER"
+          ],
+          "explanation": "函数没有外部校验调用，仅排除CANCELLED；结论限于该函数输入输出，未假设外部接口一定可达。",
+          "evidence_refs": [
+            "EC",
+            "ER"
+          ],
+          "comparison_rows": []
+        },
+        {
+          "target": "REQUIREMENT_DEVIATION",
+          "evidence_state": "STATIC_SUPPORTED",
+          "expected": "只允许PENDING转换为CANCELLED，COMPLETED拒绝取消。",
+          "basis": "合成取消规则 / 取消状态规则第1段。",
+          "basis_refs": [
+            "ER"
+          ],
+          "explanation": "同为COMPLETED输入，明确要求与函数结果相反；不以缺少调用方代替函数内部证据。",
+          "evidence_refs": [
+            "EC",
+            "ER"
+          ],
+          "comparison_rows": [
+            {
+              "label": "COMPLETED输入",
+              "left": {
+                "statement": "必须拒绝取消，不能返回CANCELLED",
+                "evidence_refs": [
+                  "ER"
+                ]
+              },
+              "right": {
+                "statement": "进入末尾返回CANCELLED",
+                "evidence_refs": [
+                  "EC"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "fix_suggestion": "在共享函数中只允许PENDING进入取消分支，保留CANCELLED的幂等返回；对COMPLETED返回明确的拒绝结果，并让调用方把该结果转换为取消失败提示。",
+      "verification_suggestion": "分别传入PENDING、COMPLETED和CANCELLED，核对返回值和拒绝方式；再检查取消入口是否在COMPLETED时停止写入，以上检查尚未执行。",
+      "missing_evidence": []
+    },
+    {
+      "key": "F1",
+      "target_refs": [
+        "BUG",
+        "FRONTEND_BACKEND_MISMATCH"
+      ],
+      "title": "移动端模型读取了错误的核销状态键",
+      "category": "字段映射",
+      "severity": "MEDIUM",
+      "severity_reason": "GET详情成功返回时，移动端仍取得默认状态；证据限于模型取值，不推断已发生重复核销。",
+      "evidence_state": "STATIC_SUPPORTED",
+      "trigger": "移动端loadOrder请求GET /orders/{id}成功，响应包含verificationStatus=COMPLETED。",
+      "actual": "移动端模型读取响应中不存在的verifyStatus，缺失键触发默认值PENDING_VERIFY；Web模型读取verificationStatus并得到COMPLETED。",
+      "impact": "移动端loadOrder把已完成核销订单交给后续逻辑时仍标为待核销，可能使移动端继续显示或执行待核销分支；本次未运行页面，不能断言实际界面已显示错误。",
+      "evidence_refs": [
+        "EB",
+        "EM",
+        "EW"
+      ],
+      "chain_refs": [
+        "CH1"
+      ],
+      "target_views": [
+        {
+          "target": "BUG",
+          "evidence_state": "STATIC_SUPPORTED",
+          "expected": "解析返回的核销状态，不因读取错误键而回退。",
+          "basis": "代码中的响应字段与直接解析路径。",
+          "basis_refs": [
+            "EB",
+            "EM"
+          ],
+          "explanation": "移动端将原始响应直接解码后取键，此路径未出现别名转换。外部依赖按标准HTTP/JSON行为理解；未运行请求。",
+          "evidence_refs": [
+            "EB",
+            "EM"
+          ],
+          "comparison_rows": []
+        },
+        {
+          "target": "FRONTEND_BACKEND_MISMATCH",
+          "evidence_state": "STATIC_SUPPORTED",
+          "expected": "GET /orders/{id}返回字段与客户端消费键一致。",
+          "basis": "后端GET路由、移动端http.get路径及响应解码语句。",
+          "basis_refs": [
+            "EB",
+            "EM"
+          ],
+          "explanation": "按本次选定代码核对同一形状的GET订单详情接口，不宣称这些提交已经一起部署；Web的键正确，差异仅定位到移动端。",
+          "evidence_refs": [
+            "EB",
+            "EM",
+            "EW"
+          ],
+          "comparison_rows": [
+            {
+              "label": "核销状态字段",
+              "left": {
+                "statement": "verificationStatus",
+                "evidence_refs": [
+                  "EB"
+                ]
+              },
+              "right": {
+                "statement": "移动端verifyStatus；Web为verificationStatus",
+                "evidence_refs": [
+                  "EM",
+                  "EW"
+                ]
+              }
+            },
+            {
+              "label": "缺少消费键时的行为",
+              "left": {
+                "statement": "此返回对象不包含verifyStatus",
+                "evidence_refs": [
+                  "EB"
+                ]
+              },
+              "right": {
+                "statement": "移动端回退PENDING_VERIFY",
+                "evidence_refs": [
+                  "EM"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "fix_suggestion": "将移动端模型的读取键改为响应实际返回的verificationStatus，并复查loadOrder及其调用方是否依赖PENDING_VERIFY默认值；不要在页面层重复补偿。",
+      "verification_suggestion": "用verificationStatus分别为COMPLETED、PENDING_VERIFY、空值和缺失字段的响应调用模型解析，断言每种状态及异常处理；再核对loadOrder调用方，以上检查尚未执行。",
+      "missing_evidence": []
+    }
+  ],
+  "evidence": [
+    {
+      "key": "EB",
+      "kind": "CODE",
+      "source_id": "server",
+      "file_id": "main",
+      "segment_id": "full",
+      "start_line": 4,
+      "end_line": 6,
+      "excerpt": "@app.get(\"/orders/{order_id}\")\ndef detail(order_id: int):\n    return {\"id\": order_id, \"verificationStatus\": \"COMPLETED\"}",
+      "observation": "后端GET订单详情直接返回verificationStatus。"
+    },
+    {
+      "key": "EC",
+      "kind": "CODE",
+      "source_id": "server",
+      "file_id": "main",
+      "segment_id": "full",
+      "start_line": 8,
+      "end_line": 12,
+      "excerpt": "def cancel_status(status: str) -> str:\n    \"\"\"Return the new status; no persistence or external hooks.\"\"\"\n    if status == \"CANCELLED\":\n        return status\n    return \"CANCELLED\"",
+      "observation": "取消函数只保留CANCELLED输入，其他输入均返回CANCELLED。"
+    },
+    {
+      "key": "EW",
+      "kind": "CODE",
+      "source_id": "web",
+      "file_id": "main",
+      "segment_id": "full",
+      "start_line": 1,
+      "end_line": 5,
+      "excerpt": "export async function loadOrder(id: number) {\n  const response = await fetch(\"/orders/\" + id);\n  const body = await response.json();\n  return {status: body.verificationStatus};\n}",
+      "observation": "Web直接读取verificationStatus，无重命名转换。"
+    },
+    {
+      "key": "EM",
+      "kind": "CODE",
+      "source_id": "mobile",
+      "file_id": "main",
+      "segment_id": "full",
+      "start_line": 4,
+      "end_line": 8,
+      "excerpt": "Future<String> loadOrder(String base, int id) async {\n  final response = await http.get(Uri.parse('$base/orders/$id'));\n  final body = jsonDecode(response.body) as Map<String, dynamic>;\n  return body['verifyStatus'] as String? ?? 'PENDING_VERIFY';\n}",
+      "observation": "移动端请求同一形状的GET路径，直接读取verifyStatus并回退默认值。"
+    },
+    {
+      "key": "ER",
+      "kind": "MATERIAL",
+      "source_id": "rules",
+      "segment_id": "cancel",
+      "excerpt": "cancel_status仅允许PENDING转换为CANCELLED；COMPLETED必须拒绝取消，不能返回CANCELLED。重复取消CANCELLED可保持原状态。",
+      "observation": "明确限定取消函数对COMPLETED的处理。"
+    }
+  ],
+  "chains": [
+    {
+      "key": "CH1",
+      "nodes": [
+        {
+          "key": "response",
+          "label": "后端订单详情返回",
+          "observation": "GET路由直接构造响应字段。",
+          "inputs": "order_id",
+          "outputs": "verificationStatus",
+          "evidence_refs": [
+            "EB"
+          ]
+        },
+        {
+          "key": "parse",
+          "label": "移动端响应解析",
+          "observation": "解析原始响应后读取不同字段名。",
+          "inputs": "HTTP响应JSON",
+          "outputs": "状态字符串或默认值",
+          "evidence_refs": [
+            "EM"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "response",
+          "to": "parse",
+          "relation": "FIELD_MAPPING",
+          "evidence_refs": [
+            "EB",
+            "EM"
+          ],
+          "note": "GET路径与返回消费代码支持当前字段对照；这不是后端主动调用客户端。"
+        }
+      ]
+    },
+    {
+      "key": "CH2",
+      "nodes": [
+        {
+          "key": "cancel",
+          "label": "取消状态函数",
+          "observation": "COMPLETED输入落到末尾返回。",
+          "inputs": "COMPLETED",
+          "outputs": "CANCELLED",
+          "evidence_refs": [
+            "EC"
+          ]
+        }
+      ],
+      "edges": []
+    }
+  ],
+  "limitations": []
+}

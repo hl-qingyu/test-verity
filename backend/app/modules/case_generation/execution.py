@@ -2,16 +2,14 @@
 
 import copy
 import json
-import os
 from datetime import UTC, datetime
-from pathlib import Path
-from tempfile import NamedTemporaryFile
 from time import monotonic
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.core.files import atomic_write
 from app.db.models import (
     CaseGenerationApplication,
     CaseGenerationBatch,
@@ -21,6 +19,7 @@ from app.db.models import (
 )
 from app.integrations import ai_client as responses
 from app.integrations.response_diagnostics import safe_snapshot
+from app.modules.ai import task_lifecycle
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.case_generation import (
@@ -28,6 +27,7 @@ from app.modules.case_generation import (
     contract,
     delivery,
     delivery_files,
+    reading,
     service,
     sources,
 )
@@ -43,18 +43,9 @@ def candidate_path(batch, request_id=None):
 
 
 def save_candidate(batch, text, request_id=None):
-    target = candidate_path(batch, request_id)
-    temporary = None
-    try:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with NamedTemporaryFile(dir=target.parent, delete=False) as f:
-            temporary = Path(f.name)
-            f.write(text.encode())
-        os.replace(temporary, target)
-    except OSError:
-        if temporary:
-            temporary.unlink(missing_ok=True)
-        raise AppError(503, "generation_candidate_storage_unavailable") from None
+    atomic_write(
+        candidate_path(batch, request_id), text.encode(), "generation_candidate_storage_unavailable"
+    )
 
 
 def refresh_run(db, run):
@@ -82,16 +73,11 @@ def recover(db):
             .with_for_update()
         )
     )
-    for cls in (CaseGenerationBatch, CaseGenerationApplication, CaseGenerationChatTurn):
-        db.execute(
-            update(cls)
-            .where(cls.status == "RUNNING")
-            .values(
-                status="FAILED",
-                error_code="generation_worker_interrupted",
-                updated_at=datetime.now(UTC),
-            )
-        )
+    task_lifecycle.mark_interrupted(
+        db,
+        (CaseGenerationBatch, CaseGenerationApplication, CaseGenerationChatTurn),
+        "generation_worker_interrupted",
+    )
     for run in runs:
         refresh_run(db, run)
     db.commit()
@@ -114,41 +100,6 @@ def claim_model(db, cls):
     return key
 
 
-def claim(db):
-    # Lock parent before child, matching cancel/retry/application lock order.
-    run = db.scalar(
-        select(CaseGenerationRun)
-        .join(CaseGenerationBatch, CaseGenerationBatch.run_id == CaseGenerationRun.id)
-        .where(
-            CaseGenerationBatch.status == "QUEUED",
-            CaseGenerationRun.status != "CANCELLED",
-            CaseGenerationRun.deleted_at.is_(None),
-        )
-        .order_by(CaseGenerationBatch.id)
-        .with_for_update(of=CaseGenerationRun, skip_locked=True)
-        .limit(1)
-    )
-    if run is None:
-        db.rollback()
-        return None
-    batch = db.scalar(
-        select(CaseGenerationBatch)
-        .where(CaseGenerationBatch.run_id == run.id, CaseGenerationBatch.status == "QUEUED")
-        .order_by(CaseGenerationBatch.id)
-        .with_for_update(skip_locked=True)
-        .limit(1)
-    )
-    if batch is None:
-        db.rollback()
-        return None
-    now = datetime.now(UTC)
-    batch.status, batch.updated_at = "RUNNING", now
-    run.status, run.updated_at = "RUNNING", now
-    update_attempt(batch, {"phase": "preparing"}, started_at=now.isoformat())
-    db.commit()
-    return batch.id
-
-
 def update_attempt(batch, diagnostics, started_at=None):
     attempts = copy.deepcopy(batch.attempts)
     attempt = next((a for a in attempts if a["request_id"] == batch.request_id), None)
@@ -166,10 +117,6 @@ def update_attempt(batch, diagnostics, started_at=None):
 
 def claim_application(db):
     return claim_model(db, CaseGenerationApplication)
-
-
-def claim_chat(db):
-    return claim_model(db, CaseGenerationChatTurn)
 
 
 def failure(cls, key, exc, factory, request_id=None, diagnostics=None):
@@ -272,6 +219,14 @@ def execute(batch_id, factory):
 
         check(True)
         instructions, instruction_messages = skill_files.model_context(meta["skill"])
+        reading_options = (
+            {
+                "reading_files": reading.reading_layout(data, attachments),
+                "reading_guidance": reading.GUIDANCE,
+            }
+            if config.get("call_mode") == "CODEX_EXEC" and data["contract_version"] == 3
+            else {}
+        )
         answer = responses.analyze(
             url,
             config["model"],
@@ -285,7 +240,9 @@ def execute(batch_id, factory):
             call_mode=config.get("call_mode", "RESPONSES_API"),
             diagnostics=diagnostics,
             instruction_messages=instruction_messages,
+            output_profile="case_generation",
             **({"terminal_spec": terminal_spec} if terminal_spec is not None else {}),
+            **reading_options,
         )
         diagnostics["phase"] = "validating_report"
         with factory() as db:

@@ -1,3 +1,4 @@
+const { compileModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,7 +7,7 @@ const ts = require('typescript');
 
 function harness(role, project = null) {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/Projects.tsx'), 'utf8');
-  const code = ts.transpileModule(
+  const code = compileModule(
     source.slice(
       source.indexOf('function ProjectForm('),
       source.indexOf('export function CreateProjectDialog('),

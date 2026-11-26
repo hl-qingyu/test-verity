@@ -1,11 +1,12 @@
-"""Worker execution for v3 requirement-risk analysis."""
+"""Worker execution for versioned requirement-risk analysis."""
 
 import copy
 import logging
 from datetime import UTC, datetime
 from time import monotonic
 
-from sqlalchemy import select, update
+from sqlalchemy import cast, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.errors import AppError
 from app.db.models import (
@@ -18,7 +19,8 @@ from app.db.models import (
 )
 from app.integrations import ai_client as responses
 from app.integrations import github
-from app.modules.ai import native_terminal
+from app.integrations.response_diagnostics import safe_snapshot
+from app.modules.ai import native_terminal, task_lifecycle
 from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.documents import service as documents
@@ -38,35 +40,10 @@ logger = logging.getLogger(__name__)
 
 
 def recover(db):
-    db.execute(
-        update(RequirementRiskAnalysis)
-        .where(RequirementRiskAnalysis.status == "RUNNING")
-        .values(
-            status="FAILED",
-            error_code="risk_analysis_worker_interrupted",
-            updated_at=datetime.now(UTC),
-        )
+    task_lifecycle.mark_interrupted(
+        db, (RequirementRiskAnalysis,), "risk_analysis_worker_interrupted"
     )
     db.commit()
-
-
-def claim(db):
-    row = db.scalar(
-        select(RequirementRiskAnalysis)
-        .where(
-            RequirementRiskAnalysis.status == "QUEUED", RequirementRiskAnalysis.deleted_at.is_(None)
-        )
-        .order_by(RequirementRiskAnalysis.id)
-        .with_for_update(skip_locked=True)
-        .limit(1)
-    )
-    if row is None:
-        db.rollback()
-        return None
-    row.status, row.updated_at = "RUNNING", datetime.now(UTC)
-    task_id = row.id
-    db.commit()
-    return task_id
 
 
 def github_access(source, actor, db):
@@ -87,9 +64,9 @@ def github_access(source, actor, db):
     return repo.full_name, saved_token(connection)
 
 
-def prepare(task, actor, db):
+def prepare(task, actor, db, *, contract_version=3):
     input_data = {
-        "contract_version": 3,
+        "contract_version": contract_version,
         "request_id": task.request_id,
         "project_id": task.project_id,
         "revision": task.id,
@@ -220,18 +197,11 @@ def prepare(task, actor, db):
 
 
 def validate_result(answer, input_data, project_id):
-    raw, comparison_corrections = risk_schemas.normalize_comparison_text(
-        risk_service.json_object(answer)
-    )
-    output = risk_service.parse(risk_schemas.Report, raw, "report")
-    output, corrections = risk_schemas.normalize_function_risks(output)
-    parsed_input = risk_schemas.AnalysisInput.model_validate(input_data)
-    review_warnings = []
-    risk_schemas.validate_report(output, parsed_input, project_id, review_warnings)
-    return output.model_dump(), corrections, comparison_corrections, review_warnings
+    return risk_service.validate_candidate(answer, input_data, project_id)
 
 
 def execute(task_id, session_factory):
+    diagnostics = {}
     try:
         with session_factory() as db:
             task = db.get(RequirementRiskAnalysis, task_id)
@@ -250,6 +220,8 @@ def execute(task_id, session_factory):
             skill = task.context.get("skill")
             if not isinstance(skill, dict) or not isinstance(skill.get("instructions"), str):
                 raise AppError(409, "skill_snapshot_missing")
+            if risk_analysis_service.has_mislabeled_skill(skill):
+                raise AppError(409, "risk_analysis_contract_mismatch")
             if "input" in task.context:
                 binaries = risk_analysis_service.frozen_materials(task.project_id, task, actor, db)
                 input_data = copy.deepcopy(task.context["input"])
@@ -258,7 +230,9 @@ def execute(task_id, session_factory):
                 bindings = copy.deepcopy(task.context["bindings"])
                 db.rollback()
             else:
-                input_data, bindings, binaries = prepare(task, actor, db)
+                input_data, bindings, binaries = prepare(
+                    task, actor, db, contract_version=skill.get("contract_version", 3)
+                )
         with session_factory() as db:
             task = db.get(RequirementRiskAnalysis, task_id, with_for_update=True)
             if task is None or task.status != "RUNNING":
@@ -291,9 +265,14 @@ def execute(task_id, session_factory):
             effort,
             instructions,
             analysis_materials.model_content(input_data, binaries),
+            diagnostics=diagnostics,
+            output_profile="requirement_analysis",
             on_progress=check,
             call_mode=config.get("call_mode", "RESPONSES_API"),
             **terminal_options,
+            **analysis_materials.structured_reading_options(
+                config.get("call_mode"), input_data, binaries
+            ),
         )
         artifacts.save_candidate(task_id, answer)
         check()
@@ -328,6 +307,7 @@ def execute(task_id, session_factory):
                 "function_risk_corrections": corrections,
                 "comparison_text_corrections": comparison_corrections,
                 "review_warnings": review_warnings,
+                "ai_diagnostics": safe_snapshot(diagnostics),
             }
             task.status, task.updated_at = "COMPLETED", datetime.now(UTC)
             db.commit()
@@ -335,6 +315,11 @@ def execute(task_id, session_factory):
         propagate_database_outage(exc)
         code = exc.detail if isinstance(exc, AppError) else "risk_analysis_internal_error"
         logger.warning("risk_analysis_failed id=%s type=%s", task_id, type(exc).__name__)
+        values = {"status": "FAILED", "error_code": code, "updated_at": datetime.now(UTC)}
+        if diagnostics:
+            values["context"] = RequirementRiskAnalysis.context.op("||")(
+                cast({"ai_diagnostics": safe_snapshot(diagnostics)}, JSONB)
+            )
         with session_factory() as db:
             db.execute(
                 update(RequirementRiskAnalysis)
@@ -342,6 +327,6 @@ def execute(task_id, session_factory):
                     RequirementRiskAnalysis.id == task_id,
                     RequirementRiskAnalysis.status == "RUNNING",
                 )
-                .values(status="FAILED", error_code=code, updated_at=datetime.now(UTC))
+                .values(**values)
             )
             db.commit()

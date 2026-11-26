@@ -1,0 +1,84 @@
+{
+  "contract_version": 4,
+  "request_id": "risk-example-001",
+  "summary": {
+    "assessment": "NEEDS_CLARIFICATION",
+    "conclusion": "先确认订单号搜索是精确匹配还是允许部分输入，再补一条输入与结果示例；否则开发和测试对同一个搜索词可能得出不同结果。本次只审查了所选的订单查询片段，不判断其他功能或现有系统实现。",
+    "priority_risk_keys": [
+      "R1"
+    ]
+  },
+  "functions": [
+    {
+      "key": "F1",
+      "module": "订单管理",
+      "name": "订单查询",
+      "scope": "用户在订单列表输入订单号并提交搜索后，系统如何匹配并返回订单",
+      "evidence": [
+        {
+          "source_id": "D1",
+          "segment_id": "s1",
+          "location": "合成需求 · 订单查询",
+          "excerpt": "订单列表支持按订单号搜索。",
+          "observation": ""
+        }
+      ],
+      "risk_keys": [
+        "R1"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "key": "R1",
+      "function_keys": [
+        "F1"
+      ],
+      "title": "订单号搜索未说明输入不完整时返回哪些订单",
+      "type": "RULE_GAP",
+      "severity": "MEDIUM",
+      "severity_reason": "影响本次查询结果的实现和验收一致性，暂无证据表明会阻碍其他核心流程。",
+      "basis": "SCOPE_GAP",
+      "description": "用户在订单列表输入不完整的订单号并点击搜索时，资料只说明“支持按订单号搜索”，没有说明系统应只接受完整订单号，还是按已输入字符匹配多个订单，也没有说明无匹配时的提示。",
+      "evidence": [
+        {
+          "source_id": "D1",
+          "segment_id": "s1",
+          "location": "合成需求 · 订单查询",
+          "excerpt": "订单列表支持按订单号搜索。",
+          "observation": ""
+        }
+      ],
+      "checked_scope": [
+        {
+          "source_id": "D1",
+          "segment_ids": [
+            "s1"
+          ]
+        }
+      ],
+      "impact": "开发可能实现精确查询而测试按部分号码准备数据，或接口返回多条订单但页面只按单条订单设计；最终会在搜索结果数量和无结果提示上产生争议。",
+      "questions": [
+        "用户输入完整订单号时是否必须精确匹配？输入不完整的订单号时，是禁止提交、按前缀返回多条，还是按包含关系返回多条？无匹配和多条匹配分别显示什么？"
+      ],
+      "improvement": {
+        "proposal": "补充规则草案：完整订单号按精确匹配；不完整输入是否允许搜索由产品确认。若允许，明确按前缀还是包含关系返回多条，并分别写出“有结果、无结果、多条结果”的页面提示和接口返回示例。",
+        "rationale": "开发可以据此确定查询条件和返回结构，测试也能用同一组输入核对结果，不再靠“支持搜索”自行猜测。",
+        "tradeoffs": "精确匹配实现和结果更简单，但用户必须知道完整订单号；部分匹配更易查找，却需要处理多条结果、权限过滤和更大的查询范围。",
+        "requires_confirmation": true
+      },
+      "source_comparison": null
+    }
+  ],
+  "optional_suggestions": [],
+  "limitations": [
+    {
+      "kind": "OUT_OF_SCOPE",
+      "source_ids": [
+        "D1"
+      ],
+      "detail": "仅提供一段合成查询需求。",
+      "effect": "不能据此评价整个订单系统或实际实现。"
+    }
+  ]
+}

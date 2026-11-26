@@ -1,9 +1,10 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
-const code = ts.transpileModule(
+const code = compileModule(
   fs.readFileSync(path.resolve(__dirname, '../src/useMaterialDrag.ts'), 'utf8'),
   {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -15,16 +16,20 @@ function harness(disabled = false) {
     target = { dataset: { materialProject: '1', materialGroup: '7' } };
   const moves = [],
     exports = {};
-  new Function('exports', 'require', code)(exports, () => ({
-    useState: () => [
-      null,
-      (v) => {
-        view = v;
-      },
-    ],
-    useRef: (value) => ({ current: value }),
-    useEffect: () => {},
-  }));
+  evaluateModule(
+    code,
+    () => ({
+      useState: () => [
+        null,
+        (v) => {
+          view = v;
+        },
+      ],
+      useRef: (value) => ({ current: value }),
+      useEffect: () => {},
+    }),
+    exports,
+  );
   const hook = exports.useMaterialDrag({
     projectId: 1,
     disabled,

@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { deletionErrors } from './analysisDeletionApi';
 import { apiRequest } from './api/http';
 import { codeError } from './codeAnalysisApi';
@@ -66,22 +67,12 @@ export function changeError(e: unknown, end: () => void) {
     ? changeErrors[e.message]
     : codeError(e, end);
 }
-export function object(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) throw Error('change_response_invalid');
-  return v as Record<string, unknown>;
-}
-export function string(v: unknown): string {
-  if (typeof v !== 'string') throw Error('change_response_invalid');
-  return v;
-}
-function number(v: unknown): number {
-  if (!Number.isSafeInteger(v) || Number(v) <= 0) throw Error('change_response_invalid');
-  return Number(v);
-}
-export function array(v: unknown): unknown[] {
-  if (!Array.isArray(v)) throw Error('change_response_invalid');
-  return v;
-}
+const guards = createGuards('change_response_invalid');
+export const object = guards.obj;
+export const string = guards.str;
+const number = guards.int;
+export const array = guards.array;
+
 function optional(v: unknown): string {
   return v === undefined || v === null ? '' : string(v);
 }
@@ -207,7 +198,7 @@ export function parseChangeDetail(v: unknown, projectId: number): PageChangeReco
   if (
     d.status === 'COMPLETED' &&
     (report.analysis_type !== 'CHANGE_IMPACT' ||
-      report.contract_version !== 2 ||
+      (report.contract_version !== 2 && report.contract_version !== 3) ||
       input.analysis_type !== 'CHANGE_IMPACT' ||
       input.contract_version !== 2 ||
       input.project_id !== projectId ||
@@ -231,11 +222,12 @@ export function parseChangeDetail(v: unknown, projectId: number): PageChangeReco
       'regression_scope',
       'evidence',
       'chains',
-      'coverage',
       'limitations',
       'target_results',
     ])
       array(report[group]);
+    if (report.contract_version === 2) array(report.coverage);
+    else object(report.platform_coverage);
     for (const group of [
       'comparison_pairs',
       'snapshots',
@@ -466,7 +458,6 @@ export function parseChangeDetail(v: unknown, projectId: number): PageChangeReco
     error_code: string(d.error_code),
     can_cancel: d.can_cancel === true,
     terminal_available: d.terminal_available === true,
-    can_start: d.can_start === true,
     can_retry: d.can_retry === true,
     retry_preparation: d.retry_preparation === true,
     retry_replan: d.retry_replan === true,
@@ -533,7 +524,6 @@ export async function changeListing(url: string, projectId: number, signal: Abor
       error_code: string(row.error_code),
       can_cancel: row.can_cancel === true,
       terminal_available: row.terminal_available === true,
-      can_start: row.can_start === true,
       can_retry: row.can_retry === true,
       retry_preparation: row.retry_preparation === true,
       retry_replan: row.retry_replan === true,

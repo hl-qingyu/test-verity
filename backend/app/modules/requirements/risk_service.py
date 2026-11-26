@@ -4,7 +4,6 @@ import copy
 import hashlib
 import json
 import logging
-import math
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
@@ -13,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, defer
 
 from app.core.errors import AppError
+from app.core.json_data import json_object as read_json
 from app.db.models import (
     DocumentVersion,
     RequirementChatTurn,
@@ -33,36 +33,7 @@ FILE_LIMIT = 16 * 1024 * 1024
 
 
 def json_object(value: str):
-    def pairs(items):
-        result = {}
-        for key, value in items:
-            if key in result:
-                raise ValueError("duplicate_key")
-            result[key] = value
-        return result
-
-    def invalid_constant(value):
-        raise ValueError("invalid_number")
-
-    try:
-        result = json.loads(value, object_pairs_hook=pairs, parse_constant=invalid_constant)
-        pending = [result]
-        while pending:
-            item = pending.pop()
-            if isinstance(item, str):
-                if "\x00" in item:
-                    raise ValueError("null_character")
-                item.encode("utf-8")
-            elif isinstance(item, dict):
-                pending.extend(item.keys())
-                pending.extend(item.values())
-            elif isinstance(item, list):
-                pending.extend(item)
-            elif isinstance(item, float) and not math.isfinite(item):
-                raise ValueError("invalid_number")
-        return result
-    except (ValueError, UnicodeError, RecursionError):
-        raise AppError(422, "risk_json_invalid") from None
+    return read_json(value, "risk_json_invalid")
 
 
 def parse(model, data, prefix):
@@ -81,6 +52,18 @@ def parse(model, data, prefix):
                 f"[{part}]" if type(part) is int else "." + (part if part in allowed else "field")
             )
         raise AppError(422, f"risk_report_invalid|{path}|{item['type']}") from None
+
+
+def validate_candidate(answer, input_data, project_id):
+    fixed = parse(schema.AnalysisInput, input_data, "input")
+    raw, comparison_corrections = schema.normalize_comparison_text(json_object(answer))
+    model = schema.CandidateV4 if fixed.contract_version == 4 else schema.Report
+    output, corrections = schema.normalize_function_risks(parse(model, raw, "report"))
+    warnings = []
+    schema.validate_report(output, fixed, project_id, warnings)
+    if isinstance(output, schema.CandidateV4):
+        output = schema.derive_report(output, fixed)
+    return output.model_dump(), corrections, comparison_corrections, warnings
 
 
 def choices(project_id: int, actor: UserAccount, db: Session):
@@ -254,8 +237,26 @@ async def import_report(
     input_data = parse(
         schema.AnalysisInput, json_object(payload.input_json.lstrip("\ufeff")), "input"
     )
-    report = parse(schema.Report, json_object(payload.report_json.lstrip("\ufeff")), "report")
-    schema.validate_report(report, input_data, project_id)
+    raw = json_object(payload.report_json.lstrip("\ufeff"))
+    if input_data.contract_version == 4:
+        if isinstance(raw, dict) and ("coverage" in raw or "outcome" in raw):
+            saved = parse(schema.ReportV4, raw, "report")
+            candidate = schema.CandidateV4.model_validate(
+                saved.model_dump(exclude={"coverage", "outcome"})
+            )
+        else:
+            saved = None
+            candidate = parse(schema.CandidateV4, raw, "report")
+        schema.validate_report(candidate, input_data, project_id)
+        report = schema.derive_report(candidate, input_data)
+        if saved is not None:
+            schema.require(
+                saved.coverage == report.coverage, "coverage", "derived_coverage_mismatch"
+            )
+            schema.require(saved.outcome == report.outcome, "outcome", "derived_outcome_mismatch")
+    else:
+        report = parse(schema.Report, raw, "report")
+        schema.validate_report(report, input_data, project_id)
     mapping = schema.unique(payload.bindings, "source_id", "bindings")
     schema.require(
         set(mapping) == {m.source_id for m in input_data.materials},
@@ -762,4 +763,34 @@ def export_markdown(project_id, actor, db, source=0, function="", severity="", s
             proof = evidence["excerpt"] or evidence["observation"]
             lines.append(f"- 依据 {evidence['source_id']} / {evidence['location']}：{proof}")
         lines.append("")
+    report_ids = {item["report_id"] for item in rows}
+    reports = db.scalars(
+        select(RequirementRiskReport)
+        .where(
+            RequirementRiskReport.project_id == project_id,
+            RequirementRiskReport.id.in_(report_ids),
+            RequirementRiskReport.deleted_at.is_(None),
+            RequirementRiskReport.report["contract_version"].as_integer() == 4,
+        )
+        .order_by(RequirementRiskReport.id.desc())
+    )
+    for record in reports:
+        lines.extend(
+            (f"## {record.title} · 覆盖情况", "", "按证据引用统计。资料读取状态单独列出。", "")
+        )
+        materials = {material["source_id"]: material for material in record.input["materials"]}
+        functions = {function["key"]: function["name"] for function in record.report["functions"]}
+        for coverage in record.report["coverage"]:
+            material = materials[coverage["source_id"]]
+            locations = {item["segment_id"]: item["location"] for item in material["segments"]}
+            lines.extend((f"### {material['name']} · {len(coverage['segments'])} 个片段", ""))
+            for segment in coverage["segments"]:
+                label = "被引用" if segment["disposition"] == "REFERENCED" else "未被引用"
+                location = locations[segment["segment_id"]] or segment["segment_id"]
+                names = "、".join(functions[key] for key in segment["function_keys"]) or "无"
+                risks = "、".join(segment["risk_keys"]) or "无"
+                lines.append(f"- {location} · {label} · 功能：{names} · 风险：{risks}")
+            if coverage["limitation"]:
+                lines.append(coverage["limitation"])
+            lines.append("")
     return "\n".join(lines)

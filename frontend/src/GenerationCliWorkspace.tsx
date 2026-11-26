@@ -26,12 +26,13 @@ export function GenerationCliWorkspace({
   onReviewResult?: (id: string) => void;
 }) {
   const record = `${generationBase(projectId)}/${runId}`;
+  const terminal = `/api/projects/${projectId}/analysis-terminal/generation/${runId}`;
   return (
     <CachedNativeCliWorkspace
       open={open}
-      base={`${record}/terminal`}
+      base={terminal}
       cancelInitial={`${record}/cancel`}
-      cancelResume={(id) => `${record}/chat/${id}/cancel`}
+      cancelResume={(id) => `${terminal}/${id}/cancel`}
       initialCancelLabel="取消生成"
       workspaceTitle="用例生成历史对话"
       errorMessage={(error) => generationError(error, onSessionEnd)}
@@ -42,7 +43,7 @@ export function GenerationCliWorkspace({
       renderResults={
         onSaveResult ? (
           <NativeResultReview
-            base={`${record}/terminal`}
+            base={terminal}
             resultRevision={resultRevision}
             onSessionEnd={onSessionEnd}
             onSave={onSaveResult}

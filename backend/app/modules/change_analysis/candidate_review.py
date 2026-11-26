@@ -4,8 +4,7 @@ from datetime import UTC, datetime
 
 from app.core.errors import AppError
 from app.modules.candidate_results import service as candidates
-from app.modules.change_analysis import artifacts, contract, evidence, service, sources
-from app.modules.requirements.risk_service import json_object
+from app.modules.change_analysis import artifacts, contract, service, sources
 
 
 def review(project_id, task_id, actor, db, payload=None):
@@ -28,10 +27,12 @@ def review(project_id, task_id, actor, db, payload=None):
         data = service.parse(contract.AnalysisInput, row.input_snapshot)
 
         def validate(raw):
-            output = service.parse(contract.Report, json_object(raw))
-            output, corrections = evidence.normalize_coordinates(data, output)
-            contract.validate_report(data, output)
-            return output.model_dump(by_alias=True), corrections
+            return service.validate_candidate(
+                service.json_object(raw),
+                data,
+                version=metadata.get("skill", {}).get("contract_version", 2),
+                mode=row.ai_config.get("call_mode", "RESPONSES_API"),
+            )
 
         result, updated, error = candidates.evaluate(
             "change_analysis",

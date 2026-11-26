@@ -1,0 +1,239 @@
+{
+  "contract_version": 3,
+  "analysis_type": "CHANGE_IMPACT",
+  "request_id": "synthetic-requirement_change",
+  "project_id": 1,
+  "revision": 1,
+  "mode": "REQUIREMENT_CHANGE",
+  "summary": {
+    "conclusion": "补充新增备注50字符上限及超限反馈；旧取消规则继续有效。建议更新备注用例并保留取消回归；未核对代码或执行测试。",
+    "priority_risk_refs": [],
+    "inheritance_note": "增量只补充备注长度；未提及的待付款/已付款取消规则继续有效，不列未变卡片。"
+  },
+  "target_results": [
+    {
+      "target": "BUSINESS_IMPACT",
+      "status": "COMPLETE",
+      "scope": "仅本次提供范围",
+      "checks": [
+        {
+          "subject": "备注长度变化",
+          "assessment": "CONSISTENT",
+          "evidence_refs": [
+            "E1",
+            "E2"
+          ],
+          "risk_refs": [],
+          "note": "变化事实与有效规则已核对，不判断实现正确。"
+        }
+      ],
+      "risk_refs": [],
+      "limitation_refs": []
+    },
+    {
+      "target": "CASE_REGRESSION",
+      "status": "COMPLETE",
+      "scope": "仅本次提供范围",
+      "checks": [
+        {
+          "subject": "所选备注/取消用例维护建议",
+          "assessment": "CONSISTENT",
+          "evidence_refs": [
+            "E1",
+            "E2"
+          ],
+          "risk_refs": [],
+          "note": "仅核对两个固定设计版本，未应用或执行。"
+        }
+      ],
+      "risk_refs": [],
+      "limitation_refs": []
+    }
+  ],
+  "changes": [
+    {
+      "key": "C1",
+      "pair_ref": "p1",
+      "mapping_refs": [
+        "m1"
+      ],
+      "diff_refs": [
+        "d1"
+      ],
+      "title": "订单备注增加50字符上限",
+      "function": "订单",
+      "kind": "MODIFY",
+      "evidence_state": "STATIC_SUPPORTED",
+      "before": "旧范围只写允许录入备注，未规定长度。",
+      "after": "新有效规则增加50字符上限及保留输入/不提交反馈。",
+      "business_effect": "订单备注增加50字符上限",
+      "evidence_refs": [
+        "E1",
+        "E2"
+      ],
+      "questions": [],
+      "limitation_refs": []
+    }
+  ],
+  "function_impacts": [
+    {
+      "key": "F1",
+      "title": "备注录入边界调整",
+      "change_refs": [
+        "C1"
+      ],
+      "subject": "订单备注录入",
+      "subject_refs": [
+        {
+          "snapshot_ref": "req-new",
+          "unit_id": "u1"
+        }
+      ],
+      "directness": "DIRECT",
+      "certainty": "STATIC_SUPPORTED",
+      "description": "50与51字符的保存行为需要按补充规则区分。",
+      "evidence_refs": [
+        "E1",
+        "E2"
+      ],
+      "chain_refs": [],
+      "suggestion": "核对长度边界与失败后的输入保留。",
+      "limitation_refs": []
+    }
+  ],
+  "code_impacts": [],
+  "case_impacts": [
+    {
+      "key": "U1",
+      "case_ref": "case-note",
+      "change_refs": [
+        "C1"
+      ],
+      "action": "UPDATE",
+      "certainty": "STATIC_SUPPORTED",
+      "reason": "旧用例要求100字符可保存，与新上限不同。",
+      "proposed_fields": [
+        {
+          "field": "data_requirements",
+          "proposal": "50和51个字符",
+          "basis_refs": [
+            "E2"
+          ]
+        },
+        {
+          "field": "expected",
+          "proposal": "50字符允许保存；51字符保留输入、提示超限且不提交。",
+          "basis_refs": [
+            "E2"
+          ]
+        }
+      ],
+      "evidence_refs": [
+        "E1",
+        "E2"
+      ],
+      "limitation_refs": []
+    },
+    {
+      "key": "U2",
+      "case_ref": "case-cancel",
+      "change_refs": [
+        "C1"
+      ],
+      "action": "KEEP",
+      "certainty": "POSSIBLE",
+      "reason": "增量未取消旧规则；保留设计并回归核对备注约束是否影响取消，未声称存在实现耦合。",
+      "proposed_fields": [],
+      "evidence_refs": [
+        "E1",
+        "E2"
+      ],
+      "limitation_refs": []
+    }
+  ],
+  "risks": [],
+  "historical_reviews": [],
+  "regression_scope": [
+    {
+      "key": "G1",
+      "title": "分别输入50与51字符备注后提交",
+      "function": "订单",
+      "change_refs": [
+        "C1"
+      ],
+      "risk_refs": [],
+      "case_refs": [
+        "case-note"
+      ],
+      "action": "UPDATE",
+      "priority": "HIGH",
+      "reason": "新版边界直接变化",
+      "preconditions": "进入所提供的订单编辑或函数调用范围",
+      "data_requirements": "按下面步骤准备边界值",
+      "steps": "分别输入50与51字符备注后提交",
+      "expected": "50字符可保存；51字符保留输入、显示指定提示且不提交。",
+      "expected_basis_refs": [
+        "E1",
+        "E2"
+      ],
+      "certainty": "STATIC_SUPPORTED",
+      "questions": [],
+      "limitation_refs": []
+    },
+    {
+      "key": "G2",
+      "title": "待付款订单取消，并检查已付款订单被拒绝",
+      "function": "订单",
+      "change_refs": [
+        "C1"
+      ],
+      "risk_refs": [],
+      "case_refs": [
+        "case-cancel"
+      ],
+      "action": "KEEP",
+      "priority": "MEDIUM",
+      "reason": "旧规则保留；核对编辑页新限制是否干扰原取消场景，不表示代码已证实受影响。",
+      "preconditions": "进入所提供的订单编辑或函数调用范围",
+      "data_requirements": "按下面步骤准备边界值",
+      "steps": "待付款订单取消，并检查已付款订单被拒绝",
+      "expected": "待付款可取消，已付款不可取消。",
+      "expected_basis_refs": [
+        "E1"
+      ],
+      "certainty": "STATIC_SUPPORTED",
+      "questions": [],
+      "limitation_refs": []
+    }
+  ],
+  "evidence": [
+    {
+      "key": "E1",
+      "side": "BEFORE",
+      "pair_ref": "p1",
+      "snapshot_ref": "req-old",
+      "unit_id": "u1",
+      "segment_id": "s1",
+      "kind": "TEXT",
+      "start_line": null,
+      "end_line": null,
+      "excerpt": "订单编辑页允许录入备注。待付款订单可取消，已付款订单不可取消。",
+      "observation": ""
+    },
+    {
+      "key": "E2",
+      "side": "AFTER",
+      "pair_ref": "p1",
+      "snapshot_ref": "req-new",
+      "unit_id": "u1",
+      "segment_id": "s1",
+      "kind": "TEXT",
+      "start_line": null,
+      "end_line": null,
+      "excerpt": "补充：订单备注最多50个字符，超过时保留输入并提示“备注最多50个字符”，不提交保存。",
+      "observation": ""
+    }
+  ],
+  "chains": [],
+  "limitations": []
+}

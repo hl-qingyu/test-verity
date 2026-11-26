@@ -1,3 +1,4 @@
+import { isRecord } from './api/guards';
 import { apiErrorMessage } from './api/http';
 
 export const connectionErrors: Record<string, string> = {
@@ -64,8 +65,7 @@ export type ProbeResult = {
 };
 export function parseProbeResult(value: unknown): ProbeResult {
   if (
-    !value ||
-    typeof value !== 'object' ||
+    !isRecord(value, true) ||
     !('github_login' in value) ||
     typeof value.github_login !== 'string' ||
     !('receipt' in value) ||
@@ -77,7 +77,7 @@ export function parseProbeResult(value: unknown): ProbeResult {
     !('repositories' in value) ||
     !Array.isArray(value.repositories) ||
     !value.repositories.every((repo: unknown) => {
-      if (!repo || typeof repo !== 'object') return false;
+      if (!isRecord(repo, true)) return false;
       return (
         'github_id' in repo &&
         Number.isInteger(repo.github_id) &&

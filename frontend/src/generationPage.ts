@@ -1,5 +1,5 @@
 import { blankDesign, DESIGN_FIELDS, CASE_COLUMNS } from './caseApi';
-import type { Design, CaseList, CaseRow } from './caseApi';
+import type { Design, CaseRow } from './caseApi';
 
 export const generationKinds = {
   NEW: '新增',
@@ -257,22 +257,6 @@ function text(v: unknown, fallback?: string): string {
     throw Error('文本无效或过长。');
   return v;
 }
-function key(v: unknown) {
-  const s = text(v);
-  if (!s.trim() || s.length > 200 || Object.hasOwn(Object.prototype, s))
-    throw Error('编号为空或包含保留名称。');
-  return s;
-}
-function array<T>(v: unknown, parse: (x: unknown) => T): T[] {
-  if (!Array.isArray(v) || v.length > 20000) throw Error('列表无效或超过本页预览容量。');
-  return v.map((item) => parse(item));
-}
-function id(v: unknown): number | null {
-  if (v === undefined || v === null) return null;
-  if (typeof v !== 'number' || !Number.isSafeInteger(v) || v <= 0)
-    throw Error('用例身份/版本须是内部正整数，不能使用展示编号。');
-  return v;
-}
 export function generationDesign(v: unknown): Design {
   const o = object(v),
     result = blankDesign();
@@ -345,177 +329,6 @@ export function generationSelection(
   ];
 }
 // The HTML prototype's display format, not a production Skill or server-side validator.
-export function parseGenerationPreview(inputText: string, reportText: string, projectId: number) {
-  if (
-    new TextEncoder().encode(inputText).length > 16 * 1024 * 1024 ||
-    new TextEncoder().encode(reportText).length > 16 * 1024 * 1024
-  )
-    throw Error('每份JSON最大16MiB。');
-  const input = object(JSON.parse(inputText.replace(/^\uFEFF/, ''))),
-    report = object(JSON.parse(reportText.replace(/^\uFEFF/, '')));
-  for (const value of [input, report]) {
-    if (value.analysis_type !== 'CASE_GENERATION' || value.contract_version !== 1)
-      throw Error('仅接受用例生成原型的双JSON展示格式。');
-    if (
-      value.project_id !== undefined &&
-      value.project_id !== null &&
-      value.project_id !== projectId
-    )
-      throw Error('文件项目与当前项目不一致。');
-  }
-  if (!key(input.request_id) || input.request_id !== report.request_id)
-    throw Error('双文件request_id不一致。');
-  if (
-    !['INITIAL', 'UPDATE'].includes(String(input.mode)) ||
-    !['COMPLETE', 'PARTIAL', 'BLOCKED'].includes(String(report.outcome))
-  )
-    throw Error('生成模式或完整性状态无效。');
-  const materials = array(input.materials, (v): GenerationMaterial => {
-    const m = object(v);
-    return {
-      sourceId: key(m.source_id),
-      name: text(m.name),
-      purpose: text(m.origin, ''),
-      kind: text(m.kind, ''),
-      version: text(m.version ?? m.snapshot_ref, ''),
-      before: '',
-      side: text(m.side, ''),
-      update: '',
-      paths: [],
-      readState: text(m.read_state),
-      segments: array(m.segments, (x) => {
-        const p = object(x);
-        return {
-          id: key(p.id ?? p.segment_id),
-          location: text(p.location, ''),
-          text: text(p.text),
-        };
-      }),
-    };
-  });
-  const sourceKeys = materials.map((m) => `${m.sourceId}:${m.side || ''}`);
-  if (
-    new Set(sourceKeys).size !== sourceKeys.length ||
-    materials.some((m) => new Set(m.segments.map((s) => s.id)).size !== m.segments.length)
-  )
-    throw Error('资料或片段编号重复。');
-  const suggestions = array(report.suggestions, (v): GenerationSuggestion => {
-    const s = object(v),
-      allowed = [
-        'key',
-        'kind',
-        'function',
-        'case_id',
-        'base_version',
-        'before',
-        'generated',
-        'design',
-        'evidence',
-        'reason',
-        'blocked',
-        'batch_key',
-      ];
-    if (Object.keys(s).some((f) => !allowed.includes(f)))
-      throw Error('候选中不允许携带人工审核或应用状态。');
-    if (!Object.hasOwn(generationKinds, text(s.kind))) throw Error('建议类型无效。');
-    if (s.blocked !== undefined && typeof s.blocked !== 'boolean') throw Error('冲突标记无效。');
-    const kind = s.kind as GenerationKind,
-      caseId = id(s.case_id),
-      baseVersion = id(s.base_version);
-    if (kind !== 'NEW' && (!caseId || !baseVersion || !s.before))
-      throw Error('修改、复用、停用必须定位内部ID及设计版本。');
-    const evidence = array(s.evidence, (x): GenerationEvidence => {
-      const e = object(x);
-      return {
-        source: key(e.source),
-        segment: key(e.segment),
-        side: text(e.side, ''),
-        quote: text(e.quote),
-      };
-    });
-    for (const e of evidence) {
-      const sources = materials.filter(
-          (m) => m.sourceId === e.source && (!m.side || m.side === e.side),
-        ),
-        candidates = sources.flatMap((m) =>
-          m.segments.filter((p) => p.id === e.segment).map((p) => ({ m, p })),
-        );
-      if (
-        candidates.length !== 1 ||
-        !e.quote.trim() ||
-        !['READ', 'READABLE', 'PARTIAL'].includes(candidates[0].m.readState) ||
-        !candidates[0].p.text.includes(e.quote)
-      )
-        throw Error('证据引用无法在固定输入唯一定位。');
-    }
-    return {
-      key: key(s.key),
-      kind,
-      function: text(s.function),
-      design: generationDesign(s.design),
-      before: s.before ? generationDesign(s.before) : undefined,
-      generated: s.generated ? generationDesign(s.generated) : undefined,
-      caseId,
-      baseVersion,
-      reason: text(s.reason),
-      blocked: s.blocked === true,
-      evidence,
-    };
-  });
-  const questions = array(report.questions, (v): GenerationQuestion => {
-    const q = object(v);
-    if (q.handling !== undefined) throw Error('问题不可导入人工处理状态。');
-    return {
-      key: key(q.key),
-      function: text(q.function, ''),
-      title: text(q.title),
-      text: text(q.text),
-      evidence: text(q.evidence, ''),
-    };
-  });
-  const keys = [...suggestions, ...questions].map((s) => s.key);
-  if (new Set(keys).size !== keys.length) throw Error('候选/问题编号重复。');
-  const batches =
-    report.batches === undefined
-      ? []
-      : array(report.batches, (v): GenerationBatch => {
-          const b = object(v);
-          if (typeof b.attempts !== 'number' || !Number.isSafeInteger(b.attempts) || b.attempts < 0)
-            throw Error('批次尝试次数无效。');
-          return {
-            key: key(b.key),
-            function: text(b.function),
-            status: text(b.status),
-            attempts: b.attempts,
-            reason: text(b.reason, ''),
-          };
-        });
-  if (new Set(batches.map((b) => b.key)).size !== batches.length) throw Error('批次编号重复。');
-  return {
-    projectId,
-    mode: input.mode as 'INITIAL' | 'UPDATE',
-    origin: 'PREVIEW' as const,
-    cancelled: false,
-    scope: text(input.scope, ''),
-    focus: text(input.focus, ''),
-    materials,
-    cases: [] as CaseRow[],
-    caseScope: '用户导入的固定用例引用，尚未关联当前库',
-    libraryRevision: null,
-    baselineId: '',
-    suggestions,
-    questions,
-    handling: {},
-    decisions: [],
-    failures: [],
-    chatDrafts: {},
-    batches,
-    limitations: array(report.limitations, text),
-    outcome: text(report.outcome),
-    inputText,
-    reportText,
-  };
-}
 export type GenerationPreviewItem = {
   key: string;
   kind: GenerationKind;
@@ -526,49 +339,6 @@ export type GenerationPreviewItem = {
   target?: CaseRow;
   categoryId?: number | null;
 };
-export function generationPreview(
-  record: GenerationRecord,
-  keys: string[],
-  snapshot: CaseList,
-): GenerationPreviewItem[] {
-  if (
-    !keys.length ||
-    new Set(keys).size !== keys.length ||
-    keys.some((k) => !record.suggestions.some((s) => s.key === k))
-  )
-    throw Error('候选选择无效或已变化。');
-  const targets = new Set<number>();
-  return keys.map((key) => {
-    const s = record.suggestions.find((s) => s.key === key)!,
-      h = currentHandling(record, s),
-      design = h?.draft || s.design;
-    const target = snapshot.items.find((c) => c.id === s.caseId),
-      matches =
-        s.kind === 'NEW'
-          ? snapshot.items.filter((c) => DESIGN_FIELDS.every((f) => c[f] === design[f]))
-          : [];
-    let problem = generationReady(record, s)
-      ? ''
-      : '缺可执行预期/有效证据、已忽略或存在未解决冲突。';
-    if (s.kind !== 'NEW') {
-      const targetVersion = h?.reviewedTarget?.version ?? s.baseVersion;
-      const targetDesign = h?.reviewedTarget?.design ?? s.before;
-      if (
-        !target ||
-        target.version !== targetVersion ||
-        !targetDesign ||
-        (h?.reviewedTarget && h.reviewedTarget.id !== target.id) ||
-        DESIGN_FIELDS.some((f) => target[f] !== targetDesign[f])
-      )
-        problem = '当前用例已变化或目标未找到，需人工核对原建议与当前版本。';
-      if (s.caseId && targets.has(s.caseId)) problem = '本批存在同一用例的重复操作，需要人工处理。';
-      if (s.caseId) targets.add(s.caseId);
-      if (s.kind === 'REUSE' && target && DESIGN_FIELDS.some((f) => target[f] !== design[f]))
-        problem = '已有用例设计存在差异，不能直接复用。';
-    }
-    return { key, kind: s.kind, design, revision: h?.revision || 0, problem, matches, target };
-  });
-}
 export function generationMarkdown(record: GenerationRecord) {
   return (
     `# ${record.title}\n\n> ${record.origin === 'SERVER' ? '项目固定生成记录；分析与人工应用状态分开，不代表测试通过。' : '页面草稿或历史预览；未进行AI分析、正式入库或执行测试。'}\n\n范围：${record.scope}\n${record.materials.map((m) => `${m.name} / ${m.versionName || m.version} / ${m.beforeName || m.before} / ${m.side || ''} / ${m.update}\n${m.paths.join('\n')}`).join('\n')}\n\n` +

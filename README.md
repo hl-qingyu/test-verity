@@ -23,7 +23,7 @@
 | 项目设置 | 基本信息、成员、GitHub仓库关联、本地代码目录 |
 | 平台设置 | 个人AI服务、个人GitHub连接、管理员账号管理 |
 
-正式页面由 `frontend/src/App.tsx` 装配，后端接口由 `backend/app/api/router.py` 装配。详细规则见[文档目录](docs/README.md)。
+正式页面由 `frontend/src/App.tsx` 装配，后端接口由 `backend/app/api/router.py` 装配。详细规则见[文档整理清单](docs/DOCUMENT_REVIEW.md)。
 
 ## 分析和审核
 
@@ -286,7 +286,7 @@ outputs/                  原型检查、备份和临时交付文件
 ## 文档和开发约定
 
 - 开发先读 [AGENTS.md](AGENTS.md)、[架构说明](docs/ARCHITECTURE.md)和[代码规范](docs/CODE_STANDARDS.md)；界面任务另读[界面规范](docs/UI_STANDARDS.md)。
-- [文档目录](docs/README.md)列出当前模块说明；[整理清单](docs/DOCUMENT_REVIEW.md)说明哪些仍有效、哪些只作历史参考。
+- [文档整理清单](docs/DOCUMENT_REVIEW.md)列出当前模块说明和历史参考。
 - [会话交接](docs/SESSION_CONTEXT.md)按任务检索，不必每次通读；进程、版本和验证结果只代表记录时状态。
 - 界面以根目录的 [verity-prototype.html](verity-prototype.html) 为准，后续原型修改直接在此文件进行。[业务说明](docs/prototypes/verity-business-rules/README.md)介绍说明栏的维护方式，原型不执行真实分析。
 - 平台Git集成只读，不提供远端推送、修改文件、创建或合并请求、评论等写操作。本仓库也不在未经授权时推送或部署。

@@ -1,19 +1,13 @@
+const { compileModule, load: loadModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
   path = require('node:path'),
   ts = require('typescript');
 function load(transport) {
-  const exports = {};
-  const code = ts.transpileModule(
-    fs.readFileSync(path.resolve(__dirname, '../src/nativeResultApi.ts'), 'utf8'),
-    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
-  ).outputText;
-  new Function('require', 'exports', code)(
-    (name) => (name === './api/http' ? transport : require(name)),
-    exports,
-  );
-  return exports;
+  return loadModule(path.resolve(__dirname, '../src/nativeResultApi.ts'), {
+    './api/http': transport,
+  });
 }
 const id = 'a'.repeat(64);
 test('native results use shared read transport, preserve cancellation and bind previews to the selected result', async () => {
@@ -71,10 +65,11 @@ test('malformed dates, counts, duplicate identities and permission flags are rej
 test('round filtering isolates candidates, questions and issues while retaining all review history', () => {
   const file = path.resolve(__dirname, '../src/generationPage.ts'),
     exports = {};
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const code = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  new Function('require', 'exports', code)(
+  evaluateModule(
+    code,
     () => ({ blankDesign: () => ({}), DESIGN_FIELDS: [], CASE_COLUMNS: [] }),
     exports,
   );

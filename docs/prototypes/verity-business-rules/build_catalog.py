@@ -141,7 +141,8 @@ add("requirements", "risk-new", '新建和重新发起需求分析', "新建需�
 
 add("requirements", "risk-handle", '风险处理和导出', "风险详情|分析范围与边界|导出风险清单", {'处理风险': ['状态可选待确认、待补充、已解决、不适用。除待确认外，必须填写处理说明，最多3000字符。',
           '有人先修改了处理结果时，需刷新后再保存。',
-          '范围详情显示本次资料、读取情况和未检查范围；可选建议单独展示。'],
+          '范围详情显示本次资料、读取情况和未检查范围；可选建议单独展示。',
+          'v4 按证据显示片段被引用或未被引用。读取状态单独列出。'],
  '导出清单': ['按功能和处理状态筛选导出，包含原文依据、影响、建议和当前处理结果。', '导出不调用AI，也不改变处理状态。']}, "backend/app/modules/requirements/risk_schemas.py|backend/app/modules/requirements/risk_service.py|frontend/src/RiskReports.tsx")
 
 add("requirements", "risk-chat", '需求对话和人工添加风险', "新建分析会话|补充系统资料与原型范围|人工添加风险点|本次资料与范围|需求对话", {'发送问题': ['问题必填，最多8000字符，不能全为空格。', '同一轮回答处理中不能重复发送；会话有新消息时，需更新后继续。', '对话使用本人AI配置，回复保存在会话中，报告和用例库不变。'],
@@ -185,6 +186,7 @@ add("generate", "generation-start", '确认开始、取消和重试', "确认生
           '开始前检查资料权限和本人AI配置，通过后排队生成。',
           '关闭页面后任务继续执行。取消只处理本人尚未完成的批次，已完成结果保留。'],
  '失败重试': ['由AI生成且失败或已取消的批次可重试；入库正在处理时暂不能重试。',
+          '旧版契约 v2 的批次不支持重试，请新建用例生成。已保存的建议仍可查看、审核和入库。',
           '重试前检查资料权限，使用重试人本人的配置，调用方式沿用原任务。',
           '原输入、配置、错误和尝试记录保留。平台不自动发起新的收费任务。',
           'Codex命令行内部的多轮请求和重试，按该调用方式执行。']}, "backend/app/modules/case_generation/service.py|backend/app/modules/case_generation/schemas.py|frontend/src/CaseGeneration.tsx")
@@ -252,9 +254,9 @@ add("changes", "change-handle", '处理变更结果和导出', "变化项|影响
 
 add("requirements|code|changes|generate|coverage", "analysis-import", '导入本地分析结果', "导入本地分析结果|导入代码分析结果|导入变更分析结果|导入用例生成结果|导入用例分析结果", {'选择文件': ['需求、代码、变更和用例生成需同时提供输入文件与结果文件；用例分析使用本模块导出的输入和报告包。',
           '输入文件通常名为input.json，结果文件通常名为report.json或risk-report.json。',
-          '需求分析支持第3版结果格式，代码和变更分析支持第2版；用例分析按本模块格式检查。',
+          '需求、代码及变更分析支持本模块的当前契约和历史兼容版本；用例分析按本模块格式检查。',
           '代码分析每份导入文件最多16兆字节。这是结果导入限制，不是在线分析的合计输入限制。'],
- '导入检查': ['检查分析类型、格式版本、所属任务、资料关联和原文引用。资料和代码须能关联到当前项目。', '文件不配套、引用缺失、字段重复冲突、附件不匹配或无权访问时，不能导入。'],
+ '导入检查': ['检查分析类型、格式版本、所属任务、资料关联和原文引用。资料和代码须能关联到当前项目。', '旧版契约 v2 的用例生成结果不支持导入，请新建用例生成。', '文件不配套、引用缺失、字段重复冲突、附件不匹配或无权访问时，不能导入。'],
  '导入结果': ['导入不调用AI，也不执行代码或测试。', '生成建议导入后仍需审核、处理重复项并确认入库。', '原文件和来源记录保留。']}, "frontend/src/CodeAnalysisImport.tsx|frontend/src/ChangeImport.tsx|frontend/src/CaseGenerationDialogs.tsx|backend/app/modules/code_analysis/service.py|backend/app/modules/requirements/risk_service.py|backend/app/modules/case_generation/imports.py|backend/app/modules/case_analysis/service.py")
 
 add("requirements|code|changes|coverage|generate", "candidate", '查看和修订未通过检查的结果', "候选与待处理问题|重新校验候选|候选字段冲突|候选修订|candidate", {'查看问题': ['能解析的建议逐条展示，重复字段的各个值一并显示，等待人工选择。', '无法解析时保留原文。通过结构、权限和引用检查后，才保存为正式报告。'],
@@ -352,13 +354,13 @@ add("requirements", "requirement-classify", '验收点分类、移动和撤销',
  '删除和撤销': ['分类下有验收点时，删除前需选择迁移、移至未分类或删除内容。',
            '迁移目标不能在本次删除范围内。',
            '操作保留历史。后续已有人修改相关内容时，不能直接撤销。',
-           '原型中的“建议分类”只演示流程。']}, "backend/app/modules/requirements/schemas.py|backend/app/modules/requirements/service.py")
+           '原型中的“建议分类”只演示流程。']}, "docs/REQUIREMENTS.md")
 
 add("requirements", "requirement-rule", '验收点审核和来源对照', "审阅验收点|来源对照|ruleForm", {'填写要求': ['标题1–500字符，操作和预期结果各1–10000字符。', '角色最多1000字符，前置条件、问题和澄清结论各10000字符。', '最多关联50份来源，同一文件版本不能重复。'],
  '审核和保存': ['状态可选待补充、待审核、已确认。待补充必须填写问题；有问题未填写澄清结论时，不能改为待审核或已确认。',
            '已确认内容修改后，需先退回重新审核；内容和来源的修改会保留版本历史。',
            '调整分类使用分类操作，不在业务内容表单中修改。'],
- '来源': ['只能关联本项目资料。已删除资料的原关联保留，但不能新增关联。', 'AI建议需人工核对业务依据，相关资料只供对照。']}, "backend/app/modules/requirements/schemas.py|backend/app/modules/requirements/service.py")
+ '来源': ['只能关联本项目资料。已删除资料的原关联保留，但不能新增关联。', 'AI建议需人工核对业务依据，相关资料只供对照。']}, "docs/REQUIREMENTS.md")
 
 add("generate", "generation-export", '报告导出和应用失败清单', "组合导出完整报告|导出生成结果|应用失败清单|cg-export-many|cg-failures", {'导出报告': ['完整报告包含本次范围、建议、人工修订、入库结果和失败历史。',
           '组合导出时，至少勾选一条有结果的记录，仅导出所选记录。',

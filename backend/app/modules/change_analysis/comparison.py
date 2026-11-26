@@ -16,7 +16,7 @@ def has_changes(data, bindings):
     )
 
 
-def unchanged_report(data):
+def unchanged_report(data, *, include_coverage=True):
     snapshots = {s["snapshot_ref"]: s for s in data["snapshots"]}
     coverage = []
     used = [
@@ -25,7 +25,7 @@ def unchanged_report(data):
         for side, ref in (("BEFORE", p["before_ref"]), ("AFTER", p["after_ref"]))
     ]
     used += [("", "CONTEXT", ref) for ref in data["context_refs"]]
-    for pair, side, ref in used:
+    for pair, side, ref in used if include_coverage else ():
         s = snapshots[ref]
         for u in s["units"]:
             partial = not s["scope_complete"] or u["read_state"] != "READABLE"
@@ -100,7 +100,6 @@ def unchanged_report(data):
         regression_scope=[],
         evidence=[],
         chains=[],
-        coverage=coverage,
         limitations=[
             {
                 "key": "L-no-change",
@@ -111,4 +110,6 @@ def unchanged_report(data):
             }
         ],
     )
+    if include_coverage:
+        result["coverage"] = coverage
     return result

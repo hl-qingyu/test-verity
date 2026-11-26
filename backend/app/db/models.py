@@ -880,11 +880,11 @@ class RequirementRiskReport(Base):
         String(64), comment="规范化输入与结果内容SHA256；同项目相同内容幂等，不覆盖原报告"
     )
     input: Mapped[dict] = mapped_column(
-        JSONB, comment="Skill v3当次完整输入快照，含文字片段；图片和PDF原件引用项目已有资料"
+        JSONB, comment="当次完整固定输入及契约版本，含文字片段；图片和PDF原件引用项目已有资料"
     )
     report: Mapped[dict] = mapped_column(
         JSONB,
-        comment="结构及引用校验通过的Skill v3风险报告；证据与覆盖提示待人工核对，不随处理改写",
+        comment="校验后按契约版本保存的风险报告；v4覆盖及状态由平台计算，人工处理独立保存",
     )
     bindings: Mapped[list] = mapped_column(
         JSONB, comment="输入来源ID到系统资料及固定版本的人工关联快照；不证明模型实际读取了原件"
@@ -948,7 +948,7 @@ class RequirementRiskAnalysis(Base):
     context: Mapped[dict] = mapped_column(
         JSONB,
         server_default="{}",
-        comment="当次v3输入、来源绑定、校正和人工核对提示快照；准备前为空对象",
+        comment="当次固定输入、来源绑定、Skill版本及校验记录；排队时可仅有Skill快照，缺省为空对象",
     )
     status: Mapped[str] = mapped_column(
         String(16),

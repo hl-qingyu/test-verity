@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -38,31 +39,32 @@ test('account role choices preserve legacy accounts and submit the selected role
   const Select = () => null;
   function load(name) {
     const exported = {};
-    const code = ts.transpileModule(
-      fs.readFileSync(path.resolve(__dirname, '../src', name), 'utf8'),
-      {
-        compilerOptions: {
-          module: ts.ModuleKind.CommonJS,
-          target: ts.ScriptTarget.ES2022,
-          jsx: ts.JsxEmit.ReactJSX,
-        },
+    const code = compileModule(fs.readFileSync(path.resolve(__dirname, '../src', name), 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
       },
-    ).outputText;
-    new Function('exports', 'require', code)(exported, (id) => {
-      if (id === 'react') return react;
-      if (id === './Form') return { Form };
-      if (id === './FormSelect') return { Select };
-      if (id === './PageJump') return { PageJump: () => null };
-      if (id === './passwordTransport')
-        return {
-          postEncrypted: async (url, payload) => {
-            seen = { url, payload, encrypted: true };
-            return Response.json({ ...account, ...payload }, { status: 201 });
-          },
-        };
-      if (id === './accountRoles') return load('accountRoles.ts');
-      return require(id);
-    });
+    }).outputText;
+    evaluateModule(
+      code,
+      (id) => {
+        if (id === 'react') return react;
+        if (id === './Form') return { Form };
+        if (id === './FormSelect') return { Select };
+        if (id === './PageJump') return { PageJump: () => null };
+        if (id === './passwordTransport')
+          return {
+            postEncrypted: async (url, payload) => {
+              seen = { url, payload, encrypted: true };
+              return Response.json({ ...account, ...payload }, { status: 201 });
+            },
+          };
+        if (id === './accountRoles') return load('accountRoles.ts');
+        return require(id);
+      },
+      exported,
+    );
     return exported;
   }
   function nodes(node) {

@@ -1,0 +1,130 @@
+{
+  "contract_version": 3,
+  "analysis_type": "CODE_REVIEW",
+  "request_id": "synthetic-local-001",
+  "summary": {
+    "conclusion": "纯函数返回首项而非求和，空列表访问越界；需求符合性缺少外部需求依据，未核对业务要求。此为合成静态示例。",
+    "priority_finding_keys": [
+      "F1"
+    ]
+  },
+  "target_results": [
+    {
+      "target": "BUG",
+      "status": "COMPLETE",
+      "scope": "所选total纯函数的声明与返回行为。",
+      "checks": [
+        {
+          "key": "B1",
+          "subject": "求和及空列表处理",
+          "assessment": "DEVIATION",
+          "evidence_refs": [
+            "E1"
+          ],
+          "finding_refs": [
+            "F1"
+          ],
+          "note": "依据函数文档字符串与直接索引操作，未执行代码。"
+        }
+      ],
+      "finding_refs": [
+        "F1"
+      ],
+      "limitation_refs": []
+    },
+    {
+      "target": "REQUIREMENT_DEVIATION",
+      "status": "BLOCKED",
+      "scope": "没有可用业务需求资料。",
+      "checks": [],
+      "finding_refs": [],
+      "limitation_refs": [
+        "L1"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "key": "F1",
+      "target_refs": [
+        "BUG"
+      ],
+      "title": "求和函数只返回首项且空列表越界",
+      "category": "边界与计算",
+      "severity": "MEDIUM",
+      "severity_reason": "函数对多个元素或空列表产生错误结果；未提供实际业务调用，不推断资金损失。",
+      "evidence_state": "STATIC_SUPPORTED",
+      "trigger": "调用total([1,2])或total([])。",
+      "actual": "函数只读取values[0]，因此[1,2]返回1而不是3；空列表访问首项并抛出索引错误。",
+      "impact": "调用方拿到多元素输入时会得到少算后的结果，空输入会直接失败；本次没有提供业务调用方，影响限于该函数输入输出。",
+      "evidence_refs": [
+        "E1"
+      ],
+      "chain_refs": [
+        "CH1"
+      ],
+      "target_views": [
+        {
+          "target": "BUG",
+          "evidence_state": "STATIC_SUPPORTED",
+          "expected": "返回所有元素的和，空列表返回零。",
+          "basis": "函数自身文档字符串明确约定；不是外部业务需求。",
+          "basis_refs": [
+            "E1"
+          ],
+          "explanation": "完整函数只有一条直接索引返回，无求和或空值分支。",
+          "evidence_refs": [
+            "E1"
+          ],
+          "comparison_rows": []
+        }
+      ],
+      "fix_suggestion": "用标准求和操作遍历全部values，并保留空列表返回0的声明行为；同时明确输入必须是数值列表。",
+      "verification_suggestion": "分别传入[]、[1]和[1,2]，断言返回0、1和3；补充非数值输入的拒绝行为，以上检查尚未执行。",
+      "missing_evidence": []
+    }
+  ],
+  "evidence": [
+    {
+      "key": "E1",
+      "kind": "CODE",
+      "source_id": "local-server",
+      "file_id": "main",
+      "segment_id": "full",
+      "start_line": 1,
+      "end_line": 3,
+      "excerpt": "def total(values):\n    \"\"\"Sum every value; return zero for an empty list.\"\"\"\n    return values[0]",
+      "observation": "声明求和，实际只返回首项。"
+    }
+  ],
+  "chains": [
+    {
+      "key": "CH1",
+      "nodes": [
+        {
+          "key": "total",
+          "label": "纯函数返回",
+          "observation": "直接索引首项。",
+          "inputs": "values",
+          "outputs": "values[0]",
+          "evidence_refs": [
+            "E1"
+          ]
+        }
+      ],
+      "edges": []
+    }
+  ],
+  "limitations": [
+    {
+      "key": "L1",
+      "kind": "MISSING_MATERIAL",
+      "target_refs": [
+        "REQUIREMENT_DEVIATION"
+      ],
+      "source_refs": [],
+      "detail": "本次未提供需求、原型或已确认决定。",
+      "effect": "无法核对业务需求符合性；不影响函数内部Bug审查。"
+    }
+  ]
+}

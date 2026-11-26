@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { apiRequest } from './api/http';
 
 export type NativeResult = {
@@ -18,20 +19,11 @@ export type NativeResultPreview = {
   issues: number;
   can_save: boolean;
 };
-function object(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw Error('generation_response_invalid');
-  return value as Record<string, unknown>;
-}
-function count(value: unknown): number {
-  if (!Number.isSafeInteger(value) || Number(value) < 0) throw Error('generation_response_invalid');
-  return Number(value);
-}
-function identity(value: unknown): string {
-  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value))
-    throw Error('generation_response_invalid');
-  return value;
-}
+const guards = createGuards('generation_response_invalid');
+const object = guards.obj;
+
+const count = (value: unknown) => guards.int(value, 0);
+const identity = guards.hash64;
 export async function nativeResults(base: string, signal: AbortSignal): Promise<NativeResult[]> {
   const response = object(await apiRequest<unknown>(`${base}/results`, { signal }));
   if (!Array.isArray(response.items)) throw Error('generation_response_invalid');

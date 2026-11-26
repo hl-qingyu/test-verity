@@ -20,7 +20,7 @@ from app.modules.requirements.risk_schemas import (
     normalize_function_risks,
     validate_report,
 )
-from app.modules.requirements.risk_service import json_object, parse
+from app.modules.requirements.risk_service import json_object, parse, validate_candidate
 
 EXAMPLES = Path(__file__).resolve().parents[2] / "skill/requirement-analysis/examples"
 
@@ -32,7 +32,76 @@ def sample():
     )
 
 
+def sample_v4():
+    return tuple(
+        json.loads((EXAMPLES / f"{kind}-v4.json").read_text(encoding="utf-8"))
+        for kind in ("input", "output")
+    )
+
+
 class RiskValidationTests(unittest.TestCase):
+    def test_v4_coverage_is_derived_from_evidence_not_checked_scope(self):
+        context, candidate = sample_v4()
+        material = context["materials"][0]
+        original = candidate["risks"][0]["evidence"][0]
+        material["segments"].extend(
+            {**material["segments"][0], "segment_id": key, "location": key}
+            for key in ("comparison", "checked")
+        )
+        risk = candidate["risks"][0]
+        risk["checked_scope"][0]["segment_ids"].append("checked")
+        risk["source_comparison"] = {
+            "relation": "EXPRESSION_DIFFERENCE",
+            "sides": [
+                {"statement": "原依据", "evidence": [original]},
+                {
+                    "statement": "对比依据",
+                    "evidence": [
+                        {**original, "segment_id": "comparison", "location": "comparison"}
+                    ],
+                },
+            ],
+            "known_facts": "资料存在表述差异。",
+            "unknowns": "",
+        }
+        result, _, _, warnings = validate_candidate(json.dumps(candidate), context, 1)
+        covered = {s["segment_id"]: s for s in result["coverage"][0]["segments"]}
+        self.assertEqual(result["outcome"], "COMPLETE")
+        self.assertEqual(covered["comparison"]["risk_keys"], ["R1"])
+        self.assertEqual(covered["comparison"]["function_keys"], [])
+        self.assertEqual(covered["checked"]["disposition"], "UNREFERENCED")
+        self.assertNotIn("reason", covered["checked"])
+        self.assertFalse(warnings)
+
+    def test_v4_outcome_tracks_material_readability_and_not_processed_sources(self):
+        context, candidate = sample_v4()
+        material = context["materials"][0]
+        candidate["limitations"].append(
+            {
+                "kind": "NOT_PROCESSED",
+                "source_ids": [material["source_id"]],
+                "detail": "一部分资料尚未处理。",
+                "effect": "无法判断相关规则。",
+            }
+        )
+        self.assertEqual(
+            validate_candidate(json.dumps(candidate), context, 1)[0]["outcome"], "PARTIAL"
+        )
+        candidate["limitations"][0]["source_ids"] = ["unbound"]
+        with self.assertRaisesRegex(AppError, "unknown_reference"):
+            validate_candidate(json.dumps(candidate), context, 1)
+        candidate["limitations"].clear()
+        material.update(read_state="PARTIAL", read_note="部分内容不可用")
+        result, *_ = validate_candidate(json.dumps(candidate), context, 1)
+        self.assertEqual(result["outcome"], "PARTIAL")
+        self.assertEqual(result["coverage"][0]["limitation"], material["read_note"])
+        material.update(read_state="UNREADABLE", segments=[])
+        candidate.update(functions=[], risks=[], optional_suggestions=[])
+        candidate["summary"].update(assessment="INSUFFICIENT_MATERIAL", priority_risk_keys=[])
+        result, *_ = validate_candidate(json.dumps(candidate), context, 1)
+        self.assertEqual(result["outcome"], "BLOCKED")
+        self.assertEqual(result["coverage"][0]["segments"], [])
+
     def test_ai_semantic_warnings_do_not_weaken_structural_references(self):
         context, report = sample()
         candidate = copy.deepcopy(report)
@@ -187,6 +256,36 @@ class RiskReportDatabaseTests(unittest.TestCase):
         return self.client.post(
             self.api + "/import", json=payload or self.payload, headers=test_auth.ORIGIN
         )
+
+    def test_v4_pair_import_verifies_coverage_and_markdown_exports_it(self):
+        context, candidate = sample_v4()
+        material = context["materials"][0]
+        material["segments"].append(
+            {**material["segments"][0], "segment_id": "other", "location": "默认排序"}
+        )
+        report, *_ = validate_candidate(json.dumps(candidate), context, self.project)
+        payload = {
+            **self.payload,
+            "input_json": json.dumps(context),
+            "report_json": json.dumps(report),
+        }
+        saved = self.upload(payload)
+        self.assertEqual(saved.status_code, 201, saved.text)
+        self.assertEqual(saved.json()["report"], report)
+        report_id = saved.json()["id"]
+        from_candidate = self.upload({**payload, "report_json": json.dumps(candidate)})
+        self.assertEqual(from_candidate.status_code, 201, from_candidate.text)
+        self.assertEqual(from_candidate.json()["id"], report_id)
+        self.assertTrue(from_candidate.json()["duplicate"])
+        markdown = self.client.get(self.base + f"/risk-reports-export?source={report_id}")
+        self.assertEqual(markdown.status_code, 200, markdown.text)
+        self.assertIn("覆盖情况", markdown.text)
+        self.assertIn("默认排序 · 未被引用", markdown.text)
+        tampered = copy.deepcopy(report)
+        tampered["coverage"][0]["segments"][-1]["disposition"] = "REFERENCED"
+        rejected = self.upload({**payload, "report_json": json.dumps(tampered)})
+        self.assertEqual(rejected.status_code, 422, rejected.text)
+        self.assertIn("derived_coverage_mismatch", rejected.json()["detail"])
 
     def test_import_and_handling_are_atomic_shared_idempotent_and_no_ai(self):
         with (

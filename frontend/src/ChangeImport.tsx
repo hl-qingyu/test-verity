@@ -86,12 +86,12 @@ export function ChangeImport({
         b = object(JSON.parse(report.text.replace(/^\uFEFF/, '')));
       if (
         a.contract_version !== 2 ||
-        b.contract_version !== 2 ||
+        (b.contract_version !== 2 && b.contract_version !== 3) ||
         a.analysis_type !== 'CHANGE_IMPACT' ||
         a.project_id !== projectId ||
         a.request_id !== b.request_id
       )
-        throw Error('需要当前项目的CHANGE_IMPACT契约2配对文件。');
+        throw Error('需要当前项目的 CHANGE_IMPACT 配对文件，支持契约 v2 和 v3。');
       const value = parseChangeDetail(
         {
           id: 1,

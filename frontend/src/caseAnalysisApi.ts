@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { deletionErrors } from './analysisDeletionApi';
 import { codeErrors } from './codeAnalysisApi';
 import { apiRequest, apiErrorMessage } from './api/http';
@@ -137,15 +138,10 @@ export type ReviewPreview = {
   target: CaseRow | null;
   matches: CaseRow[];
 };
-function obj(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== 'object' || Array.isArray(v))
-    throw Error('case_analysis_response_invalid');
-  return v as Record<string, unknown>;
-}
-function arr(v: unknown): unknown[] {
-  if (!Array.isArray(v) || v.length > 20000) throw Error('case_analysis_response_invalid');
-  return v;
-}
+const guards = createGuards('case_analysis_response_invalid');
+const obj = guards.obj,
+  arr = (value: unknown) => guards.array(value, 20000);
+
 export function parseReviewSummary(v: unknown): ReviewSummary {
   const o = obj(v);
   for (const k of ['id', 'project_id', 'actor_id', 'revision'])

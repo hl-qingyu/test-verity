@@ -1,3 +1,4 @@
+import { isRecord } from './api/guards';
 import { apiRequest, apiErrorMessage } from './api/http';
 
 export type LocalSource = {
@@ -25,8 +26,8 @@ export const localKinds = [
 ];
 
 function parseSource(value: unknown): LocalSource {
-  if (!value || typeof value !== 'object') throw new Error('invalid_response');
-  const record = value as Record<string, unknown>;
+  if (!isRecord(value, true)) throw new Error('invalid_response');
+  const record = value;
   for (const key of ['id', 'project_id', 'owner_id', 'version']) {
     if (!Number.isSafeInteger(record[key]) || Number(record[key]) <= 0)
       throw new Error('invalid_response');

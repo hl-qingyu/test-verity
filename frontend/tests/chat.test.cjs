@@ -1,19 +1,11 @@
+const { load } = require('./helpers/load.cjs');
+const React = require('react');
+const { renderToStaticMarkup } = require('react-dom/server');
+const { MemoryRouter, Routes, Route } = require('react-router-dom');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const ts = require('typescript');
-
-function load(file) {
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
-  const exports = {};
-  new Function('exports', 'require', code)(exports, (name) =>
-    name.startsWith('.') ? load(path.resolve(path.dirname(file), name) + '.ts') : require(name),
-  );
-  return exports;
-}
 const api = load(path.resolve(__dirname, '../src/chatApi.ts'));
 const turn = {
   id: 7,
@@ -135,27 +127,31 @@ test('function conversations keep their own history query and risk reference', a
 
 test('conversation layout keeps prototype columns, message bubbles and visible side scrollbars', () => {
   const css = fs.readFileSync(path.resolve(__dirname, '../src/requirement-chat.css'), 'utf8');
-  const component = fs.readFileSync(path.resolve(__dirname, '../src/RequirementChat.tsx'), 'utf8');
   assert.match(css, /grid-template-columns:\s*230px minmax\(0, 1fr\) 280px/);
   assert.match(
     css,
     /\.chat-sidebar,[\s\S]*?\.chat-context[\s\S]*?overflow-y:\s*scroll\s*!important/,
   );
   assert.match(css, /scrollbar-color:/);
-  assert.match(component, /className="chat-message mine"/);
-  assert.match(component, /className="chat-message"/);
-  assert.match(component, /功能独立对话/);
-  assert.match(component, /关联风险引用/);
+  const { RequirementChat } = load(path.resolve(__dirname, '../src/RequirementChat.tsx'));
+  const element = React.createElement(
+    MemoryRouter,
+    { initialEntries: ['/requirements/chat/4?function=orders&risk=R1'] },
+    React.createElement(
+      Routes,
+      null,
+      React.createElement(Route, {
+        path: '/requirements/chat/:reportId',
+        element: React.createElement(RequirementChat, { project: { id: 1 }, onSessionEnd() {} }),
+      }),
+    ),
+  );
+  const markup = renderToStaticMarkup(element);
+  assert.match(markup, /切换需求分析对话/);
+  assert.match(markup, /本轮追问引用风险：R1/);
+  assert.match(markup, /关联风险引用/);
+  assert.match(markup, /<textarea/);
   const shared = fs.readFileSync(path.resolve(__dirname, '../src/requirement-ui.css'), 'utf8');
-  assert.match(component, /aria-current=\{row\.id === reportId \? 'page' : undefined\}/);
-  assert.match(
-    component,
-    /<Link\s+className="evidence chat-history-item"[\s\S]*?to=\{`\/requirements\/chat\/\$\{row\.id\}`\}/,
-  );
-  assert.match(
-    component,
-    /<span className="chat-history-title">\{row\.title\}<\/span>[\s\S]*?<span className="hint">/,
-  );
   assert.match(
     shared,
     /\.chat-history \.chat-history-item\[aria-current='page'\][\s\S]*?border-left-color:/,

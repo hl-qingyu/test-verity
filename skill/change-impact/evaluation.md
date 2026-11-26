@@ -1,5 +1,7 @@
 # 变更分析 Skill 验收设计
 
+契约 v3 候选见 examples 中以 -v3.json 结尾的结果。验收覆盖差异优先视图、无变化跳过模型以及平台统计。
+
 2026-10-10接入验证：后端已提供`backend/tests/test_change_analysis.py`，覆盖三方式契约/反例、注册角色/后端任务/处理/候选/对话/重试/无变化及固定资料/链接来源；外部上游模拟。用`RUN_AUTH_DB_TESTS=1`运行才包括真实PostgreSQL回滚检查；详细本轮检查状态见[SESSION_CONTEXT.md](../../docs/SESSION_CONTEXT.md)。这些不替代下方模型效果评测。
 
 配合1.0.0与CHANGE_IMPACT契约2。本文件是验收规格，合成输出由人工编写，不是模型效果实测；结构/引用检查不证明模型分析质量或真实业务运行。

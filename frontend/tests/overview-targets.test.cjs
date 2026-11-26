@@ -1,9 +1,10 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
   path = require('node:path'),
   ts = require('typescript');
-function harness(file, component, targetType) {
+function harness(file, component, targetType, { riskTask, candidateDownload } = {}) {
   const hooks = [],
     effects = [],
     reads = [],
@@ -59,12 +60,14 @@ function harness(file, component, targetType) {
     created_at: '2026-10-14',
     updated_at: '2026-10-14',
   };
-  const wait = (url, signal) =>
-    new Promise((resolve, reject) => reads.push({ url, signal, resolve, reject }));
+  const wait = (url, signal, method) =>
+    new Promise((resolve, reject) => reads.push({ url, signal, method, resolve, reject }));
   const code = {
     codeList: async () => ({ items: [old], has_more: false }),
     codeRequest: (url, parser, options) =>
-      url.endsWith('/options') ? new Promise(() => {}) : wait(url, options?.signal),
+      url.endsWith('/options')
+        ? new Promise(() => {})
+        : wait(url, options?.signal, options?.method),
     codeError: (e) => e.message,
   };
   const review = {
@@ -96,8 +99,27 @@ function harness(file, component, targetType) {
   };
   const risks = {
     riskListing: () => new Promise(() => {}),
-    riskCatalog: () => new Promise(() => {}),
-    riskAnalyses: async () => [],
+    riskCatalog: () =>
+      riskTask
+        ? Promise.resolve({
+            overview: {
+              reports: 0,
+              functions: 0,
+              risks: 0,
+              high: 0,
+              medium: 0,
+              low: 0,
+              pending: 0,
+            },
+            reports: [],
+            functions: [],
+            items: [],
+            total: 0,
+            page: 1,
+            pages: 1,
+          })
+        : new Promise(() => {}),
+    riskAnalyses: async () => (riskTask ? [riskTask] : []),
     riskDetailRequest: (url, project, options) => wait(url, options?.signal),
     riskError: (e) => e.message,
   };
@@ -105,31 +127,42 @@ function harness(file, component, targetType) {
     if (cache.has(name)) return cache.get(name);
     const exported = {};
     cache.set(name, exported);
-    const source = ts.transpileModule(fs.readFileSync(name, 'utf8'), {
+    const source = compileModule(fs.readFileSync(name, 'utf8'), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
         jsx: ts.JsxEmit.ReactJSX,
       },
     }).outputText;
-    new Function('exports', 'require', source)(exported, (dep) => {
-      if (dep === 'react') return react;
-      if (dep === 'react-router-dom')
-        return {
-          ...require(dep),
-          useSearchParams: () => [new URLSearchParams(), () => {}],
-        };
-      if (dep.endsWith('.css')) return {};
-      if (!dep.startsWith('.')) return require(dep);
-      const base = path.resolve(path.dirname(name), dep),
-        resolved = base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx');
-      const value = load(resolved);
-      if (dep === './codeAnalysisApi') return { ...value, ...code };
-      if (dep === './caseAnalysisApi') return { ...value, ...review };
-      if (dep === './changeAnalysisApi') return { ...value, ...changes };
-      if (dep === './riskApi') return { ...value, ...risks };
-      return value;
-    });
+    evaluateModule(
+      source,
+      (dep) => {
+        if (dep === 'react') return react;
+        if (dep === 'react-router-dom')
+          return {
+            ...require(dep),
+            useSearchParams: () => [new URLSearchParams(), () => {}],
+          };
+        if (dep.endsWith('.css')) return {};
+        if (!dep.startsWith('.')) return require(dep);
+        const base = path.resolve(path.dirname(name), dep),
+          resolved = base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx');
+        const value = load(resolved);
+        if (dep === './api/http' && candidateDownload)
+          return { ...value, apiDownload: (url, options) => wait(url, options?.signal, 'GET') };
+        if (dep === './api/http' && riskTask)
+          return {
+            ...value,
+            apiRequest: (url, options) => wait(url, options?.signal, options?.method),
+          };
+        if (dep === './codeAnalysisApi') return { ...value, ...code };
+        if (dep === './caseAnalysisApi') return { ...value, ...review };
+        if (dep === './changeAnalysisApi') return { ...value, ...changes };
+        if (dep === './riskApi') return { ...value, ...risks };
+        return value;
+      },
+      exported,
+    );
     return exported;
   }
   const exported = load(path.resolve(__dirname, '../src', file));
@@ -147,8 +180,9 @@ function harness(file, component, targetType) {
     reads,
     render() {
       cursor = 0;
-      workspace(props);
+      const view = workspace(props);
       while (effects.length) effects.shift()();
+      return view;
     },
     async settle() {
       for (let n = 0; n < 4; n++) {
@@ -162,6 +196,107 @@ function harness(file, component, targetType) {
     },
   };
 }
+
+function findButton(node, label) {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findButton(child, label);
+      if (found) return found;
+    }
+  } else if (node?.props) {
+    if (node.type === 'button' && node.props.children === label) return node;
+    return findButton(node.props.children, label);
+  }
+}
+
+test('failed code record exposes the saved candidate and revalidates through its own endpoint', async () => {
+  const h = harness('CodeAnalysis.tsx', 'CodeAnalysis', 'task', { candidateDownload: true });
+  try {
+    h.render();
+    await h.settle();
+    const record = {
+      id: 44,
+      project_id: 7,
+      title: '固定失败候选',
+      actor_id: 2,
+      created_at: '2026-10-14',
+      status: 'FAILED',
+      origin: 'AI',
+      error_code: 'code_evidence_invalid',
+      revision: 1,
+      can_revalidate: true,
+      candidate_available: true,
+      handling: {},
+      targets: ['BUG'],
+      evidence_corrections: [],
+    };
+    h.reads.find(({ url }) => url.endsWith('/44')).resolve(record);
+    await h.settle();
+    const tree = h.render();
+    const candidate = findButton(tree, 'AI候选原文');
+    assert.ok(candidate);
+    const originalDocument = global.document;
+    const downloaded = [];
+    global.document = {
+      createElement: () => ({
+        click() {
+          downloaded.push(this.download);
+        },
+      }),
+    };
+    try {
+      candidate.props.onClick();
+      const request = h.reads.find(({ url }) => url.endsWith('/44/candidate'));
+      assert.equal(request.method, 'GET');
+      request.resolve(new Blob(['synthetic candidate']));
+      await Promise.resolve();
+      await Promise.resolve();
+      assert.deepEqual(downloaded, ['code-analysis-44-ai-candidate.txt']);
+    } finally {
+      global.document = originalDocument;
+    }
+    const revalidate = findButton(h.render(), '重新校验候选');
+    assert.ok(revalidate);
+    revalidate.props.onClick();
+    const request = h.reads.find(({ url }) => url.endsWith('/44/revalidate'));
+    assert.equal(request.method, 'POST');
+    request.resolve({ ...record, can_revalidate: false });
+    await h.settle();
+    assert.equal(findButton(h.render(), '重新校验候选'), undefined);
+  } finally {
+    h.close();
+  }
+});
+
+test('saved requirement risk candidate is available for download and free revalidation', async () => {
+  const riskTask = {
+    id: 44,
+    title: '固定需求失败候选',
+    status: 'FAILED',
+    report_id: null,
+    candidate_available: true,
+    can_revalidate: true,
+    selections: [],
+    created_at: '2026-10-14T00:00:00Z',
+    created_by: '合成用户',
+  };
+  const h = harness('RiskReports.tsx', 'RiskReports', 'task', { riskTask });
+  try {
+    await h.settle();
+    const view = h.render();
+    assert.ok(findButton(view, '下载AI候选'));
+    const revalidate = findButton(view, '重新校验候选（不调用AI）');
+    assert.ok(revalidate);
+    revalidate.props.onClick();
+    const request = h.reads.find(({ url }) => url.endsWith('/risk-analyses/44/revalidate'));
+    assert.equal(request.method, 'POST');
+    request.resolve({});
+    await h.settle();
+  } finally {
+    h.close();
+  }
+});
+
 for (const [file, component, type] of [
   ['CodeAnalysis.tsx', 'CodeAnalysis', 'task'],
   ['CaseAnalysis.tsx', 'CaseAnalysis', 'run'],

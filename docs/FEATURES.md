@@ -1,7 +1,7 @@
 # 功能实现确认清单
 
 <!-- document-status:start -->
-> **历史资料，不再作为当前开发或运行规则。** 多轮状态追加混有过时结论，停止作为功能总表。 当前说明见[README.md](../README.md)、[README.md](README.md)。 查阅分类见[文档整理清单](DOCUMENT_REVIEW.md)。
+> **历史资料，不再作为当前开发或运行规则。** 多轮状态追加混有过时结论，停止作为功能总表。 当前说明见[根目录 README](../README.md)。 查阅分类见[文档整理清单](DOCUMENT_REVIEW.md)。
 <!-- document-status:end -->
 
 2026-10-19：原型资料新增上传本地目录、项目共享、相对路径文件树及不可覆盖版本；五类AI分析可选固定目录版本内文件，原型变更可对比两个目录版本。上传不自动调用AI，详见[LOCAL_PROTOTYPE_DIRECTORIES.md](LOCAL_PROTOTYPE_DIRECTORIES.md)。

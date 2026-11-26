@@ -1,3 +1,4 @@
+import { usePolling } from './usePolling';
 import { AnalysisCandidateReview } from './AnalysisCandidateReview';
 import { useCachedView } from './pageViewCache';
 import type { PageViewCache } from './pageViewCache';
@@ -194,7 +195,7 @@ function ChangeWorkspace({
     [listPage, setListPage] = useState(1),
     [hasMore, setHasMore] = useState(false),
     [actionBusy, setActionBusy] = useState(false);
-  const listBusy = useRef<AbortController | null>(null);
+  const listBusy = useRef<AbortSignal | null>(null);
   function onChange(next: PageChangeRecord[]) {
     setRows(next);
   }
@@ -269,15 +270,17 @@ function ChangeWorkspace({
       });
     return () => c.abort();
   }, [base, project, overviewTarget, onSessionEnd, setSelected]);
-  useEffect(() => {
-    if (!project) return;
-    const c = new AbortController();
-    async function refresh() {
-      if (listBusy.current && !listBusy.current.signal.aborted) return;
-      listBusy.current = c;
+  usePolling({
+    enabled: !!project,
+    active: rows.some((row) => ['QUEUED', 'RUNNING'].includes(row.status || '')),
+    interval: 3500,
+    refreshKey: base,
+    load: async (signal) => {
+      if (listBusy.current && !listBusy.current.aborted) return;
+      listBusy.current = signal;
       try {
-        const result = await changeListing(`${base}?page=1&page_view=true`, project!.id, c.signal);
-        if (c.signal.aborted) return;
+        const result = await changeListing(`${base}?page=1&page_view=true`, project!.id, signal);
+        if (signal.aborted) return;
         setHasMore((old) => (listPage === 1 ? result.has_more : old));
         setRows((old) => {
           const map = new Map(old.map((r) => [r.id, r]));
@@ -312,23 +315,17 @@ function ChangeWorkspace({
         });
       } catch (e) {
         if (
-          !c.signal.aborted &&
+          !signal.aborted &&
           e instanceof Error &&
           ['not_authenticated', 'project_not_found'].includes(e.message)
         )
           setRows([]);
-        if (!c.signal.aborted) setError(changeError(e, onSessionEnd));
+        if (!signal.aborted) setError(changeError(e, onSessionEnd));
       } finally {
-        if (listBusy.current === c) listBusy.current = null;
+        if (listBusy.current === signal) listBusy.current = null;
       }
-    }
-    void refresh();
-    const timer = setInterval(() => void refresh(), 3500);
-    return () => {
-      c.abort();
-      clearInterval(timer);
-    };
-  }, [base, project, onSessionEnd, listPage]);
+    },
+  });
   useEffect(() => {
     if (!project || !record || record.loaded || !record.status) return;
     const c = new AbortController();
@@ -342,9 +339,9 @@ function ChangeWorkspace({
     return () => c.abort();
   }, [base, project, record, onSessionEnd]);
   async function moreRecords() {
-    if (!project || (listBusy.current && !listBusy.current.signal.aborted)) return;
+    if (!project || (listBusy.current && !listBusy.current.aborted)) return;
     const c = generation.current;
-    listBusy.current = c;
+    listBusy.current = c.signal;
     try {
       const result = await changeListing(
         `${base}?page=${listPage + 1}&page_view=true`,
@@ -362,7 +359,7 @@ function ChangeWorkspace({
     } catch (e) {
       if (!generation.current.signal.aborted) setError(changeError(e, onSessionEnd));
     } finally {
-      if (listBusy.current === c) listBusy.current = null;
+      if (listBusy.current === c.signal) listBusy.current = null;
     }
   }
   async function operate(action: string, body?: unknown) {

@@ -1,4 +1,4 @@
-"""Persistent v3 requirement-risk analysis queue and project access rules."""
+"""Persistent requirement-risk analysis queue and project access rules."""
 
 import hashlib
 from copy import deepcopy
@@ -22,10 +22,31 @@ from app.modules.ai.service import (
 from app.modules.documents import service as documents
 from app.modules.projects.record_deletion import require_visible, requirement_permissions
 from app.modules.prototypes import directories
-from app.modules.requirements import artifacts, risk_schemas, risk_service
+from app.modules.requirements import artifacts, risk_service
 from app.modules.skills import files as skill_files
 
 ACTIVE = ("QUEUED", "RUNNING")
+
+
+def has_mislabeled_skill(skill: object) -> bool:
+    """Recognize v4 instructions captured by the previous v3 API process."""
+    if not isinstance(skill, dict):
+        return False
+    instructions = skill.get("instructions")
+    return (
+        skill.get("contract_version") == 3
+        and skill.get("version") == "4.0.0"
+        and isinstance(instructions, str)
+        and f"\n{skill_files.REQUIREMENT_CONTRACT_HEADING.format(4)}\n" in instructions
+        and skill.get("sha256") == skill_files.digest(instructions)
+    )
+
+
+def candidate_input(context: dict) -> dict:
+    fixed = context["input"]
+    if fixed.get("contract_version") == 3 and has_mislabeled_skill(context.get("skill")):
+        return {**fixed, "contract_version": 4}
+    return fixed
 
 
 def view(
@@ -163,6 +184,8 @@ def enqueue(project_id, payload, actor, db):
                 raise AppError(422, "risk_analysis_retry_invalid")
         if "skill" not in frozen.context:
             raise AppError(409, "skill_snapshot_missing")
+        if has_mislabeled_skill(frozen.context["skill"]):
+            raise AppError(409, "risk_analysis_contract_mismatch")
         frozen_context = {"skill": deepcopy(frozen.context["skill"])}
         if "input" in frozen.context and "bindings" in frozen.context:
             frozen_context.update(
@@ -341,23 +364,17 @@ def revalidate_candidate(project_id, task_id, actor, db):
         raise AppError(404, "risk_candidate_not_found") from None
     except (OSError, UnicodeError):
         raise AppError(503, "risk_candidate_storage_unavailable") from None
-    input_data = risk_service.parse(
-        risk_schemas.AnalysisInput, deepcopy(row.context["input"]), "input"
+    input_data = candidate_input(row.context)
+    output, corrections, comparison_corrections, review_warnings = risk_service.validate_candidate(
+        raw, input_data, project_id
     )
-    candidate, comparison_corrections = risk_schemas.normalize_comparison_text(
-        risk_service.json_object(raw)
-    )
-    output = risk_service.parse(risk_schemas.Report, candidate, "report")
-    output, corrections = risk_schemas.normalize_function_risks(output)
-    review_warnings = []
-    risk_schemas.validate_report(output, input_data, project_id, review_warnings)
     result = risk_service.store_report(
         project_id,
         row.title,
         "input.json",
         "risk-report.json",
-        input_data.model_dump(),
-        output.model_dump(),
+        input_data,
+        output,
         row.context["bindings"],
         actor,
         db,
@@ -369,7 +386,11 @@ def revalidate_candidate(project_id, task_id, actor, db):
         "function_risk_corrections": corrections,
         "comparison_text_corrections": comparison_corrections,
         "review_warnings": review_warnings,
-        "revalidation": {"actor_id": actor.id, "at": datetime.now(UTC).isoformat()},
+        "revalidation": {
+            "actor_id": actor.id,
+            "at": datetime.now(UTC).isoformat(),
+            "contract_version": input_data["contract_version"],
+        },
     }
     row.status, row.error_code, row.updated_at = "COMPLETED", "", datetime.now(UTC)
     db.commit()

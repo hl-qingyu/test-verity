@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from app.core.errors import AppError
 from app.modules.candidate_results import service as candidates
 from app.modules.code_analysis import artifacts, contract, service, sources
-from app.modules.requirements.risk_service import json_object
 
 
 def review(project_id, task_id, actor, db, payload=None):
@@ -28,10 +27,11 @@ def review(project_id, task_id, actor, db, payload=None):
         data = service.parse(contract.AnalysisInput, row.input_snapshot)
 
         def validate(raw):
-            output = service.parse(contract.Report, json_object(raw))
-            output, corrections = contract.normalize_code_evidence(data, output)
-            contract.validate_report(data, output)
-            return output.model_dump(by_alias=True), corrections
+            return service.validate_candidate(
+                service.json_object(raw),
+                data,
+                version=metadata.get("skill", {}).get("contract_version", 2),
+            )
 
         result, updated, error = candidates.evaluate(
             "code_analysis",

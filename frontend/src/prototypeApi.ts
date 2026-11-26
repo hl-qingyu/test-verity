@@ -1,3 +1,4 @@
+import { isRecord } from './api/guards';
 import { apiErrorMessage, apiRequest } from './api/http';
 import { connectionErrors } from './githubApi';
 import { parseVersion } from './documentApi';
@@ -39,7 +40,7 @@ export type PrototypeCheck = {
   previous_commit: string | null;
   source: PrototypeSource;
 };
-const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
+const object = (v: unknown): v is Record<string, unknown> => isRecord(v, true);
 const positive = (v: unknown): v is number =>
   typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 const sha = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{40}$/.test(v);

@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -7,17 +8,20 @@ const ts = require('typescript');
 // Run the real TypeScript module with native Node fetch/AbortSignal; no extra test framework.
 function load(file) {
   const source = fs.readFileSync(file, 'utf8');
-  const compiled = ts.transpileModule(source, {
+  const compiled = compileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const exported = {};
-  new Function('exports', 'require', compiled)(exported, (name) =>
-    load(
-      path.resolve(
-        path.dirname(file),
-        name + (fs.existsSync(path.resolve(path.dirname(file), name + '.ts')) ? '.ts' : '.tsx'),
+  evaluateModule(
+    compiled,
+    (name) =>
+      load(
+        path.resolve(
+          path.dirname(file),
+          name + (fs.existsSync(path.resolve(path.dirname(file), name + '.ts')) ? '.ts' : '.tsx'),
+        ),
       ),
-    ),
+    exported,
   );
   return exported;
 }

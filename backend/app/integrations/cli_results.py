@@ -57,7 +57,11 @@ def run(function, *args, **kwargs):
                 function.__module__,
                 function.__name__,
                 args,
-                {k: v for k, v in kwargs.items() if k not in ("on_progress", "diagnostics")},
+                {
+                    k: v
+                    for k, v in kwargs.items()
+                    if k not in ("on_progress", "diagnostics", "reading_files", "reading_guidance")
+                },
             )
         ).encode()
     ).hexdigest()

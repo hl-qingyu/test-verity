@@ -223,9 +223,11 @@ class GitHubProjectDatabaseTests(unittest.TestCase):
         )
         with Session(self.connection, join_transaction_mode="create_savepoint") as db:
             self.assertEqual(db.get(Project, project["id"]).created_by, self.member_id)
-        self.assertEqual(
-            self.client.post("/api/projects", json=payload, headers=ORIGIN).status_code, 409
-        )
+        repeated = self.client.post("/api/projects", json=payload, headers=ORIGIN)
+        self.assertEqual(repeated.status_code, 201, repeated.text)
+        self.assertEqual(repeated.json()["name"], project["name"])
+        self.assertNotEqual(repeated.json()["identifier"], project["identifier"])
+        self.assertNotEqual(project["identifier"], payload["identifier"])
         self.assertEqual(
             self.client.patch(
                 f"/api/projects/{project['id']}",
@@ -256,7 +258,8 @@ class GitHubProjectDatabaseTests(unittest.TestCase):
         private = response.json()
         self.login(self.member_name)
         self.assertEqual(
-            [p["id"] for p in self.client.get("/api/projects").json()], [project["id"]]
+            {p["id"] for p in self.client.get("/api/projects").json()},
+            {project["id"], repeated.json()["id"]},
         )
         self.assertEqual(
             self.client.get(f"/api/projects/{private['id']}/repositories").status_code, 404
@@ -518,10 +521,15 @@ class GitHubProjectDatabaseTests(unittest.TestCase):
             outsider_name = outsider.login_name
             db.commit()
         self.login(self.member_name)
-        self.assertEqual(
-            self.client.post("/api/projects", json=payload, headers=ORIGIN).status_code, 409
-        )
         self.assertEqual([p["id"] for p in self.client.get("/api/projects").json()], [first["id"]])
+        repeated = self.client.post("/api/projects", json=payload, headers=ORIGIN)
+        self.assertEqual(repeated.status_code, 201, repeated.text)
+        self.assertEqual(repeated.json()["name"], first["name"])
+        self.assertNotEqual(repeated.json()["identifier"], first["identifier"])
+        self.assertEqual(
+            {p["id"] for p in self.client.get("/api/projects").json()},
+            {first["id"], repeated.json()["id"]},
+        )
         self.assertEqual(
             self.client.get(f"/api/projects/{second['id']}/repositories").status_code, 404
         )

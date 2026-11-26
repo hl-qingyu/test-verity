@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -81,58 +82,63 @@ function harness({ fitCols } = {}) {
     const exports = {};
     cache.set(name, exports);
     const source = fs.readFileSync(path.resolve(__dirname, '../src/' + name), 'utf8');
-    const code = ts.transpileModule(source, {
+    const code = compileModule(source, {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         jsx: ts.JsxEmit.ReactJSX,
         target: ts.ScriptTarget.ES2022,
       },
     }).outputText;
-    new Function('require', 'exports', code)((name) => {
-      if (name === 'react') return react;
-      if (name === '@xterm/xterm') return { Terminal };
-      if (name === '@xterm/addon-fit')
-        return {
-          FitAddon: class {
-            activate(term) {
-              this.term = term;
-            }
-            dispose() {}
-            fit() {
-              if (fitCols) this.term.resize(fitCols, 24);
-            }
-          },
-        };
-      if (name.endsWith('.css')) return {};
-      if (name === './NativeResultReview')
-        return { NativeResultReview: function NativeResultReview() {} };
-      if (name === './CaseDialog') return { CaseDialog: function CaseDialog() {} };
-      if (name === './api/http') return api;
-      if (name === './generationApi')
-        return { generationBase: () => '/generation', generationError: (e) => e.message };
-      if (name === './nativeTerminalApi')
-        return {
-          ...load('nativeTerminalApi.ts'),
-          terminalSocket(url, cursor) {
-            const ws = {
-              readyState: 1,
-              cursor,
-              url,
-              sent: [],
-              send(data) {
-                this.sent.push(JSON.parse(data));
-              },
-              close() {
-                this.readyState = 3;
-                this.onclose?.();
-              },
-            };
-            sockets.push(ws);
-            return ws;
-          },
-        };
-      return require(name);
-    }, exports);
+    evaluateModule(
+      code,
+      (name) => {
+        if (name === 'react') return react;
+        if (name === '@xterm/xterm') return { Terminal };
+        if (name === '@xterm/addon-fit')
+          return {
+            FitAddon: class {
+              activate(term) {
+                this.term = term;
+              }
+              dispose() {}
+              fit() {
+                if (fitCols) this.term.resize(fitCols, 24);
+              }
+            },
+          };
+        if (name.endsWith('.css')) return {};
+        if (name === './NativeResultReview')
+          return { NativeResultReview: function NativeResultReview() {} };
+        if (name === './CaseDialog') return { CaseDialog: function CaseDialog() {} };
+        if (name === './api/http') return api;
+        if (name === './generationApi')
+          return { generationBase: () => '/generation', generationError: (e) => e.message };
+        if (name === './api/guards') return load('api/guards.ts');
+        if (name === './nativeTerminalApi')
+          return {
+            ...load('nativeTerminalApi.ts'),
+            terminalSocket(url, cursor) {
+              const ws = {
+                readyState: 1,
+                cursor,
+                url,
+                sent: [],
+                send(data) {
+                  this.sent.push(JSON.parse(data));
+                },
+                close() {
+                  this.readyState = 3;
+                  this.onclose?.();
+                },
+              };
+              sockets.push(ws);
+              return ws;
+            },
+          };
+        return require(name);
+      },
+      exports,
+    );
     return exports;
   }
   const { NativeCliWorkspace } = load('NativeCliWorkspace.tsx');

@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.integrations import codex_terminal
+from app.integrations import ai_client, codex_terminal
 
 TERMINAL_KEY = "analysis_terminal"
 
@@ -49,6 +49,30 @@ def session_view(row: dict, *, kind: str) -> dict:
         "replay_cols": terminal.get("cols", 110),
         **codex_terminal.turn_state(terminal["identity"], terminal.get("execution", row["id"])),
     }
+
+
+def resume_session(config, secret, binding, check, *, legacy_context=None, legacy_instructions=""):
+    """Resume the bound thread and run the caller's final permission/result check."""
+    options = {}
+    if binding.get("thread_id"):
+        options["resume_thread"] = binding["thread_id"]
+    if legacy_context is not None:
+        options.update(fixed_input=legacy_context, instructions=legacy_instructions)
+    result = ai_client.terminal(
+        config["base_url"],
+        config["model"],
+        secret,
+        config["reasoning_effort"],
+        identity=binding["identity"],
+        execution=binding["execution"],
+        resume=True,
+        rows=binding["rows"],
+        cols=binding["cols"],
+        on_progress=check,
+        **options,
+    )
+    check(force=True)
+    return result
 
 
 def bound_output(bound: dict, cursor: int) -> dict:

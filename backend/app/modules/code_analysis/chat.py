@@ -53,7 +53,7 @@ def enqueue(project_id, task_id, payload, actor, db):
         ):
             raise AppError(409, "code_chat_request_conflict")
         return view(prior, actor)
-    if task.status != "COMPLETED" or task.report.get("contract_version") != 2:
+    if task.status != "COMPLETED" or task.report.get("contract_version") not in (2, 3):
         raise AppError(422, "code_report_not_ready")
     if not payload.question.strip():
         raise AppError(422, "code_question_required")

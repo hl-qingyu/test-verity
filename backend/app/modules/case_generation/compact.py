@@ -4,7 +4,7 @@ import copy
 import json
 import re
 
-from app.modules.case_generation import legacy_contract as contract
+from app.modules.case_generation import contract_base as contract
 from app.modules.cases.schemas import DESIGN_FIELDS
 from app.modules.requirements import analysis_materials
 
@@ -29,8 +29,8 @@ def quote_spans_segments(segments, quote):
     return False
 
 
-def model_content(data, attachments):
-    task = {
+def model_task(data):
+    return {
         "mode": data["mode"],
         "scope": data["scope"]["name"],
         "full_scope": data["scope"]["full_scope"],
@@ -42,8 +42,14 @@ def model_content(data, attachments):
         "related_reports": data["related_reports"],
         "supplement": data["supplement"],
     }
+
+
+def model_content(data, attachments):
     result = [
-        {"type": "input_text", "text": "本次固定任务：\n" + json.dumps(task, ensure_ascii=False)}
+        {
+            "type": "input_text",
+            "text": "本次固定任务：\n" + json.dumps(model_task(data), ensure_ascii=False),
+        }
     ]
     for material in data["materials"]:
         result.append(

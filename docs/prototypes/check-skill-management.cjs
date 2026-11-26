@@ -77,8 +77,8 @@ vm.runInContext(renderer[1], context);
 vm.runInContext(block, context);
 vm.runInContext(
   `
-assert.equal(SKILL_CONTENT.length,5);assert.deepEqual(SKILL_CONTENT.map(s=>s.files.length),[4,28,2,8,9]);
-for(const record of SKILL_CONTENT){for(const file of record.files){const original=fs.readFileSync(path.resolve('skill',record.key,file.path),'utf8');assert.equal(file.text,original);assert.equal(file.sha256,crypto.createHash('sha256').update(original).digest('hex'));assert.ok(!file.path.includes('__pycache__'));}}
+assert.deepEqual(SKILL_CONTENT.map(s=>s.key),['requirement-analysis','case-generation','case-analysis','code-review','change-impact']);
+for(const record of SKILL_CONTENT){const folder=path.resolve('skill',record.key);const expected=fs.readdirSync(folder,{recursive:true,withFileTypes:true}).filter(f=>f.isFile()).map(f=>path.relative(folder,path.join(f.parentPath,f.name)).split(path.sep).join('/')).filter(f=>!f.includes('__pycache__')&&!f.endsWith('.pyc')).sort();assert.equal(JSON.stringify(record.files.map(f=>f.path).sort()),JSON.stringify(expected));for(const file of record.files){const original=fs.readFileSync(path.resolve('skill',record.key,file.path),'utf8');assert.equal(file.text,original);assert.equal(file.sha256,crypto.createHash('sha256').update(original).digest('hex'));assert.ok(!file.path.includes('__pycache__'));}}
 let output=viewSkills();assert.match(output,/文件目录/);assert.match(output,/sk-edit/);assert.doesNotMatch(output,/导入 Markdown|编辑与试跑|复制到当前项目/);
 skSelected='case-generation';skPath='SKILL.md';output=viewSkills();assert.match(output,/legacy-contract.md/);assert.match(output,/compact-report.json/);assert.equal(skUsage(skFile()),'参与当前AI调用');
 assert.equal(skRecord().version,'2.1.2');skPath='segmented-output-draft.md';assert.equal(skUsage(skFile()),'参考文件');skPath='references/preparation.md';assert.equal(skUsage(skFile()),'参与当前AI调用');assert.match(viewSkills(),/references/);skPath='legacy-contract.md';assert.equal(skUsage(skFile()),'历史约定');assert.doesNotMatch(viewSkills(),/data-action="sk-edit"/);

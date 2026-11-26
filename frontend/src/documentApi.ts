@@ -1,3 +1,4 @@
+import { isRecord } from './api/guards';
 import { apiErrorMessage, apiRequest } from './api/http';
 
 export type DocumentGroup = { id: number; name: string };
@@ -200,7 +201,7 @@ export function parseLinks(value: unknown): DocumentLinks {
     links,
   };
 }
-const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object';
+const object = (v: unknown): v is Record<string, unknown> => isRecord(v, true);
 const positive = (v: unknown): v is number =>
   typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 export function parseVersion(v: unknown): DocumentVersion {

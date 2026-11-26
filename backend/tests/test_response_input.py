@@ -28,9 +28,8 @@ class ResponseInputTests(unittest.TestCase):
     def test_large_text_parts_rejoin_exactly_in_place_including_unicode_and_attachment_order(self):
         source = ('你好😀\\"\n' * (TEXT_PART_CHARACTERS // 6 + 1))[: TEXT_PART_CHARACTERS + 1]
         image = {"type": "input_image", "image_url": "data:image/png;base64,synthetic"}
-        boundary = {"mode": "explicit"}
         content = [
-            {"type": "input_text", "text": source, "prompt_cache_breakpoint": boundary},
+            {"type": "input_text", "text": source},
             image,
             {"type": "input_text", "text": "after image"},
         ]
@@ -39,8 +38,6 @@ class ResponseInputTests(unittest.TestCase):
         result, note, stats = prepare_messages(messages)
         parts = result[0]["content"]
         self.assertEqual("".join(p["text"] for p in parts[:2]), source)
-        self.assertNotIn("prompt_cache_breakpoint", parts[0])
-        self.assertEqual(parts[1]["prompt_cache_breakpoint"], boundary)
         self.assertEqual(parts[2:], content[1:])
         self.assertEqual(messages, original)
         self.assertEqual(stats["split_text_count"], 1)

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from app.core.errors import AppError
 from app.modules.candidate_results.json_candidates import Pairs, duplicate_fields, original_json
-from app.modules.case_generation import compact, legacy_contract
+from app.modules.case_generation import compact, contract_base, legacy_contract
 from app.modules.requirements.risk_service import json_object
 
 
@@ -35,7 +35,7 @@ def process(data, raw, resolutions=None, *, preserve_partition=False):
     resolutions = resolutions or {}
     if data["contract_version"] != 3:
         try:
-            original, repairs = legacy_contract.read_ai_report(data, raw)
+            original, repairs = contract_base.read_ai_report(data, raw)
             normalized, fields = legacy_contract.normalize_ai_report(original)
             return Delivery(
                 legacy_contract.validate_report(data, normalized),

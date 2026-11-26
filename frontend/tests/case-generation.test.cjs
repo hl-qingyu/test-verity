@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test'),
   assert = require('node:assert/strict'),
   fs = require('node:fs'),
@@ -8,20 +9,24 @@ const { test } = require('node:test'),
 const src = (name) => path.resolve(__dirname, '../src', name);
 function load(file, overrides = {}) {
   const exports = {};
-  const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const js = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
       jsx: ts.JsxEmit.ReactJSX,
     },
   }).outputText;
-  new Function('exports', 'require', js)(exports, (name) => {
-    if (overrides[name]) return overrides[name];
-    if (name.endsWith('.css')) return {};
-    if (!name.startsWith('.')) return require(name);
-    const base = path.resolve(path.dirname(file), name);
-    return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), overrides);
-  });
+  evaluateModule(
+    js,
+    (name) => {
+      if (overrides[name]) return overrides[name];
+      if (name.endsWith('.css')) return {};
+      if (!name.startsWith('.')) return require(name);
+      const base = path.resolve(path.dirname(file), name);
+      return load(base + (fs.existsSync(base + '.ts') ? '.ts' : '.tsx'), overrides);
+    },
+    exports,
+  );
   return exports;
 }
 const api = load(src('generationPage.ts')),
@@ -83,13 +88,41 @@ function payload(size = 12) {
   };
 }
 function record(size = 12) {
-  const p = payload(size);
+  const { input, report } = payload(size);
   return {
-    ...api.parseGenerationPreview(JSON.stringify(p.input), JSON.stringify(p.report), 1),
     id: 'record-1',
     ownerId: 1,
+    projectId: 1,
     title: '生成预览',
     createdAt: '2026-10-10T00:00:00Z',
+    mode: input.mode,
+    origin: 'PREVIEW',
+    cancelled: false,
+    scope: input.scope,
+    focus: '',
+    materials: input.materials.map((m) => ({
+      sourceId: m.source_id,
+      name: m.name,
+      version: m.version,
+      readState: m.read_state,
+      segments: m.segments,
+      paths: [],
+    })),
+    cases: [],
+    libraryRevision: null,
+    baselineId: '',
+    caseScope: '',
+    suggestions: report.suggestions,
+    questions: report.questions,
+    handling: {},
+    decisions: [],
+    failures: [],
+    chatDrafts: {},
+    batches: [],
+    limitations: [],
+    outcome: report.outcome,
+    inputText: JSON.stringify(input),
+    reportText: JSON.stringify(report),
   };
 }
 test('sidebar duration uses hours, minutes and seconds, freezes ended batches and handles missing history', () => {
@@ -198,52 +231,6 @@ test('workspace displays adoption alongside existing counts and handles loading 
   assert.doesNotMatch(render({ ...r, origin: 'DRAFT' }), /已采纳/);
 });
 
-test('generation paired preview checks identities, design whitelist, cross-file evidence and independent keys', () => {
-  const p = payload(),
-    parse = (i = p.input, r = p.report) =>
-      api.parseGenerationPreview(JSON.stringify(i), JSON.stringify(r), 1);
-  assert.equal(parse().suggestions.length, 12);
-  assert.throws(() => parse({ ...p.input, project_id: 2 }), /项目/);
-  assert.throws(() => parse(p.input, { ...p.report, request_id: 'other' }), /request_id/);
-  const bad = structuredClone(p.report);
-  bad.suggestions[0].design.result = '通过';
-  assert.throws(() => parse(p.input, bad), /非法字段/);
-  delete bad.suggestions[0].design.result;
-  bad.suggestions[0].status = '已应用';
-  assert.throws(() => parse(p.input, bad), /人工审核/);
-  delete bad.suggestions[0].status;
-  bad.suggestions[0].evidence[0].quote = '原文不存在';
-  assert.throws(() => parse(p.input, bad), /定位/);
-  const duplicate = structuredClone(p.report);
-  duplicate.questions[0].key = 'N1';
-  assert.throws(() => parse(p.input, duplicate), /重复/);
-  const aliases = {
-    type: '业务流程',
-    pre: '先准备',
-    title: '场景',
-    steps: '步骤',
-    expected: '预期',
-    cleanup: '',
-  };
-  assert.equal(api.generationDesign(aliases).case_type, '业务流程');
-  assert.throws(() => api.generationDesign({ ...aliases, case_type: '异常' }), /冲突/);
-  assert.throws(
-    () =>
-      parse(p.input, {
-        ...p.report,
-        suggestions: [
-          {
-            ...p.report.suggestions[0],
-            kind: 'UPDATE',
-            case_id: 'Display_001',
-            base_version: 1,
-            before: p.report.suggestions[0].design,
-          },
-        ],
-      }),
-    /内部正整数/,
-  );
-});
 test('512 suggestions are selected across pages; retired, ignored and unresolved entries are excluded without mutating the original report', () => {
   const r = record(512),
     raw = r.reportText;
@@ -263,65 +250,6 @@ test('512 suggestions are selected across pages; retired, ignored and unresolved
   const text = api.generationMarkdown(r);
   assert.match(text, /N512/);
   assert.match(text, /未进行AI分析/);
-});
-test('per-entry readonly preview isolates expired targets and conflicting candidates while keeping good entries reviewable', () => {
-  const r = record(3),
-    d = r.suggestions[0].design;
-  r.suggestions[1] = { ...r.suggestions[1], kind: 'UPDATE', caseId: 8, baseVersion: 2, before: d };
-  r.suggestions[2] = {
-    ...r.suggestions[2],
-    kind: 'REUSE',
-    caseId: 9,
-    baseVersion: 3,
-    before: r.suggestions[2].design,
-  };
-  const row = (id, version, design) => ({
-    ...design,
-    id,
-    version,
-    version_id: id,
-    serial: id,
-    number: 'Original_007',
-    category_id: null,
-    result: '通过',
-    tester: '原人员',
-    review_status: '已审核',
-    result_origin: 'IMPORT',
-    source_kind: 'IMPORT',
-  });
-  const snapshot = {
-    revision: 5,
-    next_number: 10,
-    categories: [],
-    items: [row(8, 3, d), row(9, 3, r.suggestions[2].design)],
-    total: 2,
-    page: 1,
-    page_size: 100,
-  };
-  const original = JSON.stringify(snapshot);
-  const result = api.generationPreview(r, ['N1', 'N2', 'N3'], snapshot);
-  assert.equal(result.length, 3);
-  assert.equal(result[0].problem, '');
-  assert.match(result[1].problem, /已变化/);
-  assert.equal(result[2].problem, '');
-  assert.equal(result[2].target.result, '通过');
-  assert.equal(JSON.stringify(snapshot), original);
-  r.handling.N2 = [
-    {
-      status: '待审阅',
-      draft: r.suggestions[1].design,
-      revision: 1,
-      resolved: true,
-      evidenceChecked: true,
-      reviewedTarget: { id: 8, version: 3, design: d },
-    },
-  ];
-  assert.equal(api.generationPreview(r, ['N2'], snapshot)[0].problem, '');
-  const later = structuredClone(snapshot);
-  later.items[0].version = 4;
-  assert.match(api.generationPreview(r, ['N2'], later)[0].problem, /已变化/);
-  assert.equal(r.suggestions[1].baseVersion, 2);
-  assert.throws(() => api.generationPreview(r, ['wrong'], snapshot), /选择/);
 });
 test('candidate XLSX exports all 512 rows with 14 literal-text columns, blank formal IDs and testers', async () => {
   const r = record(512);
@@ -403,15 +331,19 @@ test('formal generation UI keeps expanded records, tabs, server operations and u
   assert.match(html, /role="tablist"/);
   assert.match(html, /暂无用例生成记录/);
   assert.ok(!html.includes('512条 ·'));
-  const source = fs.readFileSync(src('CaseGeneration.tsx'), 'utf8');
-  assert.match(source, /generation\.current\+\+[\s\S]*controller\.current\?\.abort/);
-  assert.match(source, /GenerationReview/);
-  assert.match(source, /generationAction/);
-  assert.match(source, /generationSummaries/);
-  assert.ok(!fs.readFileSync(src('App.tsx'), 'utf8').includes('generationRecords'));
-  assert.ok(!/localStorage|sessionStorage/.test(source));
-  assert.ok(!/method:\s*['"](?:PATCH|DELETE)['"]/.test(source));
-  assert.match(fs.readFileSync(src('App.tsx'), 'utf8'), /path="\/generate"/);
+  const populated = renderToStaticMarkup(
+    React.createElement(
+      require('react-router-dom').MemoryRouter,
+      null,
+      React.createElement(GenerationWorkspace, {
+        ...props,
+        rows: [{ ...record(1), origin: 'SERVER' }],
+      }),
+    ),
+  );
+  assert.match(populated, /生成预览/);
+  assert.match(populated, /场景1/);
+  assert.doesNotMatch(populated, /暂无用例生成记录/);
 });
 
 test('continuous review groups stable functions, shows twenty rows and escapes full design text', () => {
@@ -650,9 +582,7 @@ test('execution preparation gaps remain separate from business clarification and
   assert.match(html, /库存观察入口待确认/);
   assert.match(html, /筛选功能尚未覆盖/);
   assert.match(html, /下一步/);
-  const source = fs.readFileSync(src('CaseGeneration.tsx'), 'utf8');
-  assert.match(source, /部分完成 · 有待补或未覆盖范围/);
-  assert.match(source, /业务待澄清/);
+  assert.doesNotMatch(html, /业务待澄清/);
 });
 
 test('compact reports show preparation and unfinished notes without inventing discovery structures', () => {

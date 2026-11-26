@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { parseCallMetadata } from './aiConfiguration';
 import { deletionErrors } from './analysisDeletionApi';
 import { aiErrors } from './aiErrors';
@@ -47,27 +48,14 @@ export const CODE_FILE_LIMIT = 16 * 1024 * 1024;
 function invalid(): never {
   throw new Error('code_response_invalid');
 }
-function obj(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return invalid();
-  return v as Record<string, unknown>;
-}
-function str(v: unknown): string {
-  return typeof v === 'string' ? v : invalid();
-}
-function num(v: unknown): number {
-  return typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : invalid();
-}
-function bool(v: unknown): boolean {
-  return typeof v === 'boolean' ? v : invalid();
-}
-function arr<T>(v: unknown, parse: (item: unknown) => T): T[] {
-  return Array.isArray(v) ? v.map(parse) : invalid();
-}
-function choice<T extends string>(v: unknown, values: Record<T, unknown>): T {
-  const s = str(v);
-  if (!Object.hasOwn(values, s)) return invalid();
-  return s as T;
-}
+const guards = createGuards('code_response_invalid');
+const obj = guards.obj,
+  str = guards.str,
+  bool = guards.bool,
+  arr = guards.list,
+  choice = guards.choice,
+  num = (value: unknown) => guards.int(value, 0);
+
 const strings = (v: unknown) => arr(v, str);
 const target = (v: unknown) => choice(v, codeTargets);
 const mode = (v: unknown) => choice(v, { GITHUB: '', LOCAL: '' });
@@ -209,9 +197,10 @@ function parseEvidence(value: unknown): CodeEvidence {
 export function parseCodeReport(value: unknown) {
   const v = obj(value),
     summary = obj(v.summary);
-  if (v.contract_version !== 2 || v.analysis_type !== 'CODE_REVIEW') return invalid();
+  if ((v.contract_version !== 2 && v.contract_version !== 3) || v.analysis_type !== 'CODE_REVIEW')
+    return invalid();
   return {
-    contract_version: 2 as const,
+    contract_version: v.contract_version,
     request_id: str(v.request_id),
     outcome: choice(v.outcome, codeOutcomes),
     summary: {
@@ -342,7 +331,10 @@ export function parseCodeDetail(value: unknown) {
   return {
     ...parseCodeRecord(v),
     input: input.contract_version === 2 ? parseCodeInput(input) : null,
-    report: report.contract_version === 2 ? parseCodeReport(report) : null,
+    report:
+      report.contract_version === 2 || report.contract_version === 3
+        ? parseCodeReport(report)
+        : null,
     handling: Object.fromEntries(
       Object.entries(handling).map(([key, value]) => [key, parseHandling(value)]),
     ),

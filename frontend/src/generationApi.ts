@@ -1,3 +1,4 @@
+import { createGuards } from './api/guards';
 import { parseCallMetadata } from './aiConfiguration';
 import { apiErrorMessage, apiRequest } from './api/http';
 import { codeErrors } from './codeAnalysisApi';
@@ -15,21 +16,13 @@ import type {
   GenerationSummary,
 } from './generationPage';
 
-function object(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) throw Error('generation_response_invalid');
-  return v as Record<string, unknown>;
-}
+const guards = createGuards('generation_response_invalid');
+const object = guards.obj,
+  num = (value: unknown, zero = false) => guards.int(value, zero ? 0 : 1),
+  bool = guards.bool;
+
 function text(v: unknown): string {
   if (typeof v !== 'string' || v.includes('\0')) throw Error('generation_response_invalid');
-  return v;
-}
-function num(v: unknown, zero = false): number {
-  if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < (zero ? 0 : 1))
-    throw Error('generation_response_invalid');
-  return v;
-}
-function bool(v: unknown): boolean {
-  if (typeof v !== 'boolean') throw Error('generation_response_invalid');
   return v;
 }
 function nativeId(v: unknown): string | undefined {
@@ -38,9 +31,8 @@ function nativeId(v: unknown): string | undefined {
   if (!/^[0-9a-f]{64}$/.test(value)) throw Error('generation_response_invalid');
   return value;
 }
-function list<T>(v: unknown, parse: (v: unknown) => T): T[] {
-  if (!Array.isArray(v) || v.length > 20000) throw Error('generation_response_invalid');
-  return v.map(parse);
+function list<T>(value: unknown, parse: (item: unknown) => T): T[] {
+  return guards.list(value, parse, 20000);
 }
 function progressTime(v: unknown): string | null {
   if (v === undefined || v === null) return null;
@@ -367,15 +359,6 @@ export function parseGenerationRecord(v: unknown, projectId: number): Generation
   };
 }
 export const generationBase = (projectId: number) => `/api/projects/${projectId}/case-generation`;
-export async function generationList(projectId: number, signal: AbortSignal, page = 1) {
-  const o = object(
-    await apiRequest<unknown>(`${generationBase(projectId)}?page=${page}`, { signal }),
-  );
-  return {
-    items: list(o.items, (v) => parseGenerationRecord(v, projectId)),
-    hasMore: bool(o.has_more),
-  };
-}
 export async function generationSummaries(
   projectId: number,
   signal: AbortSignal,
@@ -454,6 +437,8 @@ export async function generationAction(
   return parseGenerationRecord(response, projectId);
 }
 const generationErrors: Record<string, string> = {
+  generation_legacy_contract_retry_unsupported: '旧版契约 v2 的批次不支持重试，请新建用例生成。',
+  generation_legacy_contract_import_unsupported: '旧版契约 v2 的结果不支持导入，请新建用例生成。',
   generation_native_results_unavailable: '原生CLI历史暂不可读取，请稍后重试；没有调用AI。',
   generation_native_result_not_found: '没有找到这轮生成JSON，请重新读取可选轮次。',
   generation_native_round_retry_forbidden:

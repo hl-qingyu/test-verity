@@ -11,11 +11,13 @@ from urllib.parse import urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, build_opener
 from urllib.request import Request as URLRequest
 
+from app.core.config import DEFAULT_ANALYSIS_OUTPUT_TOKENS, AnalysisProfile, Settings
 from app.core.errors import AppError
-from app.integrations import response_errors
+from app.integrations import input_estimate, response_errors
 from app.integrations.call_control import connected
 from app.integrations.response_diagnostics import (
     EVENTS,
+    USAGE_KEYS,
     error_metadata,
     safe_identifier,
     safe_snapshot,
@@ -135,7 +137,11 @@ def analyze(
     instruction_messages: list[dict] | None = None,
     diagnostics: dict | None = None,
     on_progress: Callable[[], None] | None = None,
+    output_profile: AnalysisProfile | None = None,
 ) -> str:
+    output_limit = DEFAULT_ANALYSIS_OUTPUT_TOKENS
+    if output_profile is not None:
+        output_limit = Settings().ai_analysis_max_output_tokens.get(output_profile, output_limit)
     return _model_response(
         base_url,
         model,
@@ -143,14 +149,24 @@ def analyze(
         effort,
         instructions,
         [*(instruction_messages or []), {"role": "user", "content": content}],
-        max_output_tokens=32000,
+        max_output_tokens=output_limit,
         response_limit=16 * 1024 * 1024,
         diagnostics=diagnostics,
         on_progress=on_progress,
     )
 
 
-def converse(base_url, model, key, effort, instructions, messages, *, on_progress=None):
+def converse(
+    base_url,
+    model,
+    key,
+    effort,
+    instructions,
+    messages,
+    *,
+    diagnostics: dict | None = None,
+    on_progress=None,
+):
     return _model_response(
         base_url,
         model,
@@ -160,6 +176,7 @@ def converse(base_url, model, key, effort, instructions, messages, *, on_progres
         messages,
         max_output_tokens=8192,
         response_limit=4 * 1024 * 1024,
+        diagnostics=diagnostics,
         on_progress=on_progress,
     )
 
@@ -180,6 +197,7 @@ def _model_response(
     messages, transport_note, metrics = prepare_messages(messages)
     stats = diagnostics if diagnostics is not None else {}
     stats.update(metrics)
+    stats["input_estimate"] = input_estimate.estimate(instructions + transport_note, messages)
     payload = {
         "model": model,
         "instructions": instructions + transport_note,
@@ -326,6 +344,20 @@ def model_request(base_url: str, key: str, payload: dict) -> URLRequest:
 def open_model_response(request: URLRequest, timeout: int | float | None):
     """Shared fixed Responses transport, including the bounded CLI connection probe."""
     return build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=timeout)
+
+
+def usage_metrics(usage: object) -> dict[str, int]:
+    if not isinstance(usage, dict):
+        return {}
+    inputs, outputs = usage.get("input_tokens_details"), usage.get("output_tokens_details")
+    values = {
+        "input_tokens": usage.get("input_tokens"),
+        "cached_tokens": inputs.get("cached_tokens") if isinstance(inputs, dict) else None,
+        "output_tokens": usage.get("output_tokens"),
+        "reasoning_tokens": outputs.get("reasoning_tokens") if isinstance(outputs, dict) else None,
+        "total_tokens": usage.get("total_tokens"),
+    }
+    return {key: value for key, value in values.items() if type(value) is int and 0 <= value < 1e12}
 
 
 def send_response(
@@ -494,19 +526,16 @@ def send_response(
         stats.update(outcome="failed", error_code=exc.detail)
         notify()
         raise
-    if isinstance(result.get("usage"), dict):
-        stats["usage"] = {
-            k: v
-            for k, v in result["usage"].items()
-            if k in ("input_tokens", "output_tokens", "total_tokens") and type(v) is int and v >= 0
-        }
+    usage = stats["usage"] = usage_metrics(result.get("usage"))
     stats["outcome"] = "completed"
     notify()
     logger.info(
-        "AI response completed elapsed_seconds=%.1f received_bytes=%s output_characters=%s",
+        "AI response completed elapsed_seconds=%.1f received_bytes=%s output_characters=%s "
+        "input_tokens=%s cached_tokens=%s output_tokens=%s reasoning_tokens=%s total_tokens=%s",
         stats.get("elapsed_seconds", 0),
         stats.get("received_bytes", 0),
         len(output),
+        *(usage.get(name, "-") for name in USAGE_KEYS),
     )
     return output
 

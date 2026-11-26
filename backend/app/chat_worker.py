@@ -220,12 +220,32 @@ def _restore_cli_results(factory, logger):
             cli_results.acknowledge(identity)
 
 
+def _run_applications(factory, logger):
+    claimed = False
+    for claim, execute in (
+        (case_analysis_execution.claim_application, case_analysis_apply.execute),
+        (generation_execution.claim_application, generation_apply.execute),
+    ):
+        try:
+            with factory() as db:
+                key = claim(db)
+            if key is not None:
+                claimed = True
+                execute(key, factory)
+        except DATABASE_ERRORS:
+            raise
+        except Exception as error:
+            logger.warning("analysis_application_failed type=%s", type(error).__name__)
+    return claimed
+
+
 def _schedule(lock, factory, logger):
     stop = Event()
     scheduler_id = str(uuid4())
     slots = max(1, Settings().ai_max_concurrent)
     registry = _registry()
     engine, current = lock.engine, lock
+    idle_delay = 1
 
     active = set()
     with ThreadPoolExecutor(max_workers=slots, thread_name_prefix="analysis") as pool:
@@ -283,19 +303,12 @@ def _schedule(lock, factory, logger):
                                         logger,
                                     )
                                 )
-                    if len(active) < slots:
-                        for claim, execute in (
-                            (
-                                case_analysis_execution.claim_application,
-                                case_analysis_apply.execute,
-                            ),
-                            (generation_execution.claim_application, generation_apply.execute),
-                        ):
-                            with factory() as db:
-                                key = claim(db)
-                            if key is not None:
-                                execute(key, factory)
-                    time.sleep(1)
+                    applied = _run_applications(factory, logger)
+                    if active or applied:
+                        idle_delay = 1
+                    time.sleep(idle_delay)
+                    if not active and not applied:
+                        idle_delay = min(idle_delay * 2, 5)
                 except DATABASE_ERRORS:
                     logger.warning("analysis_scheduler_database_unavailable active=%s", len(active))
                     if current is not None:

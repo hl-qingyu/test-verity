@@ -1,3 +1,4 @@
+const { compileModule, evaluateModule } = require('./helpers/load.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,7 +7,7 @@ const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 function load(file, react = React, overrides = {}) {
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const code = compileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
@@ -14,22 +15,27 @@ function load(file, react = React, overrides = {}) {
     },
   }).outputText;
   const exports = {};
-  new Function('exports', 'require', code)(exports, (name) =>
-    overrides[name]
-      ? overrides[name]
-      : name === 'react'
-        ? react
-        : name.startsWith('.')
-          ? load(
-              path.resolve(
-                path.dirname(file),
-                name +
-                  (fs.existsSync(path.resolve(path.dirname(file), name + '.ts')) ? '.ts' : '.tsx'),
-              ),
-              react,
-              overrides,
-            )
-          : require(name),
+  evaluateModule(
+    code,
+    (name) =>
+      overrides[name]
+        ? overrides[name]
+        : name === 'react'
+          ? react
+          : name.startsWith('.')
+            ? load(
+                path.resolve(
+                  path.dirname(file),
+                  name +
+                    (fs.existsSync(path.resolve(path.dirname(file), name + '.ts'))
+                      ? '.ts'
+                      : '.tsx'),
+                ),
+                react,
+                overrides,
+              )
+            : require(name),
+    exports,
   );
   return exports;
 }
