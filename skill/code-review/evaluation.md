@@ -2,7 +2,7 @@
 
 契约 v3 候选见 examples 中以 -v3.json 结尾的结果。验收以固定输入统计的文件状态、NOT_ASSESSED 和证据唯一定位为准。
 
-配合Skill 2.0.0、契约v2使用。本文件定义后续质量评测，不是已测得结果。当前只提供两组完整合成输入/输出和离线检查；未调用模型、未进行独立盲评、未验证真实项目，不能据此宣称准确率达标。
+配合 Skill 3.0.0 和契约 v3 使用。质量评测使用合成输入、候选和离线结构检查。历史 v2 示例用于回归旧契约。
 
 ## 当前可运行检查
 
@@ -20,8 +20,8 @@ backend/.venv/Scripts/python.exe skill/code-review/scripts/check_examples.py
 
 | 样例 | 输入与期望 | 能说明什么 |
 | --- | --- | --- |
-| examples/input.json / output.json | GitHub后端、Web、移动端与需求；2个根因跨3个目标，Web正确映射保留一致检查 | 展示目标分流、多客户端区分、同根因去重、需求对照、关系引用、原型详情字段 |
-| examples/local-input.json / local-output.json | 仅本地后端，Bug与需求符合性多选；纯函数Bug成立，业务需求缺失，整体PARTIAL | 展示本地快照、单端正常Bug审查、代码注释不冒充已确认需求、各目标独立状态 |
+| examples/input-v3.json / output-v3.json | GitHub 后端、Web、移动端与需求 | 展示三个检查目标、多客户端角色、同根因去重、需求对照和关系引用 |
+| examples/local-input-v3.json / local-output-v3.json | 本地后端 Bug 与需求符合性 | 展示本地快照、单端 Bug 审查及各目标的独立状态 |
 
 上述期望由编写者人工编写，不是模型生成，不作效果评测样本得分。
 

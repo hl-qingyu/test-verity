@@ -1,4 +1,5 @@
 export const aiErrors: Record<string, string> = {
+  skill_contract_mismatch: '分析服务与 Skill 契约版本不一致。请联系管理员核对版本。',
   ai_preference_changed: '调用方式已在其他窗口切换，请重新加载后再提交。',
   ai_call_busy: 'AI 调用额度正被占用，请稍后再试；本次未发送模型请求。',
   ai_call_already_attempted: '此调用尝试已执行或中断，未重复发送；请核对历史后手动创建新尝试。',

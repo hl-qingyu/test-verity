@@ -654,8 +654,6 @@ export function NewCodeAnalysis({
         <section className="evidence">
           <strong>执行配置</strong>
           <p className="hint">
-            代码分析 Skill 2.0.0 · v2契约
-            <br />
             {callModeName(options.ai.call_mode)} · {options.ai.name} · {options.ai.model}
           </p>
           <p className="hint">

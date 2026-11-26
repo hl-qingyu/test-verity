@@ -35,6 +35,7 @@ from app.modules.requirements import (
     risk_schemas,
     risk_service,
 )
+from app.modules.skills import files as skill_files
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +223,7 @@ def execute(task_id, session_factory):
                 raise AppError(409, "skill_snapshot_missing")
             if risk_analysis_service.has_mislabeled_skill(skill):
                 raise AppError(409, "risk_analysis_contract_mismatch")
+            skill_files.verify_snapshot_contract(skill)
             if "input" in task.context:
                 binaries = risk_analysis_service.frozen_materials(task.project_id, task, actor, db)
                 input_data = copy.deepcopy(task.context["input"])

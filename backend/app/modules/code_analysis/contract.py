@@ -1,8 +1,8 @@
-"""Strict Skill v2 documents and cross-reference validation; no IO or model calls."""
+"""Versioned code analysis documents and cross-reference validation."""
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from app.core.errors import AppError
 from app.security.source_content import contains_private_key
@@ -65,7 +65,7 @@ class Material(Strict):
 
 
 class AnalysisInput(Strict):
-    contract_version: Literal[2]
+    contract_version: Literal[2, 3]
     analysis_type: Literal["CODE_REVIEW"]
     request_id: Identifier
     source_mode: SourceKind
@@ -261,9 +261,28 @@ class LimitationV3(Limitation):
     file_refs: list[FileRef] = Field(default_factory=list)
 
 
+class NodeV3(Node):
+    @field_validator("inputs", "outputs", mode="before")
+    @classmethod
+    def normalize_text_items(cls, value, info: ValidationInfo):
+        if (
+            info.context
+            and info.context.get("normalize_chain_text")
+            and isinstance(value, list)
+            and all(isinstance(item, str) for item in value)
+        ):
+            return "\n".join(value)
+        return value
+
+
+class ChainV3(Chain):
+    nodes: list[NodeV3] = Field(min_length=1, max_length=10000)
+
+
 class CandidateV3(ReportBody):
     contract_version: Literal[3]
     evidence: list[Annotated[CodeEvidenceV3 | MaterialEvidence, Field(discriminator="kind")]]
+    chains: list[ChainV3]
     limitations: list[LimitationV3]
 
 
@@ -500,6 +519,7 @@ def normalize_code_evidence(value: AnalysisInput, result: Report | CandidateV3):
 
 
 def validate_report(value: AnalysisInput, result: Report | CandidateV3):
+    require(value.contract_version == 2 or isinstance(result, CandidateV3))
     data, sources, materials, segments, states = validate_input(value)
     report = result.model_dump(by_alias=True)
     require(report["request_id"] == data["request_id"], "code_request_mismatch")

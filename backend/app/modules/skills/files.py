@@ -17,6 +17,11 @@ from app.core.errors import AppError
 ROOT = Path(__file__).resolve().parents[4] / "skill"
 BACKUPS = Path(__file__).resolve().parents[3] / "storage" / "skill-backups"
 REQUIREMENT_CONTRACT_HEADING = "# 需求风险报告调用契约（v{}）"
+_CONTRACT_HEADING = re.compile(
+    r"^# (?:需求风险报告调用契约（v|代码分析调用契约 v|变更分析调用契约 v|"
+    r"用例生成(?:简化输出|调用)契约 v|CASE_REVIEW 契约)([1-9][0-9]*)）?[ \t]*$",
+    re.MULTILINE,
+)
 REGISTRY = {
     "requirement-analysis": ("需求分析", 4, "spark"),
     "case-generation": ("用例生成", 3, "list"),
@@ -246,10 +251,9 @@ def snapshot(key):
     package = bundle(key)
     by_path = {f["path"]: f for f in package["files"]}
     contract_version = REGISTRY[key][1]
-    if key == "requirement-analysis" and not by_path["contract.md"]["text"].startswith(
-        REQUIREMENT_CONTRACT_HEADING.format(contract_version) + "\n"
-    ):
-        raise AppError(409, "risk_analysis_contract_mismatch")
+    heading = _CONTRACT_HEADING.match(by_path["contract.md"]["text"])
+    if heading is None or int(heading[1]) != contract_version:
+        raise AppError(409, "skill_contract_mismatch")
     selected = [by_path[name] for name in instruction_paths(package["files"])]
     manifest = by_path.get("resources.json")
     text = "\n\n".join(
@@ -275,8 +279,17 @@ def public(package):
     }
 
 
+def verify_snapshot_contract(snapshot):
+    """Reject known mismatches in frozen instructions before sending a model request."""
+    versions = _CONTRACT_HEADING.findall(snapshot["instructions"])
+    version = snapshot.get("contract_version")
+    if versions and version is not None and int(versions[-1]) != version:
+        raise AppError(409, "skill_contract_mismatch")
+
+
 def model_context(snapshot):
     """Build protocol messages only from frozen rules; never read current files on retry."""
+    verify_snapshot_contract(snapshot)
     instructions = snapshot["instructions"]
     entries = snapshot.get("files")
     if entries is None:

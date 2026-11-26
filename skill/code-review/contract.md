@@ -1,6 +1,6 @@
 # 代码分析调用契约 v3
 
-配合 SKILL.md 3.0.0 使用。2026-09-21平台已接入本契约：AI执行和双文件导入均由后端严格校验，创建请求与本契约输入不同，由平台从已授权来源组装。v1输入不得按v2猜测来源类型，历史报告不自动转换。
+配合 SKILL.md 3.0.0 使用。后端按冻结契约校验 AI 候选和配对导入。平台从已授权来源组装输入。已保存的完整固定输入可以沿用 v2 格式与相应的 v3 结果配对。
 
 ## 通用规则
 
@@ -86,6 +86,8 @@ key在整个evidence数组唯一。使用两种精确结构：
 ### chains
 
 每条：key、nodes、edges。nodes至少一项，每项：key（链内唯一）、label、observation、inputs、outputs、evidence_refs（非空代码证据引用）。没有证据的未知环节不生成虚构节点；放到missing_evidence/limitations，或在已知节点之间标明UNKNOWN连接。
+
+`inputs` 和 `outputs` 均为字符串。多项用 `\n` 分隔，无内容填空字符串。
 
 edges每项：from、to、relation、evidence_refs、note。两端指向本链节点，不能自连；relation为CALL、RETURN、FIELD_MAPPING、STATE_ASSIGNMENT或UNKNOWN。前四类必须有非空代码证据，note解释支持该连接的具体事实；UNKNOWN允许空证据，但必须说明为何无法核实。节点存在本身不证明连接；不得用CALL表示后端直接调用前端。多个独立根因不塞进一条无关长链。
 

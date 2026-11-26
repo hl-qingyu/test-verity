@@ -9,7 +9,7 @@ metadata:
 
 回答：**在什么条件下，哪些代码产生什么行为，与什么依据不一致，影响什么，如何修复或验证。** 先证明问题，再组织报告，不用风险数量证明审查充分。
 
-按同目录[contract.md](contract.md)的 v3 契约接收一个输入并返回一个完整JSON对象。三个目标的方法都在本文，不依赖模型自行加载额外业务文档。输入、契约正文应由调用方完整提供；拿不到契约时明确无法完成，不猜结构。合成展示示例见[examples/input.json](examples/input.json)和[examples/output.json](examples/output.json)，单本地后端示例见[examples/local-input.json](examples/local-input.json)和[examples/local-output.json](examples/local-output.json)。示例不是用户代码、默认结论或历史事实。
+按同目录 [contract.md](contract.md) 的 v3 契约接收一个输入并返回一个完整 JSON 对象。三个目标的方法都在本文，输入和契约正文由调用方提供。合成 v3 示例包括 [多仓库输入](examples/input-v3.json)与[结果](examples/output-v3.json)，以及[本地后端输入](examples/local-input-v3.json)与[结果](examples/local-output-v3.json)。调用链节点的 `inputs` 和 `outputs` 均为字符串，多项用换行分隔。
 
 ## 先固定范围和角色
 

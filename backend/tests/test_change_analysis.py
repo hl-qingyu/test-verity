@@ -688,7 +688,13 @@ class ChangeDatabaseTests(unittest.TestCase):
         self.input, self.report = sample("code")
         self.change_skill = sources.skill_snapshot()
         legacy_skill = patch.object(
-            sources, "skill_snapshot", return_value={**self.change_skill, "contract_version": 2}
+            sources,
+            "skill_snapshot",
+            return_value={
+                "contract_version": 2,
+                "version": "1.0.0",
+                "instructions": "# 变更分析调用契约 v2\n历史固定规则",
+            },
         )
         legacy_skill.start()
         self.addCleanup(legacy_skill.stop)

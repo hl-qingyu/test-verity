@@ -10,16 +10,10 @@ import {
   codeTargets,
   parseCodeDetail,
   parseCodeInput,
-  parseCodeReport,
+  parseCodeImportReport,
   readCodeJSON,
 } from './codeAnalysisApi';
-import type {
-  CodeDetail,
-  CodeInput,
-  CodeOptions,
-  CodeReport,
-  MaterialBinding,
-} from './codeAnalysisApi';
+import type { CodeDetail, CodeInput, CodeOptions, MaterialBinding } from './codeAnalysisApi';
 
 type Loaded<T> = { filename: string; text: string; parsed: T };
 
@@ -37,7 +31,7 @@ export function ImportCodeAnalysis({
   onSessionEnd: () => void;
 }) {
   const [input, setInput] = useState<Loaded<CodeInput> | null>(null),
-    [report, setReport] = useState<Loaded<CodeReport> | null>(null),
+    [report, setReport] = useState<Loaded<ReturnType<typeof parseCodeImportReport>> | null>(null),
     [title, setTitle] = useState(''),
     [bindings, setBindings] = useState<MaterialBinding[]>([]),
     [busy, setBusy] = useState(false),
@@ -66,7 +60,7 @@ export function ImportCodeAnalysis({
       if (controller.current.signal.aborted || generation !== generations.current[kind]) return;
       if (kind === 'input') setInput({ ...loaded, parsed: parseCodeInput(loaded.data) });
       else {
-        setReport({ ...loaded, parsed: parseCodeReport(loaded.data) });
+        setReport({ ...loaded, parsed: parseCodeImportReport(loaded.data) });
         setTitle((old) => old || file.name.replace(/\.json$/i, ''));
       }
     } catch (reason) {
@@ -76,12 +70,16 @@ export function ImportCodeAnalysis({
         setReading((old) => ({ ...old, [kind]: false }));
     }
   }
-  const matched = !!input && !!report && input.parsed.request_id === report.parsed.request_id;
+  const matched =
+    !!input &&
+    !!report &&
+    input.parsed.request_id === report.parsed.request_id &&
+    (input.parsed.contract_version === 2 || report.parsed.contract_version === 3);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending.current || !input || !report) return;
     if (!matched) {
-      setError('两份JSON的request_id不一致，请选择同一次分析的输入与结果。');
+      setError('请核对两份 JSON 的调用标识与契约版本。');
       return;
     }
     if (
@@ -131,7 +129,7 @@ export function ImportCodeAnalysis({
       className="code-analysis-dialog requirement-ui"
     >
       <Form onSubmit={(event) => void submit(event)}>
-        <p className="doc-note">选择 v2 的 input.json 与 report.json，每份最大16MB。</p>
+        <p className="doc-note">选择同一次分析的 input.json 与 report.json，每份最大 16 MB。</p>
         <div className="risk-import-files">
           {(['input', 'report'] as const).map((kind) => (
             <section className="evidence" key={kind}>
@@ -184,7 +182,7 @@ export function ImportCodeAnalysis({
         )}
         {input && report && !matched && (
           <p className="form-error" role="alert">
-            输入与结果的调用标识不一致。
+            输入与结果的调用标识或契约版本不匹配。
           </p>
         )}
         {input && input.parsed.materials.length > 0 && (

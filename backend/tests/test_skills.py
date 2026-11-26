@@ -41,7 +41,12 @@ class LocalFiles:
                 b'---\r\nname: fixed\r\nmetadata:\r\n  version: "1.0.0"\r\n---\r\n\r\n'
                 b"# Body\r\nOriginal\r\n"
             )
-            (directory / "contract.md").write_text("# Fixed contract", encoding="utf-8")
+            contract_heading = (
+                (files.ROOT / key / "contract.md").read_text(encoding="utf-8").splitlines()[0]
+            )
+            (directory / "contract.md").write_text(
+                contract_heading + "\n\n# Fixed contract", encoding="utf-8"
+            )
             (directory / "evaluation.md").write_text("# Reference", encoding="utf-8")
         self.root = root
         self.patches = [
@@ -75,7 +80,11 @@ class SkillFilesTests(LocalFiles, unittest.TestCase):
         self.assertEqual(files.parts(old.decode())[0], files.parts(new.decode())[0])
         self.assertTrue(new.endswith(b"Updated\r\n"))
         self.assertEqual(next(files.BACKUPS.glob("*.before")).read_bytes(), old)
-        self.assertEqual((self.root / key / "contract.md").read_text(), "# Fixed contract")
+        self.assertTrue(
+            (self.root / key / "contract.md")
+            .read_text(encoding="utf-8")
+            .endswith("# Fixed contract")
+        )
         self.assertEqual(files.write_body(key, p, 7)["token"], saved["token"])
         self.assertEqual(len(list(files.BACKUPS.glob("*.before"))), 1)
         with self.assertRaises(AppError):
@@ -136,14 +145,22 @@ class SkillFilesTests(LocalFiles, unittest.TestCase):
         with self.assertRaises(AppError):
             files.bundle("case-generation")
 
-    def test_requirement_snapshot_checks_contract_heading_against_registry(self):
-        target = self.root / "requirement-analysis/contract.md"
-        heading = files.REQUIREMENT_CONTRACT_HEADING
-        target.write_text(heading.format(3) + "\n\nOld contract", encoding="utf-8")
-        with self.assertRaisesRegex(AppError, "risk_analysis_contract_mismatch"):
-            files.snapshot("requirement-analysis")
-        target.write_text(heading.format(4) + "\n\nCurrent contract", encoding="utf-8")
-        self.assertEqual(files.snapshot("requirement-analysis")["contract_version"], 4)
+    def test_all_analysis_snapshots_check_contract_versions(self):
+        for key, (_, version, _) in files.REGISTRY.items():
+            with self.subTest(skill=key):
+                frozen = files.snapshot(key)
+                self.assertEqual(frozen["contract_version"], version)
+                with self.assertRaisesRegex(AppError, "skill_contract_mismatch"):
+                    files.verify_snapshot_contract({**frozen, "contract_version": version + 1})
+                target = self.root / key / "contract.md"
+                original = target.read_text(encoding="utf-8")
+                heading = original.splitlines()[0]
+                target.write_text(
+                    original.replace(heading, heading.replace(str(version), str(version + 1)), 1),
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(AppError, "skill_contract_mismatch"):
+                    files.snapshot(key)
 
     def test_ai_output_retains_unicode_and_rejects_structure_or_metadata_changes(self):
         text = json.dumps(
@@ -185,7 +202,7 @@ class SkillFilesTests(LocalFiles, unittest.TestCase):
         self.assertEqual(
             old["instructions"],
             '---\nname: fixed\nmetadata:\n  version: "1.0.0"\n---\n\n'
-            "# Body\nOriginal\n\n\n# Fixed contract",
+            "# Body\nOriginal\n\n\n# CASE_REVIEW 契约1\n\n# Fixed contract",
         )
 
     def test_runtime_manifest_rejects_missing_duplicate_escaping_and_non_markdown_files(self):

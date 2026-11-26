@@ -815,7 +815,20 @@ class GenerationDatabaseTests(unittest.TestCase):
             "case_scope": "实际空库",
         }
         # Legacy report fixtures verify old frozen records; new contract has separate regressions.
-        fixed_skill = {**sources.skill(), "contract_version": 2, "version": "1.1.0"}
+        fixed_skill = sources.skill()
+        legacy_contract = (EXAMPLES.parent / "legacy-contract.md").read_text(encoding="utf-8")
+        fixed_skill["files"][-1].update(
+            text=legacy_contract, sha256=hashlib.sha256(legacy_contract.encode()).hexdigest()
+        )
+        instructions = "\n\n".join(
+            f"文件：{entry['path']}\n\n{entry['text']}" for entry in fixed_skill["files"]
+        )
+        fixed_skill.update(
+            contract_version=2,
+            version="1.1.0",
+            instructions=instructions,
+            sha256=hashlib.sha256(instructions.encode()).hexdigest(),
+        )
         with patch.object(sources, "skill", return_value=fixed_skill) if legacy else nullcontext():
             response = self.post("/prepare", payload)
             self.assertEqual(response.status_code, 201, response.text)

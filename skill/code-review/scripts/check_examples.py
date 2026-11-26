@@ -388,6 +388,10 @@ def main():
             for name in ("input", "output")
         ]
         validate_pair(data, report)
+        input_v3 = json.loads(
+            (ROOT / "examples" / f"{prefix}input-v3.json").read_text(encoding="utf-8")
+        )
+        require(input_v3 == {**data, "contract_version": 3}, "v3 input must match the fixed scope")
         candidate = json.loads(
             (ROOT / "examples" / f"{prefix}output-v3.json").read_text(encoding="utf-8")
         )

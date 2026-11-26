@@ -11,7 +11,7 @@ const helpers = html.slice(html.indexOf('// Code finding presentation:'), html.i
 const targetHelpers = html.slice(html.indexOf('// Code analysis targets and input review'), html.indexOf('// End code analysis targets.'));
 assert.ok(html.includes('导入代码分析'));
 assert.ok(html.includes('function codeImportOpen('));
-assert.ok(html.includes('选择 v2 的 input.json 与 report.json，每份最大16MB'));
+assert.ok(html.includes('选择同一次分析的 input.json 与 report.json，每份最大 16 MB'));
 assert.ok(html.includes('下载AI候选结果（演示）'));
 assert.ok(html.includes('重新校验候选（演示）'));
 assert.ok(html.includes('可下载原始候选并重新校验'));

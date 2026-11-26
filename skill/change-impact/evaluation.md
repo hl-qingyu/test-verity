@@ -4,17 +4,17 @@
 
 2026-10-10接入验证：后端已提供`backend/tests/test_change_analysis.py`，覆盖三方式契约/反例、注册角色/后端任务/处理/候选/对话/重试/无变化及固定资料/链接来源；外部上游模拟。用`RUN_AUTH_DB_TESTS=1`运行才包括真实PostgreSQL回滚检查；详细本轮检查状态见[SESSION_CONTEXT.md](../../docs/SESSION_CONTEXT.md)。这些不替代下方模型效果评测。
 
-配合1.0.0与CHANGE_IMPACT契约2。本文件是验收规格，合成输出由人工编写，不是模型效果实测；结构/引用检查不证明模型分析质量或真实业务运行。
+配合 Skill 2.0.0 和 CHANGE_IMPACT 契约 v3 使用。合成候选用于结构和引用验收。
 
 ## 三组完整合成示例
 
 | 输入 / 输出 | 重点 |
 | --- | --- |
-| examples/requirement-input.json / requirement-report.json | 增量补充只新增订单备注上限；保留未提及的取消规则，用已有取消用例安排回归，不造删除或自动修改 |
-| examples/code-input.json / code-report.json | 原公共函数已有Bug，新入口扩大触达；双侧同根因证据支持pre_existing＋影响扩大，不把新增入口当新增根因 |
-| examples/prototype-input.json / prototype-report.json | 链接旧新固定HTML中按钮文案变化；只判TEXT_ONLY，外部脚本/样式未提供导致PARTIAL，不把文字变化当业务允许取消 |
+| examples/requirement-input.json / requirement-report-v3.json | 需求增量保留未提及的取消规则，用已有取消用例安排回归 |
+| examples/code-input.json / code-report-v3.json | 双侧同根因证据说明原公共函数已有问题，以及新入口如何扩大影响 |
+| examples/prototype-input.json / prototype-report-v3.json | 固定 HTML 中按钮文案变化归类为 TEXT_ONLY，缺少外部脚本和样式的影响记为部分完成 |
 
-示例只展示相应方式和部分对象，契约中的其他能力按下表验收。零风险有效，不套用例中的业务限制到真实项目。正式页面已支持契约2双JSON和来源绑定。示例项目/用例ID及来源是合成值，不能绑定到其他项目冒充实际依据。
+配对导入使用平台保存的完整根输入，可以搭配同一请求的 v3 候选。差异优先视图供模型阅读。旧版 v2 输出保留为历史回归样例。示例项目、用例与来源均为合成值。
 
 ## 后续行为验收
 

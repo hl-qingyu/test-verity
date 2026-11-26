@@ -65,6 +65,17 @@ const raw = {
 };
 const record = api.parseCodeDetail(raw);
 
+test('v3 paired import accepts a candidate before the platform computes outcome', () => {
+  const inputV3 = api.parseCodeInput(sample('input-v3'));
+  const candidate = sample('output-v3');
+  const result = api.parseCodeImportReport(candidate);
+  assert.equal(inputV3.contract_version, 3);
+  assert.equal(result.contract_version, 3);
+  assert.equal(inputV3.request_id, result.request_id);
+  assert.throws(() => api.parseCodeReport(candidate));
+  assert.equal(api.parseCodeReport({ ...candidate, outcome: 'PARTIAL' }).outcome, 'PARTIAL');
+});
+
 test('new analysis submits the complete selection above 16MiB through the shared request', async () => {
   const content = 'x'.repeat(2_000_000);
   const files = Array.from({ length: 9 }, (_, n) => ({ path: `part${n}.py`, content }));
@@ -337,7 +348,7 @@ test('new/import dialogs and file tree retain prototype controls and ordering', 
   const imported = renderToStaticMarkup(React.createElement(ImportCodeAnalysis, props));
   assert.match(imported, /input.json/);
   assert.match(imported, /report.json/);
-  assert.match(imported, /每份最大16MB/);
+  assert.match(imported, /每份最大 16 MB/);
   assert.equal((imported.match(/选择文件/g) || []).length, 2);
   const tree = renderToStaticMarkup(
     React.createElement(CodeFileTree, {

@@ -63,9 +63,10 @@ const nullableNum = (v: unknown) => (v === null || v === undefined ? null : num(
 
 export function parseCodeInput(value: unknown) {
   const v = obj(value);
-  if (v.contract_version !== 2 || v.analysis_type !== 'CODE_REVIEW') return invalid();
+  if ((v.contract_version !== 2 && v.contract_version !== 3) || v.analysis_type !== 'CODE_REVIEW')
+    return invalid();
   return {
-    contract_version: 2 as const,
+    contract_version: v.contract_version,
     analysis_type: 'CODE_REVIEW' as const,
     request_id: str(v.request_id),
     source_mode: mode(v.source_mode),
@@ -194,15 +195,15 @@ function parseEvidence(value: unknown): CodeEvidence {
       : {}),
   };
 }
-export function parseCodeReport(value: unknown) {
+export function parseCodeImportReport(value: unknown) {
   const v = obj(value),
     summary = obj(v.summary);
   if ((v.contract_version !== 2 && v.contract_version !== 3) || v.analysis_type !== 'CODE_REVIEW')
     return invalid();
+  if (v.contract_version === 2) choice(v.outcome, codeOutcomes);
   return {
     contract_version: v.contract_version,
     request_id: str(v.request_id),
-    outcome: choice(v.outcome, codeOutcomes),
     summary: {
       conclusion: str(summary.conclusion),
       priority_finding_keys: strings(summary.priority_finding_keys),
@@ -268,6 +269,9 @@ export function parseCodeReport(value: unknown) {
     }),
   };
 }
+export function parseCodeReport(value: unknown) {
+  return { ...parseCodeImportReport(value), outcome: choice(obj(value).outcome, codeOutcomes) };
+}
 export type CodeReport = ReturnType<typeof parseCodeReport>;
 function ai(value: unknown) {
   const v = obj(value);
@@ -330,7 +334,8 @@ export function parseCodeDetail(value: unknown) {
     handling = obj(v.handling);
   return {
     ...parseCodeRecord(v),
-    input: input.contract_version === 2 ? parseCodeInput(input) : null,
+    input:
+      input.contract_version === 2 || input.contract_version === 3 ? parseCodeInput(input) : null,
     report:
       report.contract_version === 2 || report.contract_version === 3
         ? parseCodeReport(report)
@@ -479,7 +484,7 @@ export const codeErrors: Record<string, string> = {
   ...deletionErrors,
   ...aiErrors,
   code_response_invalid: '服务返回结构不符合代码分析协议，请重新加载。',
-  code_contract_invalid: '输入或结果不符合Skill v2契约，请检查字段、目标和引用关系。',
+  code_contract_invalid: '输入或结果校验失败，请核对该记录的契约版本、字段、目标和引用关系。',
   code_request_mismatch: '输入和结果的request_id不一致。',
   code_evidence_invalid: '证据位置或原文不匹配，报告未保存。',
   code_candidate_not_found: '当前记录没有可下载的AI候选结果。',

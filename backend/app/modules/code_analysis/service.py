@@ -32,9 +32,9 @@ from app.modules.prototypes import directories
 ACTIVE = ("QUEUED", "RUNNING")
 
 
-def parse(model, data):
+def parse(model, data, *, context=None):
     try:
-        return model.model_validate(data)
+        return model.model_validate(data, context=context)
     except (ValidationError, ValueError, TypeError, RecursionError):
         raise AppError(422, "code_contract_invalid") from None
 
@@ -161,7 +161,7 @@ def validate_candidate(raw, input_data, *, version=None, normalize=True):
     contract.require(isinstance(raw, dict))
     version = raw.get("contract_version") if version is None else version
     if version == 3:
-        output = parse(contract.CandidateV3, raw)
+        output = parse(contract.CandidateV3, raw, context={"normalize_chain_text": normalize})
         return report_v3.validate(input_data, output, normalize=normalize)
     output = parse(contract.Report, raw)
     output, corrections = (
@@ -270,7 +270,7 @@ def view(row, actor, *, detail=False):
             can_revalidate=(
                 row.actor_id == actor.id
                 and row.status == "FAILED"
-                and row.error_code == "code_evidence_invalid"
+                and row.error_code in {"code_evidence_invalid", "code_contract_invalid"}
                 and candidate_available
             ),
             evidence_corrections=metadata.get("evidence_corrections", []),
@@ -463,7 +463,7 @@ def revalidate_candidate(project_id, task_id, actor, db):
         return view(row, actor, detail=True)
     if (
         row.status != "FAILED"
-        or row.error_code != "code_evidence_invalid"
+        or row.error_code not in {"code_evidence_invalid", "code_contract_invalid"}
         or metadata.get("origin") != "AI"
     ):
         raise AppError(422, "code_revalidation_invalid")
@@ -482,6 +482,7 @@ def revalidate_candidate(project_id, task_id, actor, db):
     )
     analysis_configuration(actor, db, row.ai_config)
     now = datetime.now(UTC)
+    previous_error = row.error_code
     row.report = output
     row.status, row.error_code, row.updated_at = "COMPLETED", "", now
     row.revision += 1
@@ -491,7 +492,7 @@ def revalidate_candidate(project_id, task_id, actor, db):
         "revalidation": {
             "at": now.isoformat(),
             "actor_id": actor.id,
-            "previous_error": "code_evidence_invalid",
+            "previous_error": previous_error,
         },
     }
     db.commit()

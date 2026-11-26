@@ -1,4 +1,4 @@
-"""Worker execution for fixed Skill v2 code analysis and independent conversations."""
+"""Worker execution for versioned code analysis and independent conversations."""
 
 import copy
 import logging
@@ -16,6 +16,7 @@ from app.modules.ai.recovery import propagate_database_outage
 from app.modules.ai.service import analysis_configuration
 from app.modules.code_analysis import artifacts, contract, report_v3, service, sources
 from app.modules.requirements import analysis_materials
+from app.modules.skills import files as skill_files
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ def execute(task_id, session_factory):
             version = metadata.get("skill", {}).get("contract_version")
             if version not in (2, 3):
                 raise AppError(422, "code_legacy_not_supported")
+            skill_files.verify_snapshot_contract(metadata["skill"])
             actor = db.get(UserAccount, actor_id)
             if actor is None:
                 raise AppError(403, "code_access_lost")

@@ -21,6 +21,7 @@ from app.modules.ai.service import analysis_configuration
 from app.modules.case_analysis import contract, service
 from app.modules.case_generation import sources
 from app.modules.requirements import analysis_materials
+from app.modules.skills import files as skill_files
 
 
 def recover(db):
@@ -119,6 +120,7 @@ def execute_model(key, factory, chat=False):
                 call_mode=config.get("call_mode", "RESPONSES_API"),
             )
         else:
+            skill_files.verify_snapshot_contract(meta["skill"])
             refs = {m["snapshot_ref"]: m["source_id"] for m in data["materials"]}
             binaries = [(p, ext, refs.get(ref, ref), name) for p, ext, ref, name in attachments]
             content = analysis_materials.model_content(

@@ -43,6 +43,26 @@ def sample(prefix=""):
 
 
 class CodeContractTests(unittest.TestCase):
+    def test_v3_candidate_normalizes_chain_text_without_mutating_original(self):
+        data, legacy = sample()
+        data["contract_version"] = 3
+        fixed = contract.AnalysisInput.model_validate(data)
+        with self.assertRaisesRegex(AppError, "code_contract_invalid"):
+            service.validate_candidate(legacy, fixed, version=2)
+        raw = json.loads((EXAMPLES / "output-v3.json").read_text(encoding="utf-8"))
+        service.validate_candidate(raw, fixed, version=3, normalize=False)
+        node = raw["chains"][0]["nodes"][0]
+        node.update(inputs=["第一项", "第二项"], outputs=[])
+        result, _ = service.validate_candidate(raw, fixed, version=3)
+        self.assertEqual(node["inputs"], ["第一项", "第二项"])
+        self.assertEqual(result["chains"][0]["nodes"][0]["inputs"], "第一项\n第二项")
+        self.assertEqual(result["chains"][0]["nodes"][0]["outputs"], "")
+        with self.assertRaisesRegex(AppError, "code_contract_invalid"):
+            service.validate_candidate(raw, fixed, version=3, normalize=False)
+        node["inputs"] = ["文本", {"invalid": "不转换对象"}]
+        with self.assertRaisesRegex(AppError, "code_contract_invalid"):
+            service.validate_candidate(raw, fixed, version=3)
+
     def test_v3_restores_missing_coordinates_and_calculates_readable_files(self):
         data, raw = sample("local-")
         raw["contract_version"] = 3
@@ -262,7 +282,13 @@ class CodeAnalysisDatabaseTests(unittest.TestCase):
         self.input, self.report = sample("local-")
         self.code_skill = sources.skill_snapshot()
         legacy_skill = patch.object(
-            sources, "skill_snapshot", return_value={**self.code_skill, "contract_version": 2}
+            sources,
+            "skill_snapshot",
+            return_value={
+                "contract_version": 2,
+                "version": "2.0.0",
+                "instructions": "# 代码分析调用契约 v2\n历史固定规则",
+            },
         )
         legacy_skill.start()
         self.addCleanup(legacy_skill.stop)
@@ -607,6 +633,41 @@ class CodeAnalysisDatabaseTests(unittest.TestCase):
             ],
             2,
         )
+
+    def test_revalidate_v3_contract_failure_can_save_a_report_with_chain_text(self):
+        with patch.object(sources, "skill_snapshot", return_value=self.code_skill):
+            task_id = self.post("", self.payload()).json()["id"]
+        self.running(task_id)
+
+        def answer(base, model, key, effort, instructions, content, **kwargs):
+            self.assertIn("调用契约 v3", instructions)
+            self.assertEqual(json.loads(content[0]["text"])["contract_version"], 3)
+            report = json.loads(self.answer(base, model, key, effort, "v2", content, **kwargs))
+            report.pop("outcome")
+            report.pop("coverage")
+            report["contract_version"] = 3
+            report["chains"][0]["nodes"][0].update(inputs=["输入一", "输入二"], outputs=[])
+            return json.dumps(report, ensure_ascii=False)
+
+        with (
+            patch("app.integrations.responses.analyze", side_effect=answer),
+            patch.object(
+                service, "validate_candidate", side_effect=AppError(422, "code_contract_invalid")
+            ),
+        ):
+            execution.execute(task_id, self.factory)
+
+        before = artifacts.candidate_path(task_id).read_bytes()
+        failed = self.client.get(f"{self.api}/{task_id}").json()
+        self.assertEqual(failed["error_code"], "code_contract_invalid")
+        self.assertTrue(failed["can_revalidate"])
+        with patch("app.integrations.responses.analyze") as remote:
+            response = self.post(f"/{task_id}/revalidate", {})
+            remote.assert_not_called()
+        self.assertEqual(response.status_code, 200, response.text)
+        report = response.json()["report"]
+        self.assertEqual(report["chains"][0]["nodes"][0]["inputs"], "输入一\n输入二")
+        self.assertEqual(artifacts.candidate_path(task_id).read_bytes(), before)
 
     def test_missing_side_tampered_content_cancel_and_retry_with_current_actor(self):
         payload = self.payload()
