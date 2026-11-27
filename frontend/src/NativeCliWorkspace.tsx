@@ -89,6 +89,7 @@ export function NativeCliWorkspace({
   useEffect(() => {
     const c = new AbortController();
     controller.current = c;
+    const palette = window.getComputedStyle(window.document.documentElement);
     const term = new Terminal({
       cursorBlink: true,
       disableStdin: true,
@@ -96,7 +97,10 @@ export function NativeCliWorkspace({
       fontFamily: 'Consolas, monospace',
       scrollback: 5000,
       allowProposedApi: false,
-      theme: { background: '#122d29', foreground: '#e2eee9' },
+      theme: {
+        background: palette.getPropertyValue('--terminal-background').trim(),
+        foreground: palette.getPropertyValue('--terminal-text').trim(),
+      },
     });
     const addon = new FitAddon();
     term.attachCustomKeyEventHandler((event) => {

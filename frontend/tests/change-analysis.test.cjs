@@ -810,7 +810,10 @@ test('new dialog keeps prototype section order and external submit footer bound 
   assert.doesNotMatch(markup, /先准备分批计划|每批单独计费/);
   assert.ok(!markup.includes('<select'));
   const css = fs.readFileSync(source('change-analysis.css'), 'utf8');
-  assert.match(css, /\.change-analysis-page \.code-analysis-overview[^}]*background: #edf5ef/s);
+  assert.match(
+    css,
+    /\.change-analysis-page \.code-analysis-overview[^}]*background: var\(--soft\)/s,
+  );
   assert.match(css, /\.change-result-tabs button[^}]*border-radius: 0/s);
   assert.match(css, /\.change-dialog-footer[^}]*flex-shrink: 0/s);
   assert.match(css, /max-width: 680px/);

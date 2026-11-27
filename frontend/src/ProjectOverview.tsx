@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useCachedView } from './pageViewCache';
 import type { PageViewCache } from './pageViewCache';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -175,7 +176,18 @@ export function ProjectOverview({
         <Icon name="arrow" />
       </span>
       <span className="ov-stat-value">
-        {value ?? '—'}
+        {typeof value === 'number' ? (
+          <>
+            <span className="screen-reader">{value}</span>
+            <span
+              className="ov-count"
+              style={{ '--overview-target': value } as CSSProperties}
+              aria-hidden="true"
+            />
+          </>
+        ) : (
+          (value ?? '—')
+        )}
         <small>{value !== null && unit}</small>
       </span>
       <span className="hint">{note}</span>
@@ -198,10 +210,15 @@ export function ProjectOverview({
         </div>
       </div>
       <section className="ov-project">
-        <div>
-          <h2>{project.name}</h2>
-          <p className="hint">{project.identifier}</p>
-          <p>{project.description || '暂无项目说明'}</p>
+        <div className="ov-project-summary">
+          <span className="ov-project-mark" aria-hidden="true">
+            <Icon name="box" />
+          </span>
+          <div>
+            <h2>{project.name}</h2>
+            <p className="hint">{project.identifier}</p>
+            <p>{project.description || '暂无项目说明'}</p>
+          </div>
         </div>
         <p className="hint">
           {summary ? `更新于 ${time(summary.as_of)}` : loading ? '正在读取…' : '尚未读取'}

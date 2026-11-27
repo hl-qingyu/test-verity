@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { App } from './App';
 import './style.css';
 import './dialog-scroll.css';
+import './soft-theme.css';
 
 const router = createBrowserRouter([{ path: '*', element: <App /> }]);
 

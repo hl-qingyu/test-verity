@@ -42,8 +42,8 @@
   color: var(--ink);
 }
 .ov-stat:hover {
-  border-color: #9eaf86;
-  background: #fbfcf8;
+  border-color: var(--accent-border);
+  background: var(--table-head);
 }
 .ov-stat-title {
   display: flex;
@@ -55,7 +55,7 @@
 .ov-stat-title .icon {
   width: 15px;
   height: 15px;
-  color: #8a967d;
+  color: var(--muted);
 }
 .ov-stat-value {
   font-size: 32px;
@@ -67,7 +67,7 @@
   margin-left: 7px;
   font-size: 12px;
   font-weight: 400;
-  color: #737d69;
+  color: var(--muted);
 }
 .ov-stat .hint {
   font-weight: 400;
@@ -111,7 +111,7 @@
   flex-shrink: 0;
   font-size: 11px;
   color: var(--muted);
-  background: #f1f4eb;
+  background: var(--surface-hover);
   padding: 5px 9px;
   border-radius: 7px;
 }
@@ -123,8 +123,8 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 4px;
   gap: 4px;
-  background: #f0f3eb;
-  border: 1px solid #e6ebdf;
+  background: var(--surface-hover);
+  border: 1px solid var(--line);
   border-radius: 10px;
 }
 .ov-tabs button {
@@ -133,18 +133,18 @@
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: #72816c;
+  color: var(--muted);
   font-size: 12px;
 }
 .ov-tabs button[aria-selected='true'] {
   background: #fff;
-  color: #315a3b;
-  border-color: #dfe7d5;
-  box-shadow: 0 1px 3px #2e4a2610;
+  color: var(--accent-hover);
+  border-color: var(--line);
+  box-shadow: 0 1px 3px #241b4010;
   font-weight: 600;
 }
 .ov-tabs button:focus-visible {
-  outline: 2px solid #78995b;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .ov-record-list {
@@ -158,7 +158,7 @@
   scrollbar-gutter: stable;
 }
 .ov-record-list:focus-visible {
-  outline: 2px solid #78995b;
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 .ov-record {
@@ -169,7 +169,7 @@
   flex-shrink: 0;
   min-width: 0;
   padding: 13px 2px;
-  border-bottom: 1px solid #edf0e7;
+  border-bottom: 1px solid var(--line);
 }
 .ov-record:last-child {
   border-bottom: 0;
@@ -180,8 +180,8 @@
   display: grid;
   place-items: center;
   border-radius: 8px;
-  color: #6d8558;
-  background: #eff4e8;
+  color: var(--accent-hover);
+  background: var(--surface-hover);
 }
 .ov-module-icon .icon {
   width: 15px;
@@ -195,12 +195,12 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 7px;
-  color: #6b7e63;
+  color: var(--accent-hover);
   font-size: 10px;
   line-height: 1.5;
 }
 .ov-record-id {
-  color: #98a08f;
+  color: var(--muted);
   font-size: 10px;
   overflow-wrap: anywhere;
 }
@@ -216,7 +216,7 @@
   margin: 4px 0;
 }
 .ov-record-meta {
-  color: #8a9581;
+  color: var(--muted);
   font-size: 10px;
   line-height: 1.6;
   white-space: nowrap;
@@ -248,7 +248,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #75816d;
+  color: var(--muted);
   white-space: nowrap;
   font-size: 10px;
   line-height: 1.6;
@@ -269,11 +269,11 @@
   color: #ad4b3c;
 }
 .ov-record-state[data-state='已完成'] {
-  color: #54783e;
+  color: var(--success-ink);
 }
 .ov-record-open {
   flex-shrink: 0;
-  color: var(--green);
+  color: var(--accent);
 }
 .ov-record-open .icon {
   width: 12px;
@@ -281,8 +281,8 @@
 }
 .ov-recent-footnote {
   padding: 12px 18px;
-  border-top: 1px solid #edf0e7;
-  color: #8a9481;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
   font-size: 10px;
   line-height: 1.8;
 }
@@ -300,21 +300,21 @@
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: #f1f5e9;
-  color: #94a27f;
+  background: var(--surface-hover);
+  color: var(--muted);
 }
 .ov-recent-empty h3 {
   font-size: 13px;
   font-weight: 500;
-  color: #63735a;
+  color: var(--accent-hover);
 }
 .ov-recent-empty p {
   font-size: 11px;
-  color: #8c9782;
+  color: var(--muted);
 }
 .ov-attention-group {
   padding: 16px 20px;
-  border-top: 1px solid #edf0e8;
+  border-top: 1px solid var(--line);
 }
 .ov-attention-group h3 {
   font-size: 13px;
@@ -334,8 +334,8 @@
   padding: 8px 10px;
   height: auto;
   font-size: 11px;
-  background: #f6f8f1;
-  border-color: #e7ecde;
+  background: var(--table-head);
+  border-color: var(--line);
 }
 .ov-attention-chip span {
   text-align: left;
@@ -380,7 +380,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border: 1px solid #e3e9d9;
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 13px;
 }
@@ -424,8 +424,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  border: 1px solid #dce5cc;
-  background: #f3f7ed;
+  border: 1px solid var(--control-border);
+  background: var(--surface-hover);
   border-radius: 10px;
   margin-bottom: 18px;
   font-size: 12px;

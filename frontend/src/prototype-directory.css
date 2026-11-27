@@ -4,7 +4,7 @@
 }
 .directory-upload-files input[type='checkbox'],
 .prototype-directory-files input[type='checkbox'] {
-  accent-color: var(--green);
+  accent-color: var(--accent);
   width: 16px;
   height: 16px;
   flex: none;

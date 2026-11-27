@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
+import './soft-theme.css';
 import './codexDemo.css';
 
 function Demo() {

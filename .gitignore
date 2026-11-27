@@ -22,3 +22,8 @@ skill/testcase/
 skill/packages/
 *.bak
 *.tmp
+
+# 本地 Verity 界面设计稿
+/Verity-80--rev[12]/
+/Verity-80--rev[12].zip
+/质序 Verity · 柔光问答 · 全页面与 80 个弹窗*-rev[12].zip

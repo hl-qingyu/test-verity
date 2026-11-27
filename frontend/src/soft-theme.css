@@ -1,0 +1,790 @@
+:root {
+  --ink: #1f1b2d;
+  --ink-secondary: #3b3550;
+  --muted: #6b6380;
+  --accent: #6e56cf;
+  --accent-hover: #5b45b8;
+  --accent-tint: #ede9fe;
+  --accent-border: #d9cff9;
+  --white: #fff;
+  --paper: #fbfaff;
+  --line: #e9e5f5;
+  --line-subtle: #f1eef9;
+  --soft: #f3f0ff;
+  --surface-hover: #f7f5ff;
+  --table-head: #faf9fe;
+  --control-border: #ded7ee;
+  --scrollbar-thumb: #aaa0ba;
+  --success-ink: #1e704d;
+  --success-tint: #e5f4eb;
+  --red: #b63740;
+  --amber: #8a550f;
+  --terminal-background: #211a31;
+  --terminal-text: #f2edf9;
+  --terminal-muted: #c1b3d6;
+  --preview-tile: #2b223c;
+  --preview-control: #362c47;
+  --preview-control-hover: #514264;
+  --preview-border: #77678e;
+  --preview-focus: #d8c8f9;
+  --radius-card: 18px;
+  --radius-control: 10px;
+  --card-shadow: 0 1px 2px #1f1b2d0a, 0 10px 30px -20px #6e56cf73;
+  --button-shadow: 0 1px 2px #1f1b2d0d;
+  --primary-shadow: 0 6px 16px -8px #6e56cfe6;
+  --shadow: 0 12px 36px -16px #341e7860;
+  --dialog-shadow: 0 40px 90px -30px #341e7873, 0 10px 30px -12px #341e7833;
+  --workspace-background:
+    radial-gradient(900px 420px at 55% -140px, #e9e3ff, transparent 70%),
+    radial-gradient(600px 360px at 100% 100%, #ffe9f2, transparent 70%), var(--paper);
+  --primary-gradient: linear-gradient(135deg, #785bd8, var(--accent) 48%, #5a3fc0);
+  --selected-gradient: linear-gradient(90deg, #ede7ff, #f8eeff);
+  --pastel-gradient: linear-gradient(135deg, #f3efff, #fbefff);
+  --aurora-gradient: linear-gradient(120deg, #b9a8ff, #ff9ec7 45%, #ffc98b 75%, #9fd8ff);
+  --card-background: radial-gradient(520px 150px at 0 0, #f8f4ff, transparent 65%), var(--white);
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+}
+
+body {
+  accent-color: var(--accent);
+  background: var(--workspace-background) fixed;
+  isolation: isolate;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse, #d9ccff8c, transparent 72%) 20% -125px / 850px 460px no-repeat,
+    radial-gradient(ellipse, #ffd3e67a, transparent 72%) 110% 0 / 740px 440px no-repeat;
+}
+
+body :is(a, button, input, textarea, summary, [tabindex]):focus-visible {
+  outline-color: var(--accent);
+}
+
+aside.sidebar {
+  background: #ffffffb8;
+  backdrop-filter: blur(12px);
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  clip-path: none;
+  background: conic-gradient(from 210deg, #7959d9, #bc4e92, #d76f44, #7959d9);
+  color: var(--white);
+  box-shadow:
+    0 6px 16px -6px #6e56cfcc,
+    inset 0 1px 0 #ffffff70;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.brand small,
+.nav-label,
+.project-caption,
+.project-chevron,
+.project-dropdown-heading,
+.breadcrumb {
+  color: var(--muted);
+}
+
+.project-pick,
+.project-dropdown,
+.account-dropdown {
+  background: var(--white);
+  border-color: var(--line);
+}
+
+.project-pick {
+  box-shadow: var(--button-shadow);
+}
+
+.project-dropdown,
+.account-dropdown {
+  box-shadow: var(--shadow);
+}
+
+.project-current strong,
+.nav-item,
+.project-option {
+  color: var(--ink-secondary);
+}
+
+.nav-item {
+  position: relative;
+  border-radius: var(--radius-control);
+}
+
+.nav-label {
+  letter-spacing: 0.02em;
+  font-size: 11px;
+}
+
+.project-create {
+  border-left-color: var(--line);
+  color: var(--accent);
+}
+
+.project-switch summary:hover,
+.project-switch[open] summary,
+.project-option:hover,
+.project-create:hover,
+.nav-item:hover,
+.account-trigger:hover,
+.account-menu[open] .account-trigger {
+  background: var(--surface-hover);
+  color: var(--accent-hover);
+}
+
+.account-trigger:hover,
+.account-menu[open] .account-trigger {
+  border-color: var(--line);
+}
+
+.project-option.selected,
+.account-trigger .avatar,
+.demo-label {
+  background: var(--accent-tint);
+  color: var(--accent-hover);
+}
+
+.nav-item.active {
+  background: var(--selected-gradient);
+  color: var(--accent-hover);
+  box-shadow: inset 0 0 0 1px #e4dbff;
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  inset: 8px auto 8px 0;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: var(--primary-gradient);
+}
+
+.project-selected-mark {
+  color: var(--accent-hover);
+}
+
+.topbar {
+  background: linear-gradient(90deg, transparent, #eee8fb 30%, #f7e9f6 70%, transparent) bottom /
+    100% 1px no-repeat;
+  border-bottom-color: transparent;
+}
+
+.demo-label {
+  border-color: var(--line);
+}
+
+h1 {
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.panel,
+.ov-project {
+  background: var(--card-background);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+}
+
+.panel-head {
+  border-bottom-color: var(--line-subtle);
+}
+
+.panel-head h2 {
+  font-size: 16px;
+}
+
+.ov-project {
+  padding: 20px;
+}
+
+.ov-project-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ov-project-summary > div {
+  min-width: 0;
+}
+
+.ov-project-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: #fff1dc;
+  color: var(--amber);
+}
+
+.ov-project-mark .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.ov-shortcuts > :first-child {
+  flex-shrink: 0;
+}
+
+.ov-page .ov-stat {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--line);
+  border-radius: var(--radius-card);
+  background: linear-gradient(160deg, var(--white) 55%, #f8f5ff);
+  box-shadow: var(--card-shadow);
+}
+
+.ov-page .ov-stat:is(:hover, :focus-visible):not(:disabled) {
+  border-color: var(--accent-border);
+  box-shadow:
+    0 18px 36px -22px #6e56cfb3,
+    0 0 0 1px #e2d9ff;
+}
+
+.ov-stat::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--aurora-gradient);
+  opacity: 0;
+}
+
+.ov-stat:is(:hover, :focus-visible):not(:disabled)::before {
+  opacity: 1;
+}
+
+@property --overview-counter {
+  syntax: '<integer>';
+  initial-value: 0;
+  inherits: false;
+}
+
+.ov-count::after {
+  --overview-counter: var(--overview-target);
+  counter-reset: overview-value var(--overview-counter);
+  content: counter(overview-value);
+}
+
+.ov-stat-title,
+.ov-stat-title .icon,
+.ov-stat-value small,
+.ov-record-module,
+.ov-record-meta,
+.ov-record-id,
+.ov-recent-footnote,
+.ov-recent-empty .hint {
+  color: var(--muted);
+}
+
+.ov-section-title,
+.ov-module-icon,
+.ov-empty-icon {
+  color: var(--accent-hover);
+}
+
+.ov-list-count,
+.ov-module-icon,
+.ov-empty-icon {
+  background: var(--soft);
+}
+
+.ov-record,
+.ov-recent-footnote,
+.ov-attention-group {
+  border-color: var(--line-subtle);
+}
+
+.ov-attention-chip:not(.has-pending) {
+  background: var(--table-head);
+  border-color: var(--line);
+}
+
+button,
+.action {
+  border-radius: var(--radius-control);
+}
+
+.ov-shortcut-buttons .action {
+  border: 1px solid var(--line);
+  color: var(--ink-secondary);
+  box-shadow: var(--button-shadow);
+}
+
+button:hover:not(:disabled),
+.action:hover {
+  background: var(--surface-hover);
+}
+
+:is(button, .action).primary {
+  background:
+    linear-gradient(108deg, transparent 39%, #ffffff36 50%, transparent 61%) 100% 0 / 240% 100%,
+    var(--primary-gradient);
+  border-color: var(--accent);
+  color: var(--white);
+  box-shadow: var(--primary-shadow);
+}
+
+:is(button, .action).primary:hover:not(:disabled) {
+  background-position: 0 0;
+  border-color: var(--accent-hover);
+  box-shadow: 0 12px 26px -10px #6e56cfee;
+}
+
+button.lime {
+  color: var(--accent-hover);
+}
+
+.badge {
+  border-radius: 999px;
+  background: #f1eff6;
+  color: var(--muted);
+}
+
+.badge.green {
+  background: var(--success-tint);
+  color: var(--success-ink);
+}
+
+.badge.orange {
+  background: #fff1dc;
+  color: var(--amber);
+}
+
+.badge.red {
+  background: #ffe9ea;
+  color: var(--red);
+}
+
+.badge.blue {
+  background: var(--pastel-gradient);
+  color: var(--accent-hover);
+}
+
+.ov-tabs {
+  background: var(--pastel-gradient);
+  border-color: var(--line);
+}
+
+.ov-tabs button {
+  color: var(--muted);
+}
+
+.ov-tabs button[aria-selected='true'] {
+  border-color: var(--line);
+  background: var(--white);
+  color: var(--accent-hover);
+  box-shadow: var(--button-shadow);
+}
+
+.ov-tabs button:focus-visible,
+.ov-record-list:focus-visible {
+  outline-color: var(--accent);
+}
+
+.form-field :is(input:not([type='checkbox'], [type='radio']), textarea),
+.password-field input,
+.req-select .req-select-trigger {
+  border-color: var(--control-border);
+  border-radius: var(--radius-control);
+}
+
+.req-select .req-select-trigger:not(:disabled) {
+  background: var(--white);
+  color: var(--ink-secondary);
+}
+
+.req-select .req-select-trigger[aria-expanded='true'],
+.req-select .req-select-trigger:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--surface-hover);
+}
+
+.req-select .req-select-trigger:disabled {
+  background: var(--line-subtle);
+}
+
+.req-select-options {
+  border-color: var(--control-border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow);
+}
+
+.req-select-options [role='option'],
+.req-select-options [role='menuitem'] {
+  color: var(--ink-secondary);
+}
+
+.req-select-options [role='option']:is(:hover, :focus):not(:disabled),
+.req-select-options [role='menuitem']:is(:hover, :focus) {
+  background: var(--surface-hover);
+  color: var(--accent-hover);
+}
+
+.req-select-options [role='option'][aria-selected='true'] {
+  background: var(--accent-tint);
+  color: var(--accent-hover);
+}
+
+:is(.account-table, .case-table, .markdown-table) thead th {
+  background: var(--table-head);
+}
+
+:is(.code-analysis-page, .change-analysis-page, .generation-page) .code-analysis-overview,
+.code-analysis-overview,
+.ov-scope-note,
+.ov-page > .notice:not(.warn, .error),
+.account-dialog .generation-source,
+.modal .cg-source,
+.modal.requirement-analysis-dialog .notice:not(.warn, .error) {
+  border-color: var(--line);
+  background: var(--soft);
+}
+
+.ov-page > .notice:not(.warn, .error),
+.modal.requirement-analysis-dialog .notice:not(.warn, .error) {
+  color: var(--ink-secondary);
+}
+
+.git-version-option.selected,
+.document-row.selected,
+.prototypes-page .document-row.selected,
+.code-record.active {
+  border-color: var(--accent-border);
+  background: var(--selected-gradient);
+}
+
+.account-dialog,
+.account-dialog .case-dialog-surface,
+dialog.modal {
+  border-color: var(--line);
+  border-radius: 22px;
+  box-shadow: var(--dialog-shadow);
+}
+
+:is(.account-dialog, dialog.modal:not(.prototype-image-viewer))::backdrop {
+  background: #1f1b2d33;
+  backdrop-filter: blur(5px);
+}
+
+.doc-dialog-head,
+.account-dialog > .panel-head,
+.modal:not(.prototype-image-viewer) .modal-header {
+  background:
+    var(--aurora-gradient) top / 100% 3px no-repeat,
+    radial-gradient(420px 120px at 0 0, #f1ecff, transparent 70%),
+    var(--white);
+  border-bottom-color: var(--line-subtle);
+}
+
+:is(.account-dialog, dialog.modal):has(footer .danger) :is(.doc-dialog-head, .modal-header) {
+  background-image:
+    linear-gradient(90deg, #f67c87, #ffc5ca),
+    radial-gradient(420px 120px at 0 0, #fff0f2, transparent 70%);
+}
+
+.account-dialog :is(.change-dialog-footer, .prototype-editor-footer),
+.modal:not(.prototype-image-viewer) .modal-footer {
+  background: #fcfbff;
+  border-top-color: var(--line-subtle);
+}
+
+:is(.chat-message, .code-chat-message) {
+  background: var(--table-head);
+  border-color: var(--line);
+}
+
+:is(.chat-message, .code-chat-message).mine {
+  background: var(--soft);
+  border-color: var(--accent-border);
+}
+
+:is(.chat-compose, .code-chat-compose, .generation-chat-compose) {
+  border-top-color: var(--accent-border);
+  background:
+    var(--aurora-gradient) top / 100% 1px no-repeat,
+    linear-gradient(180deg, var(--white), var(--paper));
+}
+
+.risk-card {
+  border-inline-start: 3px solid var(--accent-border);
+  background: linear-gradient(100deg, #f9f6ff, var(--white) 44%);
+}
+
+.risk-card:has(.risk-badge.HIGH, > .row > .badge.red:first-child) {
+  border-inline-start-color: #f08d97;
+}
+
+.risk-card:has(.risk-badge.MEDIUM, > .row > .badge.orange:first-child):not(:has(.risk-badge.HIGH)) {
+  border-inline-start-color: #ecb364;
+}
+
+.risk-impact,
+.risk-metric {
+  background: var(--pastel-gradient);
+}
+
+.risk-summary,
+.ra-overview {
+  border-color: transparent;
+  background:
+    radial-gradient(360px 160px at 98% 0, #f2ebff, transparent) padding-box,
+    linear-gradient(165deg, var(--white) 35%, #fcfaff) padding-box,
+    linear-gradient(120deg, #cbbcff, #f8c2e1, #ffe0bd, #c0e7ff, #cbbcff) border-box;
+  background-size:
+    auto,
+    auto,
+    220% 100%;
+}
+
+.risk-eyebrow,
+.risk-summary h2 {
+  color: var(--accent-hover);
+}
+
+.flow-step:is(.done, .current) :is(b, button) {
+  background: var(--primary-gradient);
+  border-color: var(--accent);
+  color: var(--white);
+}
+
+.ov-page > .notice:not(.warn, .error),
+.modal.requirement-analysis-dialog .notice:not(.warn, .error) {
+  background: linear-gradient(90deg, #f2eeff, #faf4ff 60%, #fff6fb);
+}
+
+.doc-upload-zone:hover {
+  border-color: #b9a8ff;
+  background: var(--pastel-gradient);
+}
+
+.form-field :is(input:not([type='checkbox'], [type='radio']), textarea):focus-visible,
+.req-select-trigger:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px #6e56cf24;
+}
+
+.ov-page .ov-shortcut-buttons button {
+  border-color: var(--line);
+  background: var(--white);
+  box-shadow: var(--button-shadow);
+}
+
+@supports (background-clip: text) {
+  @media (forced-colors: none) {
+    :is(.page-head, .login-card) h1 {
+      width: fit-content;
+      background: linear-gradient(100deg, var(--ink) 30%, #5a3fc0 75%, #994389);
+      background-clip: text;
+      color: transparent;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body::before {
+    animation: soft-aurora-drift 22s ease-in-out infinite alternate;
+  }
+
+  .brand-mark {
+    animation: soft-brand-hue 12s ease-in-out infinite alternate;
+  }
+
+  .nav-item {
+    transition:
+      background-color 180ms,
+      color 180ms,
+      translate 180ms var(--motion-ease);
+  }
+
+  .nav-item:hover {
+    translate: 2px 0;
+  }
+
+  :is(button, .action).primary {
+    transition:
+      background-position 500ms var(--motion-ease),
+      box-shadow 200ms,
+      translate 180ms;
+  }
+
+  :is(button, .action).primary:hover:not(:disabled) {
+    translate: 0 -1px;
+  }
+
+  :is(button, .action).primary:active:not(:disabled) {
+    translate: 0 0;
+  }
+
+  .ov-page .ov-stat {
+    transition:
+      translate 240ms var(--motion-ease),
+      box-shadow 240ms,
+      border-color 240ms;
+  }
+
+  .ov-page .ov-stat:hover:not(:disabled) {
+    translate: 0 -3px;
+  }
+
+  .ov-stat::before {
+    transition: opacity 240ms;
+  }
+
+  .risk-card {
+    transition:
+      box-shadow 220ms,
+      background-color 220ms;
+  }
+
+  .risk-card:hover {
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  button.risk-metric {
+    transition:
+      translate 200ms var(--motion-ease),
+      box-shadow 200ms;
+  }
+
+  button.risk-metric:hover:not(:disabled) {
+    translate: 0 -2px;
+    box-shadow: var(--card-shadow);
+  }
+
+  .risk-summary,
+  .ra-overview {
+    animation: soft-report-gradient 8s ease-in-out infinite alternate;
+  }
+
+  :is(.app .main, .main[data-page-enter])
+    :is(.page-head, .ov-stats, .ov-project, .ov-shortcuts, .ov-content, .code-analysis-overview) {
+    animation: soft-page-rise 480ms var(--motion-ease) backwards;
+  }
+
+  :is(.app .main, .main[data-page-enter]) .ov-stats {
+    animation-delay: 70ms;
+  }
+
+  :is(.app .main, .main[data-page-enter]) :is(.ov-shortcuts, .ov-content) {
+    animation-delay: 110ms;
+  }
+
+  :is(.app .main, .main[data-page-enter]) .ov-count::after {
+    animation: soft-count-up 800ms var(--motion-ease);
+  }
+
+  :is(.account-dialog, dialog.modal:not(.prototype-image-viewer)):modal {
+    animation: soft-dialog-pop 360ms var(--motion-spring);
+  }
+
+  :is(.account-dialog, dialog.modal:not(.prototype-image-viewer)):modal::backdrop {
+    animation: soft-fade 240ms ease-out;
+  }
+
+  .ov-record[data-state='分析中'] .ov-record-state::before,
+  .ov-record[data-state='排队中'] .ov-record-state::before {
+    animation: soft-status-pulse 1.6s ease-in-out 3;
+  }
+}
+
+@keyframes soft-aurora-drift {
+  to {
+    background-position:
+      40% -55px,
+      80% 70px;
+  }
+}
+
+@keyframes soft-brand-hue {
+  to {
+    filter: hue-rotate(32deg);
+  }
+}
+
+@keyframes soft-page-rise {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+  to {
+    opacity: 1;
+    translate: none;
+  }
+}
+
+@keyframes soft-count-up {
+  from {
+    --overview-counter: 0;
+  }
+  to {
+    --overview-counter: var(--overview-target);
+  }
+}
+
+@keyframes soft-dialog-pop {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+    scale: 0.97;
+  }
+}
+
+@keyframes soft-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes soft-status-pulse {
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 4px #6e56cf24;
+  }
+}
+
+@keyframes soft-report-gradient {
+  to {
+    background-position:
+      0 0,
+      0 0,
+      100% 0;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  aside.sidebar {
+    background: var(--paper);
+    backdrop-filter: none;
+  }
+
+  :is(.account-dialog, dialog.modal:not(.prototype-image-viewer))::backdrop {
+    background: #1f1b2d66;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  body :is(a, button, input, textarea, summary, [tabindex]):focus-visible {
+    outline-color: Highlight;
+  }
+
+  :is(.nav-item.active, .project-option.selected, .req-select-options [aria-selected='true']) {
+    outline: 1px solid Highlight;
+    outline-offset: -1px;
+  }
+}

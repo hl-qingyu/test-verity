@@ -5,7 +5,7 @@
   height: min(640px, 65vh);
   width: 100%;
   min-width: 0;
-  background: #122d29;
+  background: var(--terminal-background);
   padding: 8px;
   border-radius: 8px;
   overflow: hidden;
@@ -45,7 +45,7 @@
   place-items: center;
   margin: 0;
   padding: 24px;
-  color: #e2eee9;
+  color: var(--terminal-text);
   text-align: center;
 }
 .native-cli-restoring-label {
@@ -77,8 +77,8 @@
 .cli-event-output {
   max-height: 340px;
   overflow: auto;
-  background: #122d29;
-  color: #e2eee9;
+  background: var(--terminal-background);
+  color: var(--terminal-text);
   border-radius: 8px;
   padding: 16px;
   font:
@@ -97,7 +97,7 @@
   margin: 4px 0 0;
 }
 .cli-event-heading {
-  color: #a9c8bf;
+  color: var(--terminal-muted);
 }
 .cli-event-error,
 .cli-event-error .cli-event-heading {

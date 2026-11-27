@@ -37,7 +37,7 @@
   opacity: 0.6;
 }
 .risk-source-check:focus-within {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
 .risk-source-group .form-field {
@@ -88,15 +88,15 @@
   grid-template-columns: minmax(0, 1fr) 330px;
   gap: 32px;
   padding: 30px;
-  background: #edf5ef;
-  border: 1px solid #d9e6dc;
+  background: var(--surface-hover);
+  border: 1px solid var(--line);
   border-radius: 16px;
   margin-bottom: 24px;
 }
 .risk-eyebrow {
   font-size: 12px;
   letter-spacing: 0.08em;
-  color: #476b53;
+  color: var(--accent-hover);
   font-weight: 600;
 }
 .risk-summary h2 {
@@ -116,7 +116,7 @@
 }
 .risk-metric {
   background: #fff;
-  border: 1px solid #e0e8e0;
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 16px;
   display: flex;
@@ -160,9 +160,9 @@
   gap: 10px;
 }
 .risk-function.active {
-  background: #edf5ef;
-  color: #275f3e;
-  border-color: #d8e6dc;
+  background: var(--surface-hover);
+  color: var(--accent-hover);
+  border-color: var(--line);
 }
 .risk-function span:first-child {
   overflow-wrap: anywhere;
@@ -213,12 +213,12 @@
   overflow-wrap: anywhere;
 }
 .risk-title:hover {
-  color: #2b6246;
+  color: var(--accent-hover);
 }
 .risk-card > p {
   font-size: 14px;
   line-height: 1.9;
-  color: #5b615b;
+  color: var(--accent-hover);
 }
 .risk-card-status {
   margin-left: auto;
@@ -235,7 +235,7 @@
 }
 .risk-impact strong {
   white-space: nowrap;
-  color: #525b53;
+  color: var(--accent-hover);
 }
 .risk-suggestions {
   padding: 22px 24px;
@@ -244,7 +244,7 @@
 .risk-suggestions summary {
   cursor: pointer;
   font-size: 13px;
-  color: #5f675f;
+  color: var(--accent-hover);
 }
 .risk-suggestions h4 {
   margin: 16px 0 6px;
@@ -260,7 +260,7 @@
 .risk-empty p {
   line-height: 1.9;
   margin: 16px 0;
-  color: #6c726b;
+  color: var(--accent-hover);
 }
 .risk-empty > .row {
   justify-content: center;
@@ -275,7 +275,7 @@
   margin-bottom: 12px;
 }
 .risk-detail-section blockquote {
-  border-left: 3px solid #c7d8cb;
+  border-left: 3px solid var(--control-border);
   padding: 8px 14px;
   margin: 12px 0 0;
   background: #f8faf7;
@@ -462,7 +462,7 @@
 .risk-page .risk-function small {
   display: block;
   font-size: 11px;
-  color: #748073;
+  color: var(--muted);
   margin-bottom: 4px;
 }
 .risk-page .risk-functions {
@@ -485,8 +485,8 @@
   background: #faf0dc;
 }
 .risk-badge.LOW {
-  color: #526752;
-  background: #eaf1e8;
+  color: var(--success-ink);
+  background: var(--success-tint);
 }
 .risk-metric.HIGH strong {
   color: #a04436;
@@ -512,7 +512,7 @@
 .risk-evidence blockquote {
   margin: 12px 0;
   padding-left: 14px;
-  border-left: 3px solid #c7d8cb;
+  border-left: 3px solid var(--control-border);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

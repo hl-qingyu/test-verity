@@ -25,11 +25,11 @@
   border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
-  color: #8b978a;
+  color: var(--muted);
 }
 .change-result-tabs button[aria-selected='true'] {
-  color: var(--green);
-  border-bottom: 2px solid var(--green);
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
 }
 .change-analysis-page .code-filters > * {
   min-width: 115px;
@@ -51,7 +51,7 @@
 .change-analysis-page .code-finding p {
   font-size: 12px;
   line-height: 1.8;
-  color: #687767;
+  color: var(--accent-hover);
 }
 .change-analysis-page .code-finding .row {
   gap: 10px;
@@ -60,7 +60,7 @@
   min-height: 360px;
   max-height: calc(100vh - 230px);
   padding: 0 12px 16px;
-  scrollbar-color: #82958a #e4e9e4;
+  scrollbar-color: var(--scrollbar-thumb) var(--line-subtle);
 }
 .change-analysis-page:where(:not(.case-review-page)) .code-analysis-records .panel-head {
   margin: 0 -12px 10px;
@@ -114,7 +114,7 @@
   gap: 8px;
   flex-shrink: 0;
   border-top: 1px solid var(--line);
-  background: #fafbf7;
+  background: var(--table-head);
   padding: 17px 23px;
 }
 .change-analysis-dialog {
@@ -144,8 +144,8 @@
   min-width: 0;
 }
 .change-analysis-dialog .evidence {
-  background: #f6f8f3;
-  border: 1px solid #e5eadf;
+  background: var(--table-head);
+  border: 1px solid var(--line);
   border-radius: 7px;
   padding: 14px;
   font-size: 12px;
@@ -215,9 +215,9 @@
   border-radius: 0;
 }
 .git-version-option.selected {
-  background: #edf5ef;
-  color: var(--green);
-  box-shadow: inset 3px 0 var(--green);
+  background: var(--surface-hover);
+  color: var(--accent);
+  box-shadow: inset 3px 0 var(--accent);
 }
 .git-version-option strong,
 .git-version-option small {
@@ -235,8 +235,8 @@
 }
 .change-analysis-dialog .change-version-row {
   padding: 14px;
-  border: 1px solid #e5eadf;
-  background: #f6f8f3;
+  border: 1px solid var(--line);
+  background: var(--table-head);
   border-radius: 7px;
 }
 .change-analysis-dialog .change-version-pair {
@@ -336,10 +336,10 @@
   gap: 10px;
   align-items: flex-start;
   padding: 12px 16px;
-  background: #f1f5eb;
-  border: 1px solid #e2e9d8;
+  background: var(--surface-hover);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  color: #687e5e;
+  color: var(--accent-hover);
   font-size: 12px;
   line-height: 1.8;
 }
@@ -347,8 +347,8 @@
   margin-top: 2px;
 }
 .change-analysis-page .code-analysis-overview {
-  background: #edf5ef;
-  border-color: #d9e6dc;
+  background: var(--soft);
+  border-color: var(--line);
 }
 
 .change-batch-list {

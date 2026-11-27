@@ -63,6 +63,11 @@ function harness({ fitCols } = {}) {
   };
   global.WebSocket = { OPEN: 1 };
   global.window = {
+    document: { documentElement: {} },
+    getComputedStyle() {
+      const colors = { '--terminal-background': '#211a31', '--terminal-text': '#f2edf9' };
+      return { getPropertyValue: (property) => colors[property] || '' };
+    },
     clearTimeout() {},
     setTimeout(fn) {
       timers.push(fn);
@@ -213,6 +218,7 @@ test('real xterm renders replay without returning old query replies, then forwar
     await h.settle();
     const ws = h.sockets[0],
       term = h.terminals[0];
+    assert.deepEqual(term.options.theme, { background: '#211a31', foreground: '#f2edf9' });
     ws.onopen();
     h.frame({ type: 'output', chunks: ['History\r\n\x1b[c\x1b[6n'] });
     h.frame({ type: 'ready' });
