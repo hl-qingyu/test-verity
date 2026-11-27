@@ -6,6 +6,7 @@ const { test } = require('node:test'),
   ts = require('typescript');
 
 function harness(mode = 'remote', pageCache) {
+  const direct = mode.startsWith('direct-');
   const hooks = [],
     effects = [],
     timers = new Map(),
@@ -77,11 +78,17 @@ function harness(mode = 'remote', pageCache) {
     generationError: (e) => e.message,
     generationAction: async (project, route, body) => {
       actions.push({ route, body });
+      if (route === '/prepare') {
+        if (mode === 'direct-prepare-failure') throw Error('资料不可用');
+        return { ...structuredClone(props.rows[0]), id: '3', serverRevision: 7 };
+      }
       const row = structuredClone(props.rows[0]);
       if (route.endsWith('/start')) {
+        if (mode === 'direct-start-failure') throw Error('个人配置已变化');
+        if (direct) row.id = '3';
         row.status = 'QUEUED';
         row.batches[0].status = 'QUEUED';
-        row.batches[0].terminalAvailable = mode === 'start-cli';
+        row.batches[0].terminalAvailable = mode === 'start-cli' || mode === 'direct-cli';
       } else if (route.includes('/terminal/results/')) {
         row.status = 'COMPLETED';
         row.batches[0].status = 'FAILED';
@@ -139,6 +146,8 @@ function harness(mode = 'remote', pageCache) {
       (name) => {
         if (name === 'react') return react;
         if (name === './generationApi') return api;
+        if (direct && name === './codeAnalysisApi')
+          return { codeRequest: async () => ({ sources: [] }), codeError: (e) => e.message };
         if (name === './generationRead')
           return {
             generationCaseSnapshot: async () => ({ items: [], categories: [], revision: 0 }),
@@ -186,15 +195,16 @@ function harness(mode = 'remote', pageCache) {
     cancelled: false,
   });
   const props = { project: { id: 7 }, user: { id: 3 }, onSessionEnd() {}, pageCache },
-    remote = ['export', 'single', 'start-cli', 'start-api'].includes(mode)
-      ? GenerationWorkspace
-      : CaseGeneration(props).type;
+    remote =
+      direct || ['export', 'single', 'start-cli', 'start-api'].includes(mode)
+        ? GenerationWorkspace
+        : CaseGeneration(props).type;
   hooks.length = 0;
   cursor = 0;
   if (mode === 'target')
     props.overviewTarget = { id: 3, recordType: 'run', group: 'suggestions', state: 'PENDING' };
   if (mode === 'export') Object.assign(props, { rows: [full('2')], summaries, onChange() {} });
-  if (mode === 'start-cli' || mode === 'start-api') {
+  if (direct || mode === 'start-cli' || mode === 'start-api') {
     Object.assign(props, {
       rows: [
         {
@@ -205,7 +215,11 @@ function harness(mode = 'remote', pageCache) {
           rawReports: [],
           reportText: '',
           batches: [{ id: 9, key: 'B1', status: 'PREPARED', inputBytes: 100 }],
-          aiPreview: { version: 1, call_mode: mode === 'start-cli' ? 'CODEX_EXEC' : 'API' },
+          aiPreview: {
+            version: 1,
+            call_mode: mode.endsWith('-cli') ? 'CODEX_EXEC' : 'RESPONSES_API',
+            preference_version: 2,
+          },
         },
       ],
       onChange(rows) {
@@ -298,7 +312,8 @@ function harness(mode = 'remote', pageCache) {
       function walk(node) {
         if (Array.isArray(node)) return node.forEach(walk);
         if (!node || typeof node !== 'object') return;
-        if (node.type === 'button' && node.props.children === label) found = node;
+        if (node.type === 'button' && [node.props.children].flat().some((child) => child === label))
+          found = node;
         walk(node.props?.children);
         walk(node.props?.footer);
       }
@@ -344,7 +359,68 @@ test('native generation opens the existing history area and retains its cached t
         await h.settle();
         assert.equal(h.component('GenerationCliWorkspace').props.open, true);
         assert.equal(h.actions.length, 1, 'navigation must not create or cancel model tasks');
-      } else assert.equal(cached, undefined);
+      } else {
+        assert.equal(cached, undefined);
+        assert.equal(h.component('GenerationChat').props.runId, '2');
+        assert.equal(h.component('GenerationChat').props.canAsk, false);
+      }
+    } finally {
+      h.close();
+    }
+  }
+});
+
+test('new generation prepares and starts in one submission, then opens its own history', async () => {
+  for (const mode of [
+    'direct-cli',
+    'direct-api',
+    'direct-prepare-failure',
+    'direct-start-failure',
+  ]) {
+    const h = harness(mode);
+    try {
+      h.render();
+      h.button('新建用例生成').props.onClick();
+      await h.settle();
+      const modal = h.component('CaseGenerationNew');
+      await modal.props.onCreate({
+        id: 'submit-id',
+        title: '新任务',
+        materials: [],
+        cases: [],
+        libraryRevision: 2,
+      });
+      await h.settle();
+      assert.deepEqual(
+        h.actions.map((action) => action.route),
+        mode === 'direct-prepare-failure' ? ['/prepare'] : ['/prepare', '/3/start'],
+      );
+      assert.equal(h.actions[0].body.request_id, 'submit-id');
+      if (mode === 'direct-prepare-failure') {
+        assert.equal(h.component('CaseGenerationNew').props.serverError, '资料不可用');
+        assert.equal(h.button('返回生成报告'), undefined);
+        continue;
+      }
+      assert.deepEqual(h.actions[1].body, {
+        revision: 7,
+        ai_version: 1,
+        ai_call_mode: mode === 'direct-cli' ? 'CODEX_EXEC' : 'RESPONSES_API',
+        ai_preference_version: 2,
+        confirmed: true,
+      });
+      if (mode === 'direct-start-failure') {
+        assert.ok(h.button('继续并开始本人AI生成'));
+        assert.equal(h.button('返回生成报告'), undefined);
+        continue;
+      }
+      assert.ok(h.button('返回生成报告'));
+      if (mode === 'direct-cli') {
+        assert.equal(h.component('GenerationCliWorkspace').props.runId, '3');
+        assert.equal(h.component('GenerationCliWorkspace').props.open, true);
+      } else {
+        assert.equal(h.component('GenerationChat').props.runId, '3');
+        assert.equal(h.component('GenerationChat').props.canAsk, false);
+      }
     } finally {
       h.close();
     }

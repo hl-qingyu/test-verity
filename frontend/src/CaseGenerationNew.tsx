@@ -343,7 +343,7 @@ export function CaseGenerationNew({
         batches: [],
         limitations: [
           reference ? '已记录参考需求风险的意向，精确分析记录引用待接入。' : '未选择额外分析引用。',
-          '读取完整正文并保存固定输入；查看输入估算后开始本人AI生成。',
+          '读取完整正文并保存固定输入，随后使用本人 AI 开始生成。',
         ],
         outcome: '',
       });
@@ -372,7 +372,7 @@ export function CaseGenerationNew({
             className="primary"
             disabled={inFlight || baselineBusy}
           >
-            {inFlight ? '正在读取资料并准备…' : '读取资料并准备生成'}
+            {inFlight ? '正在准备并启动…' : '开始用例生成'}
           </button>
         </footer>
       }
@@ -380,9 +380,10 @@ export function CaseGenerationNew({
       <Form id={formId} onSubmit={submit} aria-busy={inFlight}>
         {inFlight && (
           <p className="notice" role="status">
-            <span className="generation-spinner" aria-hidden="true" /> 正在准备资料，尚未调用AI…
+            <span className="generation-spinner" aria-hidden="true" /> 正在准备并启动生成任务…
           </p>
         )}
+        <p className="hint">开始后将使用你的 AI 配置，可能计费，并打开本次历史对话。</p>
         <fieldset disabled={inFlight} className="generation-prepare-fields">
           <label className="form-field">
             名称

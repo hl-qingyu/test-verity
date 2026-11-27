@@ -136,12 +136,16 @@ test('prepare locks immediately against double submission and exposes busy feedb
   const first = h.submit(),
     second = h.submit();
   assert.equal(h.requests.length, 1);
-  assert.equal(h.button('正在读取资料并准备…').props.disabled, true);
+  assert.equal(h.button('正在准备并启动…').props.disabled, true);
   assert.equal(h.button('取消').props.disabled, true);
   assert.equal(h.render().find((n) => n.type === 'dialog').props.busy, true);
   assert.equal(h.render().find((n) => n.type === 'fieldset').props.disabled, true);
   assert.equal(h.render().find((n) => n.type === 'form').props['aria-busy'], true);
-  assert.ok(h.render().some((n) => n.props?.role === 'status' && text(n).includes('尚未调用AI')));
+  assert.ok(
+    h
+      .render()
+      .some((n) => n.props?.role === 'status' && text(n).includes('正在准备并启动生成任务')),
+  );
   h.requests[0].resolve(true);
   await Promise.all([first, second]);
 });
@@ -153,7 +157,7 @@ test('prepare failure restores controls, displays server error inside modal and 
   h.props.serverError = '资料读取失败，请重试';
   h.requests[0].resolve(false);
   await pending;
-  assert.equal(h.button('读取资料并准备生成').props.disabled, false);
+  assert.equal(h.button('开始用例生成').props.disabled, false);
   assert.equal(h.button('取消').props.disabled, false);
   assert.equal(h.render().find((n) => n.type === 'fieldset').props.disabled, false);
   assert.ok(
@@ -177,12 +181,12 @@ test('parent busy state prevents new work and rejection leaves editable input in
   h.props.busy = true;
   await h.submit();
   assert.equal(h.requests.length, 0);
-  assert.equal(h.button('正在读取资料并准备…').props.disabled, true);
+  assert.equal(h.button('正在准备并启动…').props.disabled, true);
   h.props.busy = false;
   const pending = h.submit();
   h.requests[0].reject(Error('连接中断'));
   await pending;
   assert.equal(h.field('名称', 'input').props.value, '新生成范围');
   assert.ok(h.render().some((n) => n.props?.role === 'alert' && text(n) === '连接中断'));
-  assert.equal(h.button('读取资料并准备生成').props.disabled, false);
+  assert.equal(h.button('开始用例生成').props.disabled, false);
 });

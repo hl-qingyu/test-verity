@@ -69,6 +69,7 @@ export function GenerationChat({
   reference,
   onSessionEnd,
   onDraft,
+  canAsk = true,
   terminal = false,
 }: {
   projectId: number;
@@ -78,6 +79,7 @@ export function GenerationChat({
   reference: string;
   onSessionEnd: () => void;
   onDraft: (turnId: number) => void;
+  canAsk?: boolean;
   terminal?: boolean;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]),
@@ -214,7 +216,7 @@ export function GenerationChat({
         className="generation-chat-compose"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!question.trim() || active) return;
+          if (!canAsk || !question.trim() || active) return;
           requestId.current ||= crypto.randomUUID();
           void send('', {
             request_id: requestId.current,
@@ -226,12 +228,13 @@ export function GenerationChat({
         }}
       >
         {reference && <p className="hint">当前引用：{reference}</p>}
+        {!canAsk && <p className="hint">生成报告可用后即可提问。</p>}
         <label className="form-field">
           提问
           <textarea
             value={question}
             maxLength={10000}
-            disabled={busy || active}
+            disabled={!canAsk || busy || active}
             onChange={(e) => {
               setQuestion(e.target.value);
               requestId.current = '';
@@ -243,7 +246,7 @@ export function GenerationChat({
             {error}
           </p>
         )}
-        <button className="primary" disabled={busy || active || !question.trim()}>
+        <button className="primary" disabled={!canAsk || busy || active || !question.trim()}>
           {busy ? '提交中…' : active ? '回答处理中…' : '发送'}
         </button>
       </Form>

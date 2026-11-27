@@ -285,6 +285,7 @@ function GenerationRemote(props: Props) {
                       timings: row.timings,
                       status: row.status || summary.status,
                       serverRevision: row.serverRevision || summary.serverRevision,
+                      active: row.status === 'QUEUED' || row.status === 'RUNNING' || summary.active,
                     }
                   : summary;
               });
@@ -301,7 +302,7 @@ function GenerationRemote(props: Props) {
                     status: row.status || 'PREPARED',
                     serverRevision: row.serverRevision || 1,
                     hasMaterials: !!row.materials.length,
-                    active: false,
+                    active: row.status === 'QUEUED' || row.status === 'RUNNING',
                     refreshKey: '',
                   });
                   loadedKeys.current.set(row.id, '');
@@ -743,6 +744,16 @@ function GenerationScope({ record }: { record: GenerationRecord | null }) {
     </aside>
   );
 }
+function generationStartConfirmation(record: GenerationRecord) {
+  return {
+    revision: record.serverRevision,
+    ai_version: record.aiPreview?.version ?? null,
+    ai_call_mode: record.aiPreview?.call_mode,
+    ai_preference_version: record.aiPreview?.preference_version,
+    confirmed: true,
+  };
+}
+
 export function GenerationWorkspace({
   overviewTarget,
   onRecordDeleted,
@@ -912,7 +923,7 @@ export function GenerationWorkspace({
     }
     if (preview) hadPreview.current = true;
   }, [preview, loading, detail]);
-  async function persist(path: string, body?: unknown) {
+  async function persist(path: string, body?: unknown, { startPrepared = false } = {}) {
     if (!project || loading) return;
     controller.current?.abort();
     const c = new AbortController(),
@@ -920,9 +931,8 @@ export function GenerationWorkspace({
     controller.current = c;
     setLoading(true);
     setError('');
-    try {
-      const next = await generationAction(project.id, path, body, c.signal);
-      if (!alive.current || c.signal.aborted || g !== generation.current) return;
+    const current = () => alive.current && !c.signal.aborted && g === generation.current;
+    const showRecord = (next: GenerationRecord) => {
       const existing = rowsRef.current.find((r) => r.id === next.id);
       onChange(
         existing
@@ -932,19 +942,35 @@ export function GenerationWorkspace({
           : [next, ...rowsRef.current],
       );
       setSelected(next.id);
+      onSelectRecord?.(next.id);
       setNewOpen(false);
       setImportOpen(false);
-      if (
-        (path.endsWith('/start') || path.endsWith('/retry')) &&
-        next.batches.some((b) => b.terminalAvailable)
-      ) {
+    };
+    let prepared: GenerationRecord | undefined;
+    try {
+      let next = await generationAction(project.id, path, body, c.signal);
+      if (!current()) return;
+      if (startPrepared && next.status === 'PREPARED') {
+        prepared = next;
+        next = await generationAction(
+          project.id,
+          `/${prepared.id}/start`,
+          generationStartConfirmation(prepared),
+          c.signal,
+        );
+        if (!current()) return;
+      }
+      showRecord(next);
+      if (startPrepared || path.endsWith('/start') || path.endsWith('/retry')) {
         setChat(true);
         setChatFunction('整体');
         setReference('');
       }
       return next;
     } catch (e) {
-      if (!c.signal.aborted && alive.current) setError(generationError(e, onSessionEnd));
+      if (!current()) return;
+      if (prepared) showRecord(prepared);
+      setError(generationError(e, onSessionEnd));
     } finally {
       if (!c.signal.aborted && alive.current && g === generation.current) setLoading(false);
     }
@@ -1171,10 +1197,13 @@ export function GenerationWorkspace({
       currentPage * GENERATION_PAGE_SIZE,
     );
   const nativeChat = !!record?.batches.some((batch) => batch.terminalAvailable);
+  const newTrigger = useRef<HTMLButtonElement>(null);
   const historyTrigger = useRef<HTMLButtonElement>(null);
+  const chatHeading = useRef<HTMLHeadingElement>(null);
   const wasChat = useRef(false);
   useEffect(() => {
     if (!chat && wasChat.current) historyTrigger.current?.focus();
+    if (chat && !wasChat.current) chatHeading.current?.focus();
     wasChat.current = chat;
   }, [chat]);
   const scopedQuestions =
@@ -1407,15 +1436,25 @@ export function GenerationWorkspace({
     <div className="code-analysis-page requirement-ui change-analysis-page generation-page">
       <header className="page-head">
         <div>
-          <h1>{chat ? '用例生成对话' : '用例生成'}</h1>
+          <h1 ref={chatHeading} tabIndex={chat ? -1 : undefined}>
+            {chat ? '用例生成对话' : '用例生成'}
+          </h1>
           {!chat && <p>查看候选、处理问题并审核入库</p>}
         </div>
         <div className="head-actions">
           {chat ? (
-            <button onClick={() => setChat(false)}>返回生成报告</button>
+            <>
+              {record?.canCancel && !nativeChat && (
+                <button disabled={loading} onClick={() => void persist(`/${record.id}/cancel`)}>
+                  取消生成
+                </button>
+              )}
+              <button onClick={() => setChat(false)}>返回生成报告</button>
+            </>
           ) : (
             <>
               <button
+                ref={newTrigger}
                 className="primary"
                 disabled={!project || loading}
                 onClick={() => void newRecord()}
@@ -1468,7 +1507,7 @@ export function GenerationWorkspace({
               </button>
             </div>
           )}
-          {!chat && record?.origin === 'SERVER' && (
+          {(!chat || !nativeChat) && record?.origin === 'SERVER' && (
             <GenerationActivity
               record={record}
               busy={loading}
@@ -1616,6 +1655,7 @@ export function GenerationWorkspace({
                   }
                   label={chatFunction}
                   reference={reference}
+                  canAsk={ready}
                   onSessionEnd={onSessionEnd}
                   onDraft={setChatDraftTurn}
                 />
@@ -1706,13 +1746,7 @@ export function GenerationWorkspace({
                           className="primary"
                           disabled={loading || record.ownerId !== user.id}
                           onClick={() =>
-                            void persist(`/${record.id}/start`, {
-                              revision: record.serverRevision,
-                              ai_version: record.aiPreview?.version || null,
-                              ai_call_mode: record.aiPreview?.call_mode,
-                              ai_preference_version: record.aiPreview?.preference_version,
-                              confirmed: true,
-                            })
+                            void persist(`/${record.id}/start`, generationStartConfirmation(record))
                           }
                         >
                           {record.batches.length === 1
@@ -2169,31 +2203,40 @@ export function GenerationWorkspace({
           busy={loading}
           serverError={error}
           onCreate={(draft) => {
-            return persist('/prepare', {
-              request_id: draft.id,
-              title: draft.title,
-              mode: draft.mode,
-              scope: draft.scope,
-              focus: draft.focus,
-              materials: draft.materials.map((m) => ({
-                document_id: m.documentId,
-                version: m.version,
-                before: m.before,
-                update: m.update,
-                paths: m.paths,
-                before_paths: m.beforePaths || [],
-                connection_id: m.connectionId || null,
-              })),
-              case_ids: draft.cases.map((c) => c.id),
-              case_versions: Object.fromEntries(draft.cases.map((c) => [String(c.id), c.version])),
-              case_scope: draft.caseScope,
-              case_library_revision: draft.libraryRevision,
-              full_scope: draft.scope === '完整所选资料',
-              risk_report_ids: draft.riskReportIds || [],
-              baseline_run_id: draft.baselineId ? Number(draft.baselineId) : null,
-            }).then((next) => !!next);
+            return persist(
+              '/prepare',
+              {
+                request_id: draft.id,
+                title: draft.title,
+                mode: draft.mode,
+                scope: draft.scope,
+                focus: draft.focus,
+                materials: draft.materials.map((m) => ({
+                  document_id: m.documentId,
+                  version: m.version,
+                  before: m.before,
+                  update: m.update,
+                  paths: m.paths,
+                  before_paths: m.beforePaths || [],
+                  connection_id: m.connectionId || null,
+                })),
+                case_ids: draft.cases.map((c) => c.id),
+                case_versions: Object.fromEntries(
+                  draft.cases.map((c) => [String(c.id), c.version]),
+                ),
+                case_scope: draft.caseScope,
+                case_library_revision: draft.libraryRevision,
+                full_scope: draft.scope === '完整所选资料',
+                risk_report_ids: draft.riskReportIds || [],
+                baseline_run_id: draft.baselineId ? Number(draft.baselineId) : null,
+              },
+              { startPrepared: true },
+            ).then((next) => !!next);
           }}
-          onClose={() => setNewOpen(false)}
+          onClose={() => {
+            setNewOpen(false);
+            requestAnimationFrame(() => newTrigger.current?.focus());
+          }}
           onSessionEnd={onSessionEnd}
         />
       )}
